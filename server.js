@@ -27,6 +27,10 @@ const pool = new Pool({
     await pool.query(
       'ALTER TABLE IF EXISTS duties ADD COLUMN IF NOT EXISTS event_id INTEGER REFERENCES events(id) ON DELETE SET NULL'
     );
+    // Soft-archive support for events
+    await pool.query(
+      'ALTER TABLE IF EXISTS events ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP NULL'
+    );
   } catch (e) {
     console.error('Schema ensure failed (duties.event_id):', e?.message || e);
   }
@@ -125,7 +129,8 @@ app.post('/signup', async (req, res) => {
 // Public groups listing for signup dropdown
 app.get('/public/groups', async (req, res) => {
   try {
-    const rows = await pool.query('SELECT id, name FROM groups WHERE status = $1 ORDER BY name', ['active']);
+    // Support schemas with either 'status' or 'group_status'
+    const rows = await pool.query("SELECT id, name FROM groups WHERE COALESCE(status, group_status, 'active') = 'active' ORDER BY name");
     res.json(rows.rows);
   } catch (err) {
     res.status(500).json({ message: 'Failed to load groups' });
@@ -267,11 +272,16 @@ app.get('/groups', authRequired, async (req, res) => {
 
 app.post('/groups', authRequired, superadminOnly, async (req, res) => {
   try {
-    const { name, status } = req.body;
-    const result = await pool.query(
-      'INSERT INTO groups (name,status) VALUES ($1,$2) RETURNING id',
-      [name, status || 'active']
-    );
+    const { name, status } = req.body || {};
+    const colsRes = await pool.query("SELECT column_name FROM information_schema.columns WHERE table_name='groups'");
+    const has = new Set(colsRes.rows.map(r => r.column_name));
+    const fields = ['name'];
+    const params = ['$1'];
+    const values = [name];
+    if (has.has('status')) { fields.push('status'); params.push('$2'); values.push(status || 'active'); }
+    else if (has.has('group_status')) { fields.push('group_status'); params.push('$2'); values.push(status || 'Active'); }
+    const sql = `INSERT INTO groups (${fields.join(',')}) VALUES (${params.join(',')}) RETURNING id`;
+    const result = await pool.query(sql, values);
     res.json({ id: result.rows[0].id });
   } catch (err) {
     res.status(400).json({ message: err.message });
@@ -286,21 +296,63 @@ app.delete('/groups/:id', authRequired, superadminOnly, async (req, res) => {
 // --- Events
 app.get('/events', authRequired, async (req, res) => {
   if (req.user.role === 'superadmin') {
-    const events = await pool.query('SELECT * FROM events ORDER BY event_date DESC');
+    const events = await pool.query('SELECT * FROM events WHERE archived_at IS NULL ORDER BY event_date DESC');
     return res.json(events.rows);
   }
-  const events = await pool.query('SELECT * FROM events WHERE group_id=$1 OR group_id IS NULL ORDER BY event_date DESC', [req.user.group_id]);
+  const events = await pool.query(
+    'SELECT * FROM events WHERE archived_at IS NULL AND (group_id=$1 OR group_id IS NULL) ORDER BY event_date DESC',
+    [req.user.group_id]
+  );
   res.json(events.rows);
 });
 
 app.post('/events', authRequired, adminOnly, async (req, res) => {
   try {
-    const { title, description, event_date, group_id } = req.body;
+    const { title, description, event_date } = req.body || {};
+    let { group_id } = req.body || {};
+    if (!group_id) group_id = req.user.group_id || null;
+    if (!group_id) return res.status(400).json({ message: 'Group is required for events' });
     const result = await pool.query(
       'INSERT INTO events (title,description,event_date,group_id) VALUES ($1,$2,$3,$4) RETURNING id',
-      [title, description, event_date, group_id]
+      [title, description ?? null, event_date ?? null, group_id]
     );
     res.json({ id: result.rows[0].id });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+// Archive an event (soft delete)
+app.post('/events/:id/archive', authRequired, adminOnly, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) return res.status(400).json({ message: 'Invalid id' });
+    let result;
+    if (req.user.role === 'superadmin') {
+      result = await pool.query('UPDATE events SET archived_at=NOW() WHERE id=$1 AND archived_at IS NULL RETURNING id', [id]);
+    } else {
+      result = await pool.query('UPDATE events SET archived_at=NOW() WHERE id=$1 AND group_id=$2 AND archived_at IS NULL RETURNING id', [id, req.user.group_id]);
+    }
+    if (result.rowCount === 0) return res.status(404).json({ message: 'Not found' });
+    res.json({ id: result.rows[0].id });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+// Delete an event (hard delete)
+app.delete('/events/:id', authRequired, adminOnly, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) return res.status(400).json({ message: 'Invalid id' });
+    let result;
+    if (req.user.role === 'superadmin') {
+      result = await pool.query('DELETE FROM events WHERE id=$1 RETURNING id', [id]);
+    } else {
+      result = await pool.query('DELETE FROM events WHERE id=$1 AND group_id=$2 RETURNING id', [id, req.user.group_id]);
+    }
+    if (result.rowCount === 0) return res.status(404).json({ message: 'Not found' });
+    res.json({ ok: true });
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
@@ -321,20 +373,35 @@ app.post('/duties', authRequired, async (req, res) => {
     const { title, description, status, group_id, event_id } = req.body || {};
     let targetGroupId = group_id ?? null;
     if (isAdmin(req.user)) {
-      // admins/superadmins may specify group_id; if omitted and they have a group, use it; otherwise allow global (NULL)
       targetGroupId = (targetGroupId ?? req.user.group_id ?? null);
+      if (targetGroupId == null) return res.status(400).json({ message: 'Group is required for duties' });
     } else if (req.user.role === 'volunteer') {
-      // volunteers can only create within their own group and must have one
       targetGroupId = req.user.group_id;
       if (targetGroupId == null) return res.status(400).json({ message: 'Missing group context' });
     } else {
       return res.status(403).json({ message: 'Forbidden' });
     }
 
-    const result = await pool.query(
-      'INSERT INTO duties (title,description,status,group_id,event_id) VALUES ($1,$2,$3,$4,$5) RETURNING id',
-      [title, description, status || 'open', targetGroupId, event_id ?? null]
-    );
+    // Build insert compatible with varying schemas
+    const colsRes = await pool.query("SELECT column_name FROM information_schema.columns WHERE table_name='duties'");
+    const has = new Set(colsRes.rows.map(r => r.column_name));
+    // Normalize status to match stricter schemas (e.g., pending/in_progress/completed)
+    const statusMap = { open: 'pending', closed: 'completed', complete: 'completed', completed: 'completed' };
+    let normalizedStatus = (status || 'pending').toLowerCase();
+    normalizedStatus = statusMap[normalizedStatus] || normalizedStatus;
+    if (!['pending','in_progress','completed'].includes(normalizedStatus)) normalizedStatus = 'pending';
+    const fields = [];
+    const params = [];
+    const values = [];
+    let idx = 1;
+    fields.push('title'); params.push(`$${idx++}`); values.push(title);
+    fields.push('description'); params.push(`$${idx++}`); values.push(description ?? null);
+    if (has.has('status')) { fields.push('status'); params.push(`$${idx++}`); values.push(normalizedStatus); }
+    if (has.has('group_id')) { fields.push('group_id'); params.push(`$${idx++}`); values.push(targetGroupId); }
+    if (has.has('event_id')) { fields.push('event_id'); params.push(`$${idx++}`); values.push(event_id ?? null); }
+
+    const sql = `INSERT INTO duties (${fields.join(',')}) VALUES (${params.join(',')}) RETURNING id`;
+    const result = await pool.query(sql, values);
     res.json({ id: result.rows[0].id });
   } catch (err) {
     res.status(400).json({ message: err.message });

@@ -128,7 +128,7 @@
       </div>
     </div>
     <table>
-      <thead><tr><th>ID</th><th>Title</th><th>Date</th><th>Join</th></tr></thead>
+      <thead><tr><th>ID</th><th>Title</th><th>Date</th><th>Join</th><th id="eventActionsHeader" class="hidden">Actions</th></tr></thead>
       <tbody id="eventList"></tbody>
     </table>
   </section>
@@ -659,11 +659,32 @@
           tbody.innerHTML = '';
           events.forEach(e => {
             const tr = document.createElement('tr');
+            let actions = '';
+            if (role === 'admin' || role === 'superadmin') {
+              actions = `<button data-eid="${e.id}" class="archiveEventBtn">Archive</button> <button data-eid="${e.id}" class="deleteEventBtn">Delete</button>`;
+            }
             tr.innerHTML =
               `<td>${e.id}</td><td>${e.title}</td><td>${e.event_date || ''}</td>
-               <td><button disabled title="Join coming soon">Join</button></td>`;
+               <td><button disabled title="Join coming soon">Join</button></td>
+               <td>${actions}</td>`;
             tbody.appendChild(tr);
           });
+          // wire actions
+          tbody.querySelectorAll('.archiveEventBtn').forEach(btn => btn.addEventListener('click', async (ev) => {
+            const id = Number(ev.currentTarget.getAttribute('data-eid'));
+            try {
+              const res = await authed(`/events/${id}/archive`, { method: 'POST' });
+              if (res.ok) fetchEvents(); else { const d = await res.json().catch(()=>({})); alert(d.message||'Failed to archive'); }
+            } catch { alert('Error archiving'); }
+          }));
+          tbody.querySelectorAll('.deleteEventBtn').forEach(btn => btn.addEventListener('click', async (ev) => {
+            const id = Number(ev.currentTarget.getAttribute('data-eid'));
+            if (!confirm('Delete this event?')) return;
+            try {
+              const res = await authed(`/events/${id}`, { method: 'DELETE' });
+              if (res.ok) fetchEvents(); else { const d = await res.json().catch(()=>({})); alert(d.message||'Failed to delete'); }
+            } catch { alert('Error deleting'); }
+          }));
         }
 
         // Populate optional event dropdowns for duty creation
@@ -1065,6 +1086,8 @@
         // Show create form only for admins/superadmins
         const wrap = document.getElementById('eventsCreateWrap');
         if (wrap) wrap.classList.toggle('hidden', !isAdminish);
+        const actionsHeader = document.getElementById('eventActionsHeader');
+        if (actionsHeader) actionsHeader.classList.toggle('hidden', !isAdminish);
         await fetchEvents();
       };
       document.getElementById('navClockBtn').onclick = async () => { navigateTo('clockSection'); await fetchDuties(); await fetchTimeTracking(); };
