@@ -67,12 +67,35 @@ function isAdmin(user) {
 // --- Auth Routes
 app.post('/register', authRequired, adminOnly, async (req, res) => {
   try {
-    const { name, email, phone, address, password, role, group_id } = req.body;
+    const { name, email, phone, address, password, role, group_id } = req.body || {};
+    if (!email || !password || !role) return res.status(400).json({ message: 'Missing required fields' });
+
     const hash = await bcrypt.hash(password, 10);
-    const result = await pool.query(
-      'INSERT INTO users (name,email,phone,address,password,role,group_id) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id',
-      [name, email, phone, address, hash, role, group_id || null]
-    );
+
+    // Detect available columns on the current database schema (works across envs)
+    const colsRes = await pool.query("SELECT column_name FROM information_schema.columns WHERE table_name='users'");
+    const has = new Set(colsRes.rows.map(r => r.column_name));
+
+    const fields = [];
+    const values = [];
+    const params = [];
+    let idx = 1;
+
+    // Optional fields if present in schema
+    if (has.has('name') && name !== undefined) { fields.push('name'); params.push(`$${idx++}`); values.push(name); }
+    if (has.has('phone') && phone !== undefined) { fields.push('phone'); params.push(`$${idx++}`); values.push(phone); }
+    if (has.has('address') && address !== undefined) { fields.push('address'); params.push(`$${idx++}`); values.push(address); }
+
+    // Required fields
+    fields.push('email'); params.push(`$${idx++}`); values.push(email);
+    fields.push('password'); params.push(`$${idx++}`); values.push(hash);
+    fields.push('role'); params.push(`$${idx++}`); values.push(role);
+
+    // group_id if schema supports it
+    if (has.has('group_id')) { fields.push('group_id'); params.push(`$${idx++}`); values.push(group_id ?? null); }
+
+    const sql = `INSERT INTO users (${fields.join(',')}) VALUES (${params.join(',')}) RETURNING id`;
+    const result = await pool.query(sql, values);
     res.json({ id: result.rows[0].id });
   } catch (err) {
     res.status(400).json({ message: err.message });

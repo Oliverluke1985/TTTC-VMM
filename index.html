@@ -240,6 +240,24 @@
       <thead><tr><th>ID</th><th>Name</th><th>Status</th><th>Actions</th></tr></thead>
       <tbody id="groupList"></tbody>
     </table>
+
+    <h3>Create User (Superadmin)</h3>
+    <div class="row">
+      <div class="col">
+        <label>Role</label>
+        <select id="newUserRole">
+          <option value="superadmin">superadmin</option>
+          <option value="admin">admin</option>
+          <option value="volunteer">volunteer</option>
+        </select>
+        <label>Email</label><input id="newUserEmail" type="email" />
+        <label>Password</label><input id="newUserPassword" type="password" />
+        <label>Group (optional for superadmin/global)</label>
+        <select id="newUserGroup"><option value="">— None —</option></select>
+        <button id="createUserBtn">Create User</button>
+        <div id="createUserError" class="error"></div>
+      </div>
+    </div>
   </section>
 
   <!-- ADMIN -->
@@ -254,6 +272,42 @@
         <label>Date</label><input id="eventDate" type="date" />
         <button id="createEventBtn">Create Event</button>
         <div id="createEventError" class="error"></div>
+      </div>
+    </div>
+
+    <h3>Create Superadmin</h3>
+    <div class="row">
+      <div class="col">
+        <label>Email</label><input id="superEmail" type="email" />
+        <label>Password</label><input id="superPassword" type="password" />
+        <label>Group (optional)</label>
+        <select id="superGroup"><option value="">— None —</option></select>
+        <button id="createSuperBtn">Create Superadmin</button>
+        <div id="createSuperErr" class="error"></div>
+      </div>
+    </div>
+
+    <h3>Create Admin</h3>
+    <div class="row">
+      <div class="col">
+        <label>Email</label><input id="adminEmail" type="email" />
+        <label>Password</label><input id="adminPassword" type="password" />
+        <label>Group</label>
+        <select id="adminGroup"><option value="">— None —</option></select>
+        <button id="createAdminBtn">Create Admin</button>
+        <div id="createAdminErr" class="error"></div>
+      </div>
+    </div>
+
+    <h3>Create Volunteer</h3>
+    <div class="row">
+      <div class="col">
+        <label>Email</label><input id="volEmail" type="email" />
+        <label>Password</label><input id="volPassword" type="password" />
+        <label>Group</label>
+        <select id="volGroup"><option value="">— None —</option></select>
+        <button id="createVolBtn">Create Volunteer</button>
+        <div id="createVolErr" class="error"></div>
       </div>
     </div>
 
@@ -328,6 +382,68 @@
     fetchConfig();
 
     // (Per-user theming removed)
+    // SUPERADMIN: Create User
+    document.getElementById('createUserBtn')?.addEventListener('click', async () => {
+      const email = document.getElementById('newUserEmail').value.trim();
+      const password = document.getElementById('newUserPassword').value;
+      const roleSel = document.getElementById('newUserRole');
+      const roleVal = roleSel ? roleSel.value : 'volunteer';
+      const grpSel = document.getElementById('newUserGroup');
+      const gid = grpSel && grpSel.value ? Number(grpSel.value) : null;
+      const errEl = document.getElementById('createUserError');
+      errEl.textContent = '';
+      try {
+        if (!email || !password) { errEl.textContent = 'Email and password required'; return; }
+        const res = await authed('/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password, role: roleVal, group_id: gid })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) { errEl.textContent = data.message || 'Failed to create user'; return; }
+        document.getElementById('newUserEmail').value = '';
+        document.getElementById('newUserPassword').value = '';
+        if (grpSel) grpSel.value = '';
+        errEl.textContent = '';
+        alert('User created.');
+      } catch {
+        errEl.textContent = 'Error creating user';
+      }
+    });
+
+    // Admin tools: create specific roles
+    async function createUserWith(roleVal, emailId, passId, groupSelId, errId) {
+      const email = document.getElementById(emailId).value.trim();
+      const password = document.getElementById(passId).value;
+      const grpSel = document.getElementById(groupSelId);
+      const gid = grpSel && grpSel.value ? Number(grpSel.value) : (groupId ?? null);
+      const errEl = document.getElementById(errId);
+      errEl.textContent = '';
+      try {
+        if (!email || !password) { errEl.textContent = 'Email and password required'; return; }
+        const res = await authed('/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password, role: roleVal, group_id: gid })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) { errEl.textContent = data.message || 'Failed to create user'; return; }
+        document.getElementById(emailId).value = '';
+        document.getElementById(passId).value = '';
+        if (grpSel) grpSel.value = '';
+        alert('User created.');
+      } catch { errEl.textContent = 'Error creating user'; }
+    }
+
+    document.getElementById('createSuperBtn')?.addEventListener('click', async () => {
+      await createUserWith('superadmin', 'superEmail', 'superPassword', 'superGroup', 'createSuperErr');
+    });
+    document.getElementById('createAdminBtn')?.addEventListener('click', async () => {
+      await createUserWith('admin', 'adminEmail', 'adminPassword', 'adminGroup', 'createAdminErr');
+    });
+    document.getElementById('createVolBtn')?.addEventListener('click', async () => {
+      await createUserWith('volunteer', 'volEmail', 'volPassword', 'volGroup', 'createVolErr');
+    });
 
     // UTIL: fetch wrapper with auth
     async function authed(path, opts = {}) {
@@ -464,7 +580,7 @@
           groupNameEl.textContent = '-';
         }
 
-        // superadmin table
+        // superadmin: populate org list and new-user group selector(s)
         const tbody = document.getElementById('groupList');
         if (tbody) {
           tbody.innerHTML = '';
@@ -476,6 +592,25 @@
             tbody.appendChild(tr);
           });
         }
+
+        const groupSelectors = [
+          document.getElementById('newUserGroup'),
+          document.getElementById('superGroup'),
+          document.getElementById('adminGroup'),
+          document.getElementById('volGroup')
+        ];
+        groupSelectors.forEach(sel => {
+          if (!sel) return;
+          const current = sel.value;
+          sel.innerHTML = '<option value="">— None —</option>';
+          groups.forEach(g => {
+            const opt = document.createElement('option');
+            opt.value = g.id;
+            opt.textContent = `${g.name}`;
+            sel.appendChild(opt);
+          });
+          if (current) sel.value = current;
+        });
       } catch (e) { /* silent */ }
     }
 
@@ -884,7 +1019,7 @@
       document.getElementById('navClockBtn').classList.toggle('hidden', !isVolunteer);
       document.getElementById('navPhotosBtn').classList.toggle('hidden', !isVolunteer);
       document.getElementById('navHomeBtn').onclick = () => navigateTo('homeSection');
-      document.getElementById('navAdminBtn').onclick = () => navigateTo('adminSection');
+      document.getElementById('navAdminBtn').onclick = () => navigateTo(currentRole === 'superadmin' ? 'superadminSection' : 'adminSection');
       document.getElementById('navCreateDutyBtn').onclick = () => {
         navigateTo('createDutySection');
         document.getElementById('createDutyAdmin').classList.toggle('hidden', !isAdminish);
