@@ -31,6 +31,16 @@ const pool = new Pool({
     await pool.query(
       'ALTER TABLE IF EXISTS events ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP NULL'
     );
+    // RSVP table
+    await pool.query(
+      `CREATE TABLE IF NOT EXISTS event_attendees (
+         id SERIAL PRIMARY KEY,
+         event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+         user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+         created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+         UNIQUE (event_id, user_id)
+       )`
+    );
   } catch (e) {
     console.error('Schema ensure failed (duties.event_id):', e?.message || e);
   }
@@ -295,13 +305,27 @@ app.delete('/groups/:id', authRequired, superadminOnly, async (req, res) => {
 
 // --- Events
 app.get('/events', authRequired, async (req, res) => {
+  // Return events plus a joined flag for the current user
   if (req.user.role === 'superadmin') {
-    const events = await pool.query('SELECT * FROM events WHERE archived_at IS NULL ORDER BY event_date DESC');
+    const events = await pool.query(
+      `SELECT e.*, EXISTS(
+         SELECT 1 FROM event_attendees a WHERE a.event_id = e.id AND a.user_id = $1
+       ) AS joined
+       FROM events e
+       WHERE e.archived_at IS NULL
+       ORDER BY e.event_date DESC`,
+      [req.user.id]
+    );
     return res.json(events.rows);
   }
   const events = await pool.query(
-    'SELECT * FROM events WHERE archived_at IS NULL AND (group_id=$1 OR group_id IS NULL) ORDER BY event_date DESC',
-    [req.user.group_id]
+    `SELECT e.*, EXISTS(
+       SELECT 1 FROM event_attendees a WHERE a.event_id = e.id AND a.user_id = $1
+     ) AS joined
+     FROM events e
+     WHERE e.archived_at IS NULL AND (e.group_id=$2 OR e.group_id IS NULL)
+     ORDER BY e.event_date DESC`,
+    [req.user.id, req.user.group_id]
   );
   res.json(events.rows);
 });
@@ -353,6 +377,36 @@ app.delete('/events/:id', authRequired, adminOnly, async (req, res) => {
     }
     if (result.rowCount === 0) return res.status(404).json({ message: 'Not found' });
     res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+// RSVP: join an event
+app.post('/events/:id/join', authRequired, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) return res.status(400).json({ message: 'Invalid id' });
+    // Ensure event visible to user (group scoped unless superadmin)
+    const ev = await pool.query('SELECT * FROM events WHERE id=$1 AND archived_at IS NULL', [id]);
+    if (ev.rowCount === 0) return res.status(404).json({ message: 'Not found' });
+    if (req.user.role !== 'superadmin' && ev.rows[0].group_id && ev.rows[0].group_id !== req.user.group_id) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+    await pool.query('INSERT INTO event_attendees(event_id,user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [id, req.user.id]);
+    res.json({ joined: true });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+// RSVP: leave an event
+app.post('/events/:id/leave', authRequired, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) return res.status(400).json({ message: 'Invalid id' });
+    await pool.query('DELETE FROM event_attendees WHERE event_id=$1 AND user_id=$2', [id, req.user.id]);
+    res.json({ joined: false });
   } catch (err) {
     res.status(400).json({ message: err.message });
   }

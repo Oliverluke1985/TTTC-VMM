@@ -665,11 +665,25 @@
             }
             tr.innerHTML =
               `<td>${e.id}</td><td>${e.title}</td><td>${e.event_date || ''}</td>
-               <td><button disabled title="Join coming soon">Join</button></td>
+               <td>${e.joined ? `<button data-eid="${e.id}" class="leaveBtn">Leave</button>` : `<button data-eid=\"${e.id}\" class=\"joinBtn\">Join</button>`}</td>
                <td>${actions}</td>`;
             tbody.appendChild(tr);
           });
           // wire actions
+          tbody.querySelectorAll('.joinBtn').forEach(btn => btn.addEventListener('click', async (ev) => {
+            const id = Number(ev.currentTarget.getAttribute('data-eid'));
+            try {
+              const res = await authed(`/events/${id}/join`, { method: 'POST' });
+              if (res.ok) fetchEvents(); else { const d = await res.json().catch(()=>({})); alert(d.message||'Failed to join'); }
+            } catch { alert('Error joining'); }
+          }));
+          tbody.querySelectorAll('.leaveBtn').forEach(btn => btn.addEventListener('click', async (ev) => {
+            const id = Number(ev.currentTarget.getAttribute('data-eid'));
+            try {
+              const res = await authed(`/events/${id}/leave`, { method: 'POST' });
+              if (res.ok) fetchEvents(); else { const d = await res.json().catch(()=>({})); alert(d.message||'Failed to leave'); }
+            } catch { alert('Error leaving'); }
+          }));
           tbody.querySelectorAll('.archiveEventBtn').forEach(btn => btn.addEventListener('click', async (ev) => {
             const id = Number(ev.currentTarget.getAttribute('data-eid'));
             try {
