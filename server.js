@@ -178,7 +178,14 @@ app.post('/login', async (req, res) => {
 // --- Account & Config
 app.get('/me', authRequired, async (req, res) => {
   try {
-    const result = await pool.query('SELECT id, name, email, phone, address, role, group_id FROM users WHERE id=$1', [req.user.id]);
+    const colsRes = await pool.query("SELECT column_name FROM information_schema.columns WHERE table_name='users'");
+    const has = new Set(colsRes.rows.map(r => r.column_name));
+    const selectCols = ['id','email','role','group_id'];
+    if (has.has('name')) selectCols.push('name');
+    if (has.has('phone')) selectCols.push('phone');
+    if (has.has('address')) selectCols.push('address');
+    const sql = `SELECT ${selectCols.join(', ')} FROM users WHERE id=$1`;
+    const result = await pool.query(sql, [req.user.id]);
     if (result.rowCount === 0) return res.status(404).json({ message: 'Not found' });
     res.json(result.rows[0]);
   } catch (err) {
@@ -188,11 +195,19 @@ app.get('/me', authRequired, async (req, res) => {
 
 app.post('/account', authRequired, async (req, res) => {
   try {
-    const { name, email, phone, address } = req.body;
-    const result = await pool.query(
-      'UPDATE users SET name=COALESCE($1,name), email=COALESCE($2,email), phone=COALESCE($3,phone), address=COALESCE($4,address) WHERE id=$5 RETURNING id',
-      [name ?? null, email ?? null, phone ?? null, address ?? null, req.user.id]
-    );
+    const t = req.body || {};
+    const colsRes = await pool.query("SELECT column_name FROM information_schema.columns WHERE table_name='users'");
+    const has = new Set(colsRes.rows.map(r => r.column_name));
+    const setClauses = [];
+    const params = [];
+    let idx = 1;
+    if (has.has('name') && t.name !== undefined) { setClauses.push(`name=COALESCE($${idx++},name)`); params.push(t.name); }
+    if (t.email !== undefined) { setClauses.push(`email=COALESCE($${idx++},email)`); params.push(t.email); }
+    if (has.has('phone') && t.phone !== undefined) { setClauses.push(`phone=COALESCE($${idx++},phone)`); params.push(t.phone); }
+    if (has.has('address') && t.address !== undefined) { setClauses.push(`address=COALESCE($${idx++},address)`); params.push(t.address); }
+    if (setClauses.length === 0) return res.json({ id: req.user.id });
+    const sql = `UPDATE users SET ${setClauses.join(', ')} WHERE id=$${idx} RETURNING id`;
+    const result = await pool.query(sql, [...params, req.user.id]);
     res.json({ id: result.rows[0].id });
   } catch (err) {
     res.status(400).json({ message: err.message });
@@ -346,6 +361,39 @@ app.post('/events', authRequired, adminOnly, async (req, res) => {
   }
 });
 
+// Edit event
+app.patch('/events/:id', authRequired, adminOnly, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) return res.status(400).json({ message: 'Invalid id' });
+    const { title, description, event_date, group_id } = req.body || {};
+    const setClauses = [];
+    const params = [];
+    let idx = 1;
+    if (title !== undefined) { setClauses.push(`title = $${idx++}`); params.push(title); }
+    if (description !== undefined) { setClauses.push(`description = $${idx++}`); params.push(description); }
+    if (event_date !== undefined) { setClauses.push(`event_date = $${idx++}`); params.push(event_date); }
+    if (group_id !== undefined) { setClauses.push(`group_id = $${idx++}`); params.push(group_id); }
+    if (setClauses.length === 0) return res.json({ id });
+    let result;
+    if (req.user.role === 'superadmin') {
+      result = await pool.query(
+        `UPDATE events SET ${setClauses.join(', ')} WHERE id=$${idx} RETURNING id`,
+        [...params, id]
+      );
+    } else {
+      result = await pool.query(
+        `UPDATE events SET ${setClauses.join(', ')} WHERE id=$${idx} AND group_id=$${idx + 1} RETURNING id`,
+        [...params, id, req.user.group_id]
+      );
+    }
+    if (result.rowCount === 0) return res.status(404).json({ message: 'Not found' });
+    res.json({ id: result.rows[0].id });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
 // Archive an event (soft delete)
 app.post('/events/:id/archive', authRequired, adminOnly, async (req, res) => {
   try {
@@ -456,6 +504,58 @@ app.post('/duties', authRequired, async (req, res) => {
 
     const sql = `INSERT INTO duties (${fields.join(',')}) VALUES (${params.join(',')}) RETURNING id`;
     const result = await pool.query(sql, values);
+    res.json({ id: result.rows[0].id });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+// Edit duty
+app.patch('/duties/:id', authRequired, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) return res.status(400).json({ message: 'Invalid id' });
+    const { title, description, status, event_id, group_id } = req.body || {};
+    // Only admins/superadmins can edit duties broadly; volunteers can only edit their own created duty's title/description
+    const isAdminish = isAdmin(req.user);
+    const colsRes = await pool.query("SELECT column_name FROM information_schema.columns WHERE table_name='duties'");
+    const has = new Set(colsRes.rows.map(r => r.column_name));
+
+    const setClauses = [];
+    const params = [];
+    let idx = 1;
+    if (title !== undefined) { setClauses.push(`title=$${idx++}`); params.push(title); }
+    if (description !== undefined) { setClauses.push(`description=$${idx++}`); params.push(description); }
+    if (status !== undefined && has.has('status')) {
+      const map = { open: 'pending', closed: 'completed', complete: 'completed', completed: 'completed' };
+      let s = String(status).toLowerCase();
+      s = map[s] || s;
+      if (!['pending','in_progress','completed'].includes(s)) s = 'pending';
+      setClauses.push(`status=$${idx++}`); params.push(s);
+    }
+    if (event_id !== undefined && has.has('event_id')) { setClauses.push(`event_id=$${idx++}`); params.push(event_id); }
+    if (group_id !== undefined && has.has('group_id')) { setClauses.push(`group_id=$${idx++}`); params.push(group_id); }
+    if (setClauses.length === 0) return res.json({ id });
+
+    let result;
+    if (isAdminish) {
+      if (req.user.role === 'superadmin') {
+        result = await pool.query(`UPDATE duties SET ${setClauses.join(', ')} WHERE id=$${idx} RETURNING id`, [...params, id]);
+      } else {
+        result = await pool.query(
+          `UPDATE duties SET ${setClauses.join(', ')} WHERE id=$${idx} AND group_id=$${idx + 1} RETURNING id`,
+          [...params, id, req.user.group_id]
+        );
+      }
+    } else if (req.user.role === 'volunteer' && has.has('volunteer_id')) {
+      result = await pool.query(
+        `UPDATE duties SET ${setClauses.join(', ')} WHERE id=$${idx} AND volunteer_id=$${idx + 1} RETURNING id`,
+        [...params, id, req.user.id]
+      );
+    } else {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+    if (result.rowCount === 0) return res.status(404).json({ message: 'Not found' });
     res.json({ id: result.rows[0].id });
   } catch (err) {
     res.status(400).json({ message: err.message });

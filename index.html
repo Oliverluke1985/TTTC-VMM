@@ -131,6 +131,17 @@
       <thead><tr><th>ID</th><th>Title</th><th>Date</th><th>Join</th><th id="eventActionsHeader" class="hidden">Actions</th></tr></thead>
       <tbody id="eventList"></tbody>
     </table>
+    <div id="eventEditWrap" class="row hidden">
+      <div class="col">
+        <h3>Edit Event</h3>
+        <label>Event ID</label><input id="editEventId" type="number" />
+        <label>Title</label><input id="editEventTitle" type="text" />
+        <label>Description</label><input id="editEventDesc" type="text" />
+        <label>Date</label><input id="editEventDate" type="date" />
+        <button id="saveEventBtn">Save Event</button>
+        <div id="editEventError" class="error"></div>
+      </div>
+    </div>
   </section>
 
   <section id="createDutySection" class="col hidden">
@@ -162,6 +173,22 @@
         <select id="volDutyEvent"><option value="">— None —</option></select>
         <button id="volCreateDutyBtn">Create Duty</button>
         <div id="volCreateDutyError" class="error"></div>
+      </div>
+    </div>
+    <div id="dutyEditWrap" class="row hidden">
+      <div class="col">
+        <h3>Edit Duty</h3>
+        <label>Duty ID</label><input id="editDutyId" type="number" />
+        <label>Title</label><input id="editDutyTitle" type="text" />
+        <label>Description</label><input id="editDutyDesc" type="text" />
+        <label>Status</label>
+        <select id="editDutyStatus">
+          <option value="pending">pending</option>
+          <option value="in_progress">in_progress</option>
+          <option value="completed">completed</option>
+        </select>
+        <button id="saveDutyBtn">Save Duty</button>
+        <div id="editDutyError" class="error"></div>
       </div>
     </div>
   </section>
@@ -661,7 +688,7 @@
             const tr = document.createElement('tr');
             let actions = '';
             if (role === 'admin' || role === 'superadmin') {
-              actions = `<button data-eid="${e.id}" class="archiveEventBtn">Archive</button> <button data-eid="${e.id}" class="deleteEventBtn">Delete</button>`;
+              actions = `<button data-eid="${e.id}" class="editEventPrefillBtn">Edit</button> <button data-eid="${e.id}" class="archiveEventBtn">Archive</button> <button data-eid="${e.id}" class="deleteEventBtn">Delete</button>`;
             }
             tr.innerHTML =
               `<td>${e.id}</td><td>${e.title}</td><td>${e.event_date || ''}</td>
@@ -670,6 +697,15 @@
             tbody.appendChild(tr);
           });
           // wire actions
+          tbody.querySelectorAll('.editEventPrefillBtn').forEach(btn => btn.addEventListener('click', (ev) => {
+            const id = Number(ev.currentTarget.getAttribute('data-eid'));
+            document.getElementById('eventEditWrap').classList.remove('hidden');
+            document.getElementById('editEventId').value = String(id);
+            const row = Array.from(ev.currentTarget.closest('tr').children);
+            document.getElementById('editEventTitle').value = row[1].textContent || '';
+            document.getElementById('editEventDate').value = row[2].textContent || '';
+            document.getElementById('editEventDesc').value = '';
+          }));
           tbody.querySelectorAll('.joinBtn').forEach(btn => btn.addEventListener('click', async (ev) => {
             const id = Number(ev.currentTarget.getAttribute('data-eid'));
             try {
@@ -792,6 +828,26 @@
       }
     });
 
+    // Save event edits
+    document.getElementById('saveEventBtn')?.addEventListener('click', async () => {
+      const id = Number(document.getElementById('editEventId').value);
+      const title = document.getElementById('editEventTitle').value.trim();
+      const description = document.getElementById('editEventDesc').value.trim();
+      const event_date = document.getElementById('editEventDate').value;
+      try {
+        const res = await authed(`/events/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title, description, event_date })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) { document.getElementById('editEventError').textContent = data.message || 'Failed to save event'; return; }
+        document.getElementById('editEventError').textContent = '';
+        document.getElementById('eventEditWrap').classList.add('hidden');
+        await fetchEvents();
+      } catch { document.getElementById('editEventError').textContent = 'Error saving event'; }
+    });
+
     // DUTIES (admin-managed; volunteer sees assigned duties)
     async function fetchDuties() {
       try {
@@ -851,6 +907,26 @@
       } catch {
         document.getElementById('createDutyError').textContent = 'Error creating duty';
       }
+    });
+
+    // Save duty edits
+    document.getElementById('saveDutyBtn')?.addEventListener('click', async () => {
+      const id = Number(document.getElementById('editDutyId').value);
+      const title = document.getElementById('editDutyTitle').value.trim();
+      const description = document.getElementById('editDutyDesc').value.trim();
+      const status = document.getElementById('editDutyStatus').value;
+      try {
+        const res = await authed(`/duties/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title, description, status })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) { document.getElementById('editDutyError').textContent = data.message || 'Failed to save duty'; return; }
+        document.getElementById('editDutyError').textContent = '';
+        document.getElementById('dutyEditWrap').classList.add('hidden');
+        await fetchDuties();
+      } catch { document.getElementById('editDutyError').textContent = 'Error saving duty'; }
     });
 
     // Create Duty (volunteer)
@@ -1094,6 +1170,7 @@
         navigateTo('createDutySection');
         document.getElementById('createDutyAdmin').classList.toggle('hidden', !isAdminish);
         document.getElementById('createDutyVol').classList.toggle('hidden', isAdminish);
+        document.getElementById('dutyEditWrap').classList.toggle('hidden', !isAdminish);
       };
       document.getElementById('navEventsBtn').onclick = async () => {
         navigateTo('eventsSection');
@@ -1102,6 +1179,7 @@
         if (wrap) wrap.classList.toggle('hidden', !isAdminish);
         const actionsHeader = document.getElementById('eventActionsHeader');
         if (actionsHeader) actionsHeader.classList.toggle('hidden', !isAdminish);
+        document.getElementById('eventEditWrap').classList.toggle('hidden', !isAdminish);
         await fetchEvents();
       };
       document.getElementById('navClockBtn').onclick = async () => { navigateTo('clockSection'); await fetchDuties(); await fetchTimeTracking(); };
