@@ -1,0 +1,1002 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+  />
+  <title>Volunteer Time Tracking</title>
+  <style>
+    :root { color-scheme: light dark; --primary: #000000; --text: #ffffff; --accent1: #35b1fb; --accent2: #0289db; --accent3: #054a74; --accent4: #00433a; --accent5: #ffffff; }
+    html, body { height: 100%; }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 24px; line-height: 1.35; background-size: cover; background-repeat: no-repeat; color: var(--text); background-color: var(--primary); min-height: 100vh; display: flex; flex-direction: column; }
+    header { position: relative; display:flex; justify-content:center; align-items:center; padding: 51px 0; margin-bottom: -32px; overflow: hidden; border-radius: 0; margin-left: -24px; margin-right: -24px; width: calc(100% + 48px); }
+    header::before { content: ""; position: absolute; inset: 0; background: url('https://i.postimg.cc/t4S6CDjx/cityscape.jpg') 50% 34%/cover no-repeat; opacity: 0.75; pointer-events: none; }
+    header > * { position: relative; z-index: 1; }
+    #logo { max-height: 112px; border-radius: 6px; transform: translateY(-7%); }
+    h1 { margin: 0 0 16px; font-size: 22px; color: var(--accent1); text-align:center; }
+    #appTitle { display:block; width: fit-content; margin: 0 auto 16px; background: #000; padding: 8px 12px; border-radius: 8px; position: relative; z-index: 2; transform: translateY(4%); }
+    h2 { margin: 14px 0 10px; font-size: 18px; color: var(--accent2); }
+    h3 { margin: 12px 0 8px; font-size: 16px; color: var(--accent3); }
+    a { color: var(--accent1); }
+    .row { display: flex; gap: 16px; flex-wrap: wrap; }
+    .col { flex: 1 1 360px; border: 1px solid var(--accent3); padding: 12px; border-radius: 10px; background: rgba(255,255,255,0.04); }
+    label { display:block; margin-top: 6px; font-size: 14px; color: var(--accent5); }
+    input, select { margin: 4px 0 8px; padding: 8px; width: 100%; box-sizing: border-box; border-radius: 8px; border: 1px solid var(--accent3); background: rgba(0,0,0,0.25); color: var(--text); }
+    button { padding: 8px 12px; margin: 6px 6px 0 0; border-radius: 10px; border: 1px solid var(--accent2); background: var(--primary); color: var(--text); cursor: pointer; }
+    button:hover { background: var(--accent2); }
+    table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 14px; }
+    thead th { background: rgba(255,255,255,0.06); color: var(--text); }
+    th, td { border: 1px solid var(--accent3); padding: 6px 8px; vertical-align: top; }
+    .hidden { display: none !important; }
+    .error { color: #b00020; margin-top: 6px; }
+    .ok { color: #0b6; }
+    .nowrap { white-space: nowrap; }
+    /* Defensive: hide extension popovers/overlays if present */
+    *[popover]{display:none!important;visibility:hidden!important;opacity:0!important;}
+    #top-layer{display:none!important}
+
+    /* Toolbar */
+    nav#toolbar { display:flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 12px 0 16px; background: rgba(0,0,0,0.6); border: 1px solid var(--accent3); border-radius: 8px; padding: 8px; }
+    nav#toolbar button { background: rgba(0,0,0,0.2); }
+
+    /* Home section tweaks */
+    #homeSection { max-width: 640px; margin: 0 auto 16px; text-align: center; flex: 0 1 640px; }
+    #homeHero { display: block; margin: 8px auto 0; max-width: 420px; width: 100%; border-radius: 10px; }
+
+    /* Footer background image */
+    footer#footer { position: relative; height: 288px; margin-top: auto; border-radius: 0; overflow: hidden; pointer-events: none; margin-left: -24px; margin-right: -24px; width: calc(100% + 48px); }
+    footer#footer::before { content: ""; position: absolute; inset: 0; background: url('https://i.postimg.cc/8Cfgxn5P/theater-seats.jpg') 50% 78%/cover no-repeat; opacity: 0.75; pointer-events: none; }
+  </style>
+
+  <!-- Strip any tracking params like ?utm_source=... to avoid parser oddities -->
+  <script>
+    (function stripQuery() {
+      if (location.search && /utm_|fbclid|gclid/i.test(location.search)) {
+        history.replaceState({}, document.title, location.pathname);
+      }
+    })();
+  </script>
+</head>
+<body>
+  <header>
+    <a id="logoLink" href="#" target="_blank" rel="noopener noreferrer">
+      <img id="logo" alt="logo" class="hidden" />
+    </a>
+  </header>
+  <h1 id="appTitle">Volunteer Time Tracking</h1>
+  <nav id="toolbar" class="hidden">
+    <button id="navHomeBtn">Home</button>
+    <button id="navEventsBtn">Events</button>
+    <button id="navCreateDutyBtn">Create Duty</button>
+    <button id="navClockBtn">Time Clock</button>
+    <button id="navPhotosBtn">Photos</button>
+    <button id="navAdminBtn">Admin Tools</button>
+    <button id="navAccountBtn">Account</button>
+    <button id="navLogoutBtn">Logout</button>
+  </nav>
+  <section id="homeSection" class="col hidden">
+    <h2>Welcome to the TTTC Volunteer Tracker App</h2>
+    <img id="homeHero" alt="Welcome" src="https://i.postimg.cc/gjsftpNw/original-ticket.jpg" />
+    <p>Use the toolbar above to navigate: create duties, clock time, manage events, and more.</p>
+  </section>
+
+  <!-- VOLUNTEER: TIME CLOCK PAGE -->
+  <section id="clockSection" class="col hidden">
+    <h2>Time Clock</h2>
+    <h3>My Duties</h3>
+    <table>
+      <thead><tr><th>ID</th><th>Title</th><th>Description</th><th>Status</th><th>Track Time</th></tr></thead>
+      <tbody id="dutyList"></tbody>
+    </table>
+
+    <h3>My Timesheet</h3>
+    <table>
+      <thead><tr><th>ID</th><th>Duty</th><th>Start</th><th>End</th><th>Hours</th><th>Date</th></tr></thead>
+      <tbody id="timeList"></tbody>
+    </table>
+  </section>
+
+  <!-- VOLUNTEER: PHOTOS PAGE -->
+  <section id="photosSection" class="col hidden">
+    <h2>Photos</h2>
+    <div id="photoUploadWrap">
+      <label for="photoDuty">Duty</label>
+      <select id="photoDuty"></select>
+      <input id="photoCaption" type="text" placeholder="Caption (optional)" />
+      <input id="photoFile" type="file" accept="image/*" capture="environment" />
+      <button id="uploadPhotoBtn">Upload Photo</button>
+      <div id="photoError" class="error"></div>
+    </div>
+    <div id="photoGallery"></div>
+  </section>
+
+  <!-- VOLUNTEER: EVENTS PAGE -->
+  <section id="eventsSection" class="col hidden">
+    <h2>Events</h2>
+    <div id="eventsCreateWrap" class="row hidden">
+      <div class="col">
+        <h3>Create Event</h3>
+        <label>Title</label><input id="eventTitle2" type="text" />
+        <label>Description</label><input id="eventDesc2" type="text" />
+        <label>Date</label><input id="eventDate2" type="date" />
+        <button id="createEventBtn2">Create Event</button>
+        <div id="createEventError2" class="error"></div>
+      </div>
+    </div>
+    <table>
+      <thead><tr><th>ID</th><th>Title</th><th>Date</th><th>Join</th></tr></thead>
+      <tbody id="eventList"></tbody>
+    </table>
+  </section>
+
+  <section id="createDutySection" class="col hidden">
+    <h2>Create Duty</h2>
+    <div id="createDutyAdmin" class="row">
+      <div class="col">
+        <h3>Admin Create Duty</h3>
+        <label>Title</label><input id="dutyTitle" type="text" />
+        <label>Description</label><input id="dutyDesc" type="text" />
+        <label>Event (optional)</label>
+        <select id="dutyEvent"><option value="">— None —</option></select>
+        <label>Status</label>
+        <select id="dutyStatus">
+          <option value="open">open</option>
+          <option value="closed">closed</option>
+        </select>
+        <button id="createDutyBtn">Create Duty</button>
+        <div id="createDutyError" class="error"></div>
+      </div>
+    </div>
+    <div id="createDutyVol" class="row">
+      <div class="col">
+        <h3>Volunteer Create Duty</h3>
+        <label>Title</label><input id="volDutyTitle" type="text" />
+        <label>Description</label><input id="volDutyDesc" type="text" />
+        <label>Event (optional)</label>
+        <select id="volDutyEvent"><option value="">— None —</option></select>
+        <button id="volCreateDutyBtn">Create Duty</button>
+        <div id="volCreateDutyError" class="error"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- LOGIN -->
+  <section id="authSection" class="col">
+    <h2>Login</h2>
+    <label>Email</label>
+    <input id="email" type="email" autocomplete="username" />
+    <label>Password</label>
+    <input id="password" type="password" autocomplete="current-password" />
+    <button id="loginBtn">Login</button>
+    <div id="loginError" class="error"></div>
+
+    <button id="showSignupBtn" style="margin-top:16px">Sign up</button>
+    <div id="signupWrap" class="hidden">
+      <h2 style="margin-top:16px">Sign Up</h2>
+      <label>Name</label>
+      <input id="signupName" type="text" autocomplete="name" />
+      <label>Email</label>
+      <input id="signupEmail" type="email" autocomplete="email" />
+      <label>Password</label>
+      <input id="signupPassword" type="password" autocomplete="new-password" />
+      <label>Organization</label>
+      <select id="signupGroup"><option value="">— Select (optional) —</option></select>
+      <label>Phone</label>
+      <input id="signupPhone" type="text" autocomplete="tel" />
+      <label>Address</label>
+      <input id="signupAddress" type="text" autocomplete="street-address" />
+      <button id="signupBtn">Create Account</button>
+      <div id="signupError" class="error"></div>
+    </div>
+  </section>
+
+  <!-- ACCOUNT INFO (Name, Email, Phone, Address only) -->
+  <section id="infoSection" class="col hidden">
+    <h2>Account</h2>
+    <div>Role: <strong id="role"></strong></div>
+    <div>Group: <strong id="groupName"></strong> <span id="groupIdWrap" class="nowrap hidden">(ID: <span id="groupId"></span>)</span></div>
+    <div>User ID: <strong id="userId"></strong></div>
+    <button id="logoutBtn">Logout</button>
+    <hr />
+    <h3>Profile</h3>
+    <div class="row">
+      <div class="col">
+        <label>Name</label>
+        <input id="acctName" type="text" />
+        <label>Email</label>
+        <input id="acctEmail" type="email" />
+        <label>Phone</label>
+        <input id="acctPhone" type="text" />
+        <label>Address</label>
+        <input id="acctAddress" type="text" />
+        <button id="saveAccountInfo">Save</button>
+        <div id="accountInfoError" class="error"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SUPERADMIN -->
+  <section id="superadminSection" class="col hidden">
+    <h2>Superadmin Tools</h2>
+
+    <h3>Create Organization (Group)</h3>
+    <div class="row">
+      <div class="col">
+        <label>Organization Name</label><input id="groupNameInput" type="text" />
+        <label>Status</label>
+        <select id="groupStatus">
+          <option value="active">active</option>
+          <option value="inactive">inactive</option>
+        </select>
+        <button id="createGroupBtn">Create Group</button>
+        <div id="createGroupError" class="error"></div>
+      </div>
+    </div>
+
+    <h3>All Organizations</h3>
+    <table>
+      <thead><tr><th>ID</th><th>Name</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody id="groupList"></tbody>
+    </table>
+  </section>
+
+  <!-- ADMIN -->
+  <section id="adminSection" class="col hidden">
+    <h2>Admin Tools</h2>
+
+    <h3>Create Event</h3>
+    <div class="row">
+      <div class="col">
+        <label>Title</label><input id="eventTitle" type="text" />
+        <label>Description</label><input id="eventDesc" type="text" />
+        <label>Date</label><input id="eventDate" type="date" />
+        <button id="createEventBtn">Create Event</button>
+        <div id="createEventError" class="error"></div>
+      </div>
+    </div>
+
+    
+
+    <h3>Pending Approvals</h3>
+    <table>
+      <thead><tr><th>Log ID</th><th>Volunteer</th><th>Hours</th><th>Date</th><th>Approve</th></tr></thead>
+      <tbody id="approvalList"></tbody>
+    </table>
+
+    <button id="downloadCsvBtn">Download Timesheet CSV</button>
+    <div id="downloadCsvError" class="error"></div>
+
+    <h3>All Time Logs (Scoped to Org)</h3>
+    <table>
+      <thead>
+        <tr><th>ID</th><th>Volunteer</th><th>Duty</th><th>Start</th><th>End</th><th>Hours</th><th>Date</th><th>Edit</th><th>Delete</th></tr>
+      </thead>
+      <tbody id="adminTimeList"></tbody>
+    </table>
+
+    <h3>Photo Approvals</h3>
+    <div id="photoApprovals"></div>
+  </section>
+
+  <!-- VOLUNTEER (legacy combined section removed; now split into dedicated pages) -->
+
+  <footer id="footer"></footer>
+
+  <script>
+    const apiUrl = window.location.origin;
+    let token = null;
+    let role = null;
+    let groupId = null;
+    let userId = null;
+
+    function show(id) { document.getElementById(id).classList.remove('hidden'); }
+    function hide(id) { document.getElementById(id).classList.add('hidden'); }
+
+    // CONFIG/BRANDING
+    async function fetchConfig() {
+      try {
+        const res = await fetch(`${apiUrl}/config`);
+        if (!res.ok) return;
+        const cfg = await res.json();
+        if (cfg.appName) {
+          document.title = cfg.appName;
+          const titleEl = document.getElementById('appTitle');
+          if (titleEl) titleEl.textContent = cfg.appName;
+        }
+        if (cfg.primaryColor) document.documentElement.style.setProperty('--primary', cfg.primaryColor);
+        if (cfg.textColor) document.documentElement.style.setProperty('--text', cfg.textColor);
+        if (cfg.accents && cfg.accents[0]) document.documentElement.style.setProperty('--accent1', cfg.accents[0]);
+        if (cfg.accents && cfg.accents[1]) document.documentElement.style.setProperty('--accent2', cfg.accents[1]);
+        if (cfg.accents && cfg.accents[2]) document.documentElement.style.setProperty('--accent3', cfg.accents[2]);
+        if (cfg.accents && cfg.accents[3]) document.documentElement.style.setProperty('--accent4', cfg.accents[3]);
+        if (cfg.accents && cfg.accents[4]) document.documentElement.style.setProperty('--accent5', cfg.accents[4]);
+        if (cfg.bgImageUrl) document.body.style.backgroundImage = `url('${cfg.bgImageUrl}')`;
+        if (cfg.logoUrl) {
+          const logoEl = document.getElementById('logo');
+          const linkEl = document.getElementById('logoLink');
+          if (linkEl) linkEl.href = cfg.logoUrl;
+          if (logoEl) {
+            logoEl.src = cfg.logoUrl;
+            logoEl.onerror = () => { logoEl.classList.add('hidden'); };
+            logoEl.classList.remove('hidden');
+          }
+        }
+      } catch { /* silent */ }
+    }
+    fetchConfig();
+
+    // (Per-user theming removed)
+
+    // UTIL: fetch wrapper with auth
+    async function authed(path, opts = {}) {
+      const headers = Object.assign({}, opts.headers || {}, token ? { Authorization: `Bearer ${token}` } : {});
+      const res = await fetch(`${apiUrl}${path}`, Object.assign({}, opts, { headers }));
+      return res;
+    }
+
+    async function bootstrapAfterAuth(data) {
+      token = data.token;
+      role = data.role;
+      groupId = data.group_id || null;
+      userId = data.id;
+
+      document.getElementById('role').textContent = role;
+      document.getElementById('groupId').textContent = groupId ?? '-';
+      if (groupId != null) document.getElementById('groupIdWrap').classList.remove('hidden');
+      document.getElementById('userId').textContent = userId;
+
+      hide('authSection');
+      setupToolbar(role);
+      navigateTo('homeSection');
+
+      await loadMe();
+      await fetchConfig();
+      await fetchGroups();
+      await fetchEvents();
+      await fetchDuties();
+      await fetchTimeTracking();
+      await fetchPhotos();
+      await fetchApprovals();
+      await fetchAdminTimes();
+      await fetchPhotoApprovals();
+    }
+
+    // LOGIN
+    document.getElementById('loginBtn').addEventListener('click', async () => {
+      document.getElementById('loginError').textContent = '';
+      try {
+        const response = await fetch(`${apiUrl}/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: document.getElementById('email').value.trim(),
+            password: document.getElementById('password').value
+          })
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          document.getElementById('loginError').textContent = data.message || 'Login failed';
+          return;
+        }
+        await bootstrapAfterAuth(data);
+      } catch (e) {
+        document.getElementById('loginError').textContent = 'Error logging in';
+      }
+    });
+
+    // SIGNUP
+    async function fetchPublicGroups() {
+      try {
+        const res = await fetch(`${apiUrl}/public/groups`);
+        if (!res.ok) return;
+        const groups = await res.json();
+        const sel = document.getElementById('signupGroup');
+        if (!sel) return;
+        const current = sel.value;
+        sel.innerHTML = '<option value="">— Select (optional) —</option>';
+        groups.forEach(g => {
+          const opt = document.createElement('option');
+          opt.value = g.id;
+          opt.textContent = `${g.name}`;
+          sel.appendChild(opt);
+        });
+        if (current) sel.value = current;
+      } catch {}
+    }
+    fetchPublicGroups();
+    document.getElementById('showSignupBtn').addEventListener('click', () => {
+      const wrap = document.getElementById('signupWrap');
+      wrap.classList.toggle('hidden');
+    });
+
+    document.getElementById('signupBtn').addEventListener('click', async () => {
+      document.getElementById('signupError').textContent = '';
+      try {
+        const name = document.getElementById('signupName').value.trim();
+        const email = document.getElementById('signupEmail').value.trim();
+        const password = document.getElementById('signupPassword').value;
+        const phone = document.getElementById('signupPhone').value.trim();
+        const address = document.getElementById('signupAddress').value.trim();
+        const groupSel = document.getElementById('signupGroup');
+        const group_id = groupSel && groupSel.value ? Number(groupSel.value) : null;
+        const response = await fetch(`${apiUrl}/signup`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, email, password, phone, address, group_id })
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          document.getElementById('signupError').textContent = data.message || 'Signup failed';
+          return;
+        }
+        // Auto-login
+        await bootstrapAfterAuth(data);
+      } catch {
+        document.getElementById('signupError').textContent = 'Error creating account';
+      }
+    });
+
+    // LOGOUT
+    document.getElementById('logoutBtn').addEventListener('click', () => {
+      token = null; role = null; groupId = null; userId = null;
+      show('authSection');
+      ['infoSection','superadminSection','adminSection','homeSection','createDutySection','clockSection','eventsSection','photosSection']
+        .forEach(id => { const el = document.getElementById(id); if (el) el.classList.add('hidden'); });
+    });
+
+    // GROUPS (front-end shows name; backend uses id)
+    async function fetchGroups() {
+      try {
+        const res = await authed('/groups');
+        const groups = await res.json();
+
+        // map id->name for display
+        const nameById = {};
+        groups.forEach(g => nameById[g.id] = g.name);
+
+        // show user-facing group name if we know their groupId
+        const groupNameEl = document.getElementById('groupName');
+        if (groupId != null && nameById[groupId]) {
+          groupNameEl.textContent = nameById[groupId];
+        } else {
+          groupNameEl.textContent = '-';
+        }
+
+        // superadmin table
+        const tbody = document.getElementById('groupList');
+        if (tbody) {
+          tbody.innerHTML = '';
+          groups.forEach(g => {
+            const tr = document.createElement('tr');
+            tr.innerHTML =
+              `<td>${g.id}</td><td>${g.name}</td><td>${g.status}</td>
+               <td><button onclick="deleteGroup(${g.id})">Delete</button></td>`;
+            tbody.appendChild(tr);
+          });
+        }
+      } catch (e) { /* silent */ }
+    }
+
+    async function deleteGroup(id) {
+      try {
+        const res = await authed(`/groups/${id}`, { method: 'DELETE' });
+        if (res.ok) fetchGroups();
+      } catch (e) { /* silent */ }
+    }
+
+    document.getElementById('createGroupBtn')?.addEventListener('click', async () => {
+      const name = document.getElementById('groupNameInput').value.trim();
+      const status = document.getElementById('groupStatus').value;
+      try {
+        const res = await authed('/groups', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, status })
+        });
+        if (!res.ok) {
+          document.getElementById('createGroupError').textContent = 'Failed to create group';
+          return;
+        }
+        document.getElementById('createGroupError').textContent = '';
+        document.getElementById('groupNameInput').value = '';
+        fetchGroups();
+      } catch {
+        document.getElementById('createGroupError').textContent = 'Error creating group';
+      }
+    });
+
+    // EVENTS
+    async function fetchEvents() {
+      try {
+        const res = await authed('/events');
+        const events = await res.json();
+        const tbody = document.getElementById('eventList');
+        if (tbody) {
+          tbody.innerHTML = '';
+          events.forEach(e => {
+            const tr = document.createElement('tr');
+            tr.innerHTML =
+              `<td>${e.id}</td><td>${e.title}</td><td>${e.event_date || ''}</td>
+               <td><button disabled title="Join coming soon">Join</button></td>`;
+            tbody.appendChild(tr);
+          });
+        }
+
+        // Populate optional event dropdowns for duty creation
+        const eventSelects = [document.getElementById('dutyEvent'), document.getElementById('volDutyEvent')];
+        eventSelects.forEach(sel => {
+          if (!sel) return;
+          const current = sel.value;
+          sel.innerHTML = '<option value="">— None —</option>';
+          events.forEach(e => {
+            const opt = document.createElement('option');
+            opt.value = e.id;
+            opt.textContent = `${e.title} ${e.event_date ? '— ' + e.event_date : ''}`;
+            sel.appendChild(opt);
+          });
+          if (current) sel.value = current;
+        });
+      } catch (e) { /* silent */ }
+    }
+
+    document.getElementById('createEventBtn')?.addEventListener('click', async () => {
+      const title = document.getElementById('eventTitle').value.trim();
+      const description = document.getElementById('eventDesc').value.trim();
+      const event_date = document.getElementById('eventDate').value;
+      try {
+        const res = await authed('/events', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title, description, event_date, group_id: groupId })
+        });
+        if (!res.ok) {
+          document.getElementById('createEventError').textContent = 'Failed to create event';
+          return;
+        }
+        document.getElementById('createEventError').textContent = '';
+        document.getElementById('eventTitle').value = '';
+        document.getElementById('eventDesc').value = '';
+        document.getElementById('eventDate').value = '';
+        fetchEvents();
+      } catch {
+        document.getElementById('createEventError').textContent = 'Error creating event';
+      }
+    });
+
+    // Create Event (from Events page admin-only form)
+    document.getElementById('createEventBtn2')?.addEventListener('click', async () => {
+      const title = document.getElementById('eventTitle2').value.trim();
+      const description = document.getElementById('eventDesc2').value.trim();
+      const event_date = document.getElementById('eventDate2').value;
+      try {
+        const res = await authed('/events', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title, description, event_date, group_id: groupId })
+        });
+        if (!res.ok) {
+          document.getElementById('createEventError2').textContent = 'Failed to create event';
+          return;
+        }
+        document.getElementById('createEventError2').textContent = '';
+        document.getElementById('eventTitle2').value = '';
+        document.getElementById('eventDesc2').value = '';
+        document.getElementById('eventDate2').value = '';
+        fetchEvents();
+      } catch {
+        document.getElementById('createEventError2').textContent = 'Error creating event';
+      }
+    });
+
+    // DUTIES (admin-managed; volunteer sees assigned duties)
+    async function fetchDuties() {
+      try {
+        const res = await authed('/duties'); // backend should return duties user can see
+        const duties = await res.json();
+        const tbody = document.getElementById('dutyList');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        // populate duty table rows and photo duty select
+        const dutySelect = document.getElementById('photoDuty');
+        if (dutySelect) { dutySelect.innerHTML = ''; }
+        duties.forEach(d => {
+          const tr = document.createElement('tr');
+          tr.innerHTML =
+            `<td>${d.id}</td><td>${d.title}</td><td>${d.description || ''}</td><td>${d.status}</td>
+             <td>
+               <input type="date" id="dutyDate-${d.id}" required>
+               <button onclick="startTime(${d.id})">Clock In</button>
+               <button onclick="stopTime(${d.id})">Clock Out</button>
+             </td>`;
+          tbody.appendChild(tr);
+          if (dutySelect) {
+            const opt = document.createElement('option');
+            opt.value = d.id;
+            opt.textContent = `${d.id} — ${d.title}`;
+            dutySelect.appendChild(opt);
+          }
+        });
+      } catch (e) { /* silent */ }
+    }
+
+    // Create Duty (admin)
+    document.getElementById('createDutyBtn')?.addEventListener('click', async () => {
+      const title = document.getElementById('dutyTitle').value.trim();
+      const description = document.getElementById('dutyDesc').value.trim();
+      const eventSel = document.getElementById('dutyEvent');
+      const event_id = eventSel && eventSel.value ? Number(eventSel.value) : null;
+      const status = document.getElementById('dutyStatus').value;
+      try {
+        const res = await authed('/duties', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title, description, status, group_id: groupId, event_id })
+        });
+        if (!res.ok) {
+          document.getElementById('createDutyError').textContent = 'Failed to create duty';
+          return;
+        }
+        document.getElementById('createDutyError').textContent = '';
+        document.getElementById('dutyTitle').value = '';
+        document.getElementById('dutyDesc').value = '';
+        if (eventSel) eventSel.value = '';
+        fetchDuties();
+      } catch {
+        document.getElementById('createDutyError').textContent = 'Error creating duty';
+      }
+    });
+
+    // Create Duty (volunteer)
+    document.getElementById('volCreateDutyBtn')?.addEventListener('click', async () => {
+      const title = document.getElementById('volDutyTitle').value.trim();
+      const description = document.getElementById('volDutyDesc').value.trim();
+      const eventSel = document.getElementById('volDutyEvent');
+      const event_id = eventSel && eventSel.value ? Number(eventSel.value) : null;
+      try {
+        const res = await authed('/duties', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title, description, event_id })
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          document.getElementById('volCreateDutyError').textContent = data.message || 'Failed to create duty';
+          return;
+        }
+        document.getElementById('volCreateDutyError').textContent = '';
+        document.getElementById('volDutyTitle').value = '';
+        document.getElementById('volDutyDesc').value = '';
+        if (eventSel) eventSel.value = '';
+        fetchDuties();
+      } catch {
+        document.getElementById('volCreateDutyError').textContent = 'Error creating duty';
+      }
+    });
+
+    async function startTime(dutyId) {
+      try {
+        const dutyDate = document.getElementById(`dutyDate-${dutyId}`).value;
+        const res = await authed(`/duties/${dutyId}/time/start`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ duty_date: dutyDate })
+        });
+        if (res.ok) fetchTimeTracking();
+        else {
+          const data = await res.json().catch(() => ({}));
+          alert(data.message || 'Failed to clock in');
+        }
+      } catch {
+        alert('Error clocking in');
+      }
+    }
+
+    async function stopTime(dutyId) {
+      try {
+        const res = await authed(`/duties/${dutyId}/time/end`, { method: 'POST' });
+        if (res.ok) fetchTimeTracking();
+        else {
+          const data = await res.json().catch(() => ({}));
+          alert(data.message || 'Failed to clock out');
+        }
+      } catch {
+        alert('Error clocking out');
+      }
+    }
+
+    // TIMESHEET
+    async function fetchTimeTracking() {
+      try {
+        const res = await authed('/time-tracking');
+        const rows = await res.json();
+        const tbody = document.getElementById('timeList');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        rows.forEach(r => {
+          const tr = document.createElement('tr');
+          const hours = (r.duration_hours != null ? Number(r.duration_hours).toFixed(2) : '');
+          tr.innerHTML =
+            `<td>${r.id}</td><td>${r.duty_id || ''}</td>
+             <td class="nowrap">${r.start_time || ''}</td>
+             <td class="nowrap">${r.end_time || ''}</td>
+             <td>${hours}</td>
+             <td>${r.duty_date || ''}</td>`;
+          tbody.appendChild(tr);
+        });
+      } catch (e) { /* silent */ }
+    }
+
+    // APPROVAL QUEUE (admin)
+    async function fetchApprovals() {
+      if (role !== 'admin' && role !== 'superadmin') return;
+      try {
+        const res = await authed('/time-tracking');
+        const rows = await res.json();
+        const tbody = document.getElementById('approvalList');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        rows.filter(r => !r.approved).forEach(r => {
+          const tr = document.createElement('tr');
+          const hours = (r.duration_hours != null ? Number(r.duration_hours).toFixed(2) : '');
+          tr.innerHTML =
+            `<td>${r.id}</td><td>${r.volunteer_id || ''}</td><td>${hours}</td><td>${r.duty_date || ''}</td>
+             <td><button onclick="approve(${r.id})">Approve</button></td>`;
+          tbody.appendChild(tr);
+        });
+      } catch (e) { /* silent */ }
+    }
+    async function approve(id) {
+      try {
+        const res = await authed(`/time-tracking/${id}/approve`, { method: 'POST' });
+        if (res.ok) fetchApprovals();
+      } catch (e) { /* silent */ }
+    }
+
+    // ADMIN TIMES TABLE
+    async function fetchAdminTimes() {
+      if (role !== 'admin' && role !== 'superadmin') return;
+      try {
+        const res = await authed('/time-tracking');
+        const rows = await res.json();
+        const tbody = document.getElementById('adminTimeList');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        rows.forEach(r => {
+          const tr = document.createElement('tr');
+          const hours = (r.duration_hours != null ? Number(r.duration_hours).toFixed(2) : '');
+          tr.innerHTML =
+            `<td>${r.id}</td><td>${r.volunteer_id || ''}</td><td>${r.duty_id || ''}</td>
+             <td><input type="datetime-local" id="start-${r.id}" value="${formatDateTimeLocal(r.start_time)}"></td>
+             <td><input type="datetime-local" id="end-${r.id}" value="${formatDateTimeLocal(r.end_time)}"></td>
+             <td>${hours}</td>
+             <td><input type="date" id="date-${r.id}" value="${formatDateLocal(r.duty_date)}"></td>
+             <td><button onclick="saveTime(${r.id})">Save</button></td>
+             <td><button onclick="deleteTime(${r.id})">Delete</button></td>`;
+          tbody.appendChild(tr);
+        });
+      } catch (e) { /* silent */ }
+    }
+
+    function formatDateTimeLocal(iso) {
+      if (!iso) return '';
+      const d = new Date(iso);
+      const pad = n => String(n).padStart(2,'0');
+      return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+    function formatDateLocal(iso) {
+      if (!iso) return '';
+      const d = new Date(iso);
+      const pad = n => String(n).padStart(2,'0');
+      return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+    }
+
+    async function saveTime(id) {
+      try {
+        const payload = {
+          start_time: document.getElementById(`start-${id}`).value || null,
+          end_time: document.getElementById(`end-${id}`).value || null,
+          duty_date: document.getElementById(`date-${id}`).value || null,
+        };
+        const res = await authed(`/time-tracking/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (res.ok) { fetchAdminTimes(); fetchTimeTracking(); fetchApprovals(); }
+        else {
+          const data = await res.json().catch(() => ({}));
+          alert(data.message || 'Failed to save');
+        }
+      } catch { alert('Error saving'); }
+    }
+    async function deleteTime(id) {
+      if (!confirm('Delete this time log?')) return;
+      try {
+        const res = await authed(`/time-tracking/${id}`, { method: 'DELETE' });
+        if (res.ok) { fetchAdminTimes(); fetchTimeTracking(); fetchApprovals(); }
+        else {
+          const data = await res.json().catch(() => ({}));
+          alert(data.message || 'Failed to delete');
+        }
+      } catch { alert('Error deleting'); }
+    }
+    
+
+    // Profile
+    async function loadMe() {
+      try {
+        const res = await authed('/me');
+        if (!res.ok) return;
+        const me = await res.json();
+        document.getElementById('acctName').value = me.name || '';
+        document.getElementById('acctEmail').value = me.email || '';
+        document.getElementById('acctPhone').value = me.phone || '';
+        document.getElementById('acctAddress').value = me.address || '';
+      } catch { /* silent */ }
+    }
+
+    document.getElementById('saveAccountInfo')?.addEventListener('click', async () => {
+      document.getElementById('accountInfoError').textContent = '';
+      try {
+        const res = await authed('/account', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: document.getElementById('acctName').value.trim(),
+            email: document.getElementById('acctEmail').value.trim(),
+            phone: document.getElementById('acctPhone').value.trim(),
+            address: document.getElementById('acctAddress').value.trim(),
+          })
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          document.getElementById('accountInfoError').textContent = data.message || 'Failed to save profile';
+          return;
+        }
+        document.getElementById('accountInfoError').textContent = '';
+      } catch {
+        document.getElementById('accountInfoError').textContent = 'Error saving profile';
+      }
+    });
+
+    // (Per-user theming removed)
+
+    // NAVIGATION / TOOLBAR
+    function hideMainSections() {
+      ['infoSection','superadminSection','homeSection','createDutySection','clockSection','photosSection','eventsSection','adminSection'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.add('hidden');
+      });
+    }
+    function navigateTo(sectionId) {
+      hideMainSections();
+      show(sectionId);
+    }
+    function setupToolbar(currentRole) {
+      const tb = document.getElementById('toolbar');
+      if (!tb) return;
+      tb.classList.remove('hidden');
+      const isVolunteer = currentRole === 'volunteer';
+      const isAdminish = currentRole === 'admin' || currentRole === 'superadmin';
+      document.getElementById('navAdminBtn').classList.toggle('hidden', !isAdminish);
+      document.getElementById('navClockBtn').classList.toggle('hidden', !isVolunteer);
+      document.getElementById('navPhotosBtn').classList.toggle('hidden', !isVolunteer);
+      document.getElementById('navHomeBtn').onclick = () => navigateTo('homeSection');
+      document.getElementById('navAdminBtn').onclick = () => navigateTo('adminSection');
+      document.getElementById('navCreateDutyBtn').onclick = () => {
+        navigateTo('createDutySection');
+        document.getElementById('createDutyAdmin').classList.toggle('hidden', !isAdminish);
+        document.getElementById('createDutyVol').classList.toggle('hidden', isAdminish);
+      };
+      document.getElementById('navEventsBtn').onclick = async () => {
+        navigateTo('eventsSection');
+        // Show create form only for admins/superadmins
+        const wrap = document.getElementById('eventsCreateWrap');
+        if (wrap) wrap.classList.toggle('hidden', !isAdminish);
+        await fetchEvents();
+      };
+      document.getElementById('navClockBtn').onclick = async () => { navigateTo('clockSection'); await fetchDuties(); await fetchTimeTracking(); };
+      document.getElementById('navPhotosBtn').onclick = async () => { navigateTo('photosSection'); await fetchDuties(); await fetchPhotos(); };
+      document.getElementById('navAccountBtn').onclick = () => navigateTo('infoSection');
+      document.getElementById('navLogoutBtn').onclick = () => document.getElementById('logoutBtn').click();
+    }
+
+    // CSV download (role-scoped)
+    document.getElementById('downloadCsvBtn')?.addEventListener('click', async () => {
+      document.getElementById('downloadCsvError').textContent = '';
+      try {
+        const res = await authed('/time-tracking.csv');
+        if (!res.ok) {
+          document.getElementById('downloadCsvError').textContent = 'Failed to download CSV';
+          return;
+        }
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'time-tracking.csv';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      } catch {
+        document.getElementById('downloadCsvError').textContent = 'Error downloading CSV';
+      }
+    });
+
+    // Photos
+    async function fetchPhotos() {
+      try {
+        const res = await authed('/photos');
+        if (!res.ok) return;
+        const rows = await res.json();
+        const gallery = document.getElementById('photoGallery');
+        if (!gallery) return;
+        gallery.innerHTML = '';
+        rows.forEach(p => {
+          const div = document.createElement('div');
+          div.style.marginTop = '8px';
+          div.innerHTML = `<img src="${p.file_path}" alt="photo" style="max-width:200px;border-radius:8px;"> <div>${p.caption || ''} ${p.approved ? '✔️' : '⏳'}</div>`;
+          gallery.appendChild(div);
+        });
+      } catch { /* silent */ }
+    }
+    // Admin photo approvals
+    async function fetchPhotoApprovals() {
+      if (role !== 'admin' && role !== 'superadmin') return;
+      try {
+        const res = await authed('/photos');
+        if (!res.ok) return;
+        const rows = await res.json();
+        const wrap = document.getElementById('photoApprovals');
+        if (!wrap) return;
+        wrap.innerHTML = '';
+        rows.filter(p => !p.approved).forEach(p => {
+          const div = document.createElement('div');
+          div.style.marginTop = '8px';
+          div.innerHTML = `<img src="${p.file_path}" alt="pending" style="max-width:160px;border-radius:6px;margin-right:8px;vertical-align:middle;">` +
+                          `<span>#${p.id} — Volunteer ${p.volunteer_id} — Duty ${p.duty_id} — ${p.caption || ''}</span> ` +
+                          `<button onclick="approvePhoto(${p.id})">Approve</button>`;
+          wrap.appendChild(div);
+        });
+      } catch { /* silent */ }
+    }
+    async function approvePhoto(id) {
+      try {
+        const res = await authed(`/photos/${id}/approve`, { method: 'POST' });
+        if (res.ok) { fetchPhotoApprovals(); fetchPhotos(); }
+      } catch { /* silent */ }
+    }
+
+    document.getElementById('uploadPhotoBtn')?.addEventListener('click', async () => {
+      document.getElementById('photoError').textContent = '';
+      try {
+        const dutyId = document.getElementById('photoDuty').value;
+        const file = document.getElementById('photoFile').files[0];
+        const caption = document.getElementById('photoCaption').value.trim();
+        if (!file) { document.getElementById('photoError').textContent = 'Choose a photo'; return; }
+        const form = new FormData();
+        form.append('photo', file);
+        form.append('caption', caption);
+        const res = await fetch(`${apiUrl}/duties/${dutyId}/photos`, {
+          method: 'POST',
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          body: form,
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          document.getElementById('photoError').textContent = data.message || 'Upload failed';
+          return;
+        }
+        document.getElementById('photoFile').value = '';
+        document.getElementById('photoCaption').value = '';
+        fetchPhotos();
+      } catch {
+        document.getElementById('photoError').textContent = 'Error uploading photo';
+      }
+    });
+  </script>
+</body>
+</html>

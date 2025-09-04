@@ -1,0 +1,605 @@
+require('dotenv').config();
+const express = require('express');
+const cors = require('cors');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const { Pool } = require('pg');
+const fs = require('fs');
+const multer = require('multer');
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+// Use a sane default in development so login doesn't 500 if JWT_SECRET is unset
+const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-123';
+
+// --- DB connection (fallback to local dev DB if env not set)
+const DATABASE_URL = process.env.DATABASE_URL || 'postgres://localhost:5432/vmapp';
+const pool = new Pool({
+  connectionString: DATABASE_URL,
+  ssl: process.env.PGSSLMODE === 'require' ? { rejectUnauthorized: false } : false,
+});
+
+// Ensure optional event link on duties exists
+(async () => {
+  try {
+    await pool.query(
+      'ALTER TABLE IF EXISTS duties ADD COLUMN IF NOT EXISTS event_id INTEGER REFERENCES events(id) ON DELETE SET NULL'
+    );
+  } catch (e) {
+    console.error('Schema ensure failed (duties.event_id):', e?.message || e);
+  }
+})();
+
+// --- Middleware
+function authRequired(req, res, next) {
+  const auth = req.headers['authorization'];
+  if (!auth) return res.status(401).json({ message: 'Missing token' });
+  try {
+    const token = auth.split(' ')[1];
+    req.user = jwt.verify(token, JWT_SECRET);
+    next();
+  } catch {
+    return res.status(401).json({ message: 'Invalid token' });
+  }
+}
+
+function adminOnly(req, res, next) {
+  if (!['admin','superadmin'].includes(req.user.role)) {
+    return res.status(403).json({ message: 'Admins only' });
+  }
+  next();
+}
+
+function superadminOnly(req, res, next) {
+  if (req.user.role !== 'superadmin') {
+    return res.status(403).json({ message: 'Superadmins only' });
+  }
+  next();
+}
+
+// --- Helpers
+function isAdmin(user) {
+  return user && (user.role === 'admin' || user.role === 'superadmin');
+}
+
+// --- Auth Routes
+app.post('/register', authRequired, adminOnly, async (req, res) => {
+  try {
+    const { name, email, phone, address, password, role, group_id } = req.body;
+    const hash = await bcrypt.hash(password, 10);
+    const result = await pool.query(
+      'INSERT INTO users (name,email,phone,address,password,role,group_id) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id',
+      [name, email, phone, address, hash, role, group_id || null]
+    );
+    res.json({ id: result.rows[0].id });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+// Public signup: create a volunteer under a selected group (or none)
+app.post('/signup', async (req, res) => {
+  try {
+    const { name, email, password, phone, address, group_id } = req.body || {};
+    if (!name || !email || !password) return res.status(400).json({ message: 'Missing required fields' });
+    const exists = await pool.query('SELECT 1 FROM users WHERE email=$1', [email]);
+    if (exists.rowCount > 0) return res.status(400).json({ message: 'Email already registered' });
+    const hash = await bcrypt.hash(password, 10);
+    const result = await pool.query(
+      'INSERT INTO users (name,email,phone,address,password,role,group_id) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, role, group_id',
+      [name, email, phone || null, address || null, hash, 'volunteer', group_id ?? null]
+    );
+    const user = { id: result.rows[0].id, role: 'volunteer', group_id: result.rows[0].group_id };
+    const token = jwt.sign(user, JWT_SECRET, { expiresIn: '1h' });
+    res.json({ token, ...user });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+// Public groups listing for signup dropdown
+app.get('/public/groups', async (req, res) => {
+  try {
+    const rows = await pool.query('SELECT id, name FROM groups WHERE status = $1 ORDER BY name', ['active']);
+    res.json(rows.rows);
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to load groups' });
+  }
+});
+
+app.post('/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    const result = await pool.query('SELECT * FROM users WHERE email=$1', [email]);
+    if (result.rowCount === 0) return res.status(400).json({ message: 'Invalid credentials' });
+    const user = result.rows[0];
+    let match = false;
+    try {
+      match = await bcrypt.compare(password, user.password);
+    } catch (_) {
+      match = false;
+    }
+    if (!match) {
+      // Fallback: verify using Postgres crypt() against stored hash (supports pgcrypto seeds)
+      const verify = await pool.query('SELECT 1 FROM users WHERE email=$1 AND password = crypt($2, password)', [email, password]);
+      if (verify.rowCount === 0) return res.status(400).json({ message: 'Invalid credentials' });
+    }
+    const token = jwt.sign(
+      { id: user.id, role: user.role, group_id: user.group_id },
+      JWT_SECRET,
+      { expiresIn: '1h' }
+    );
+    res.json({ token, role: user.role, group_id: user.group_id, id: user.id });
+  } catch (err) {
+    res.status(500).json({ message: err?.message || 'Error logging in' });
+  }
+});
+
+// --- Account & Config
+app.get('/me', authRequired, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT id, name, email, phone, address, role, group_id FROM users WHERE id=$1', [req.user.id]);
+    if (result.rowCount === 0) return res.status(404).json({ message: 'Not found' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ message: 'Error loading profile' });
+  }
+});
+
+app.post('/account', authRequired, async (req, res) => {
+  try {
+    const { name, email, phone, address } = req.body;
+    const result = await pool.query(
+      'UPDATE users SET name=COALESCE($1,name), email=COALESCE($2,email), phone=COALESCE($3,phone), address=COALESCE($4,address) WHERE id=$5 RETURNING id',
+      [name ?? null, email ?? null, phone ?? null, address ?? null, req.user.id]
+    );
+    res.json({ id: result.rows[0].id });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+app.get('/config', (req, res) => {
+  res.json({
+    appName: process.env.APP_NAME || 'Volunteer Time Tracking',
+    logoUrl: process.env.LOGO_URL || 'https://i.postimg.cc/Ght5qLQw/TTTC-Logo-Redesign2.jpg',
+    primaryColor: process.env.THEME_PRIMARY || '#000000',
+    textColor: process.env.THEME_TEXT || '#ffffff',
+    accents: [
+      process.env.ACCENT1 || '#35b1fb',
+      process.env.ACCENT2 || '#0289db',
+      process.env.ACCENT3 || '#054a74',
+      process.env.ACCENT4 || '#00433a',
+      process.env.ACCENT5 || '#ffffff'
+    ],
+    bgImageUrl: process.env.BG_IMAGE_URL || null,
+  });
+});
+
+// Per-user theme endpoints
+app.get('/theme', authRequired, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM user_theme WHERE user_id=$1', [req.user.id]);
+    const defaults = {
+      primary_color: process.env.THEME_PRIMARY || '#000000',
+      text_color: process.env.THEME_TEXT || '#ffffff',
+      accent1: process.env.ACCENT1 || '#35b1fb',
+      accent2: process.env.ACCENT2 || '#0289db',
+      accent3: process.env.ACCENT3 || '#054a74',
+      accent4: process.env.ACCENT4 || '#00433a',
+      accent5: process.env.ACCENT5 || '#ffffff',
+      logo_url: process.env.LOGO_URL || null,
+      bg_image_url: process.env.BG_IMAGE_URL || null,
+    };
+    res.json({ ...defaults, ...(result.rows[0] || {}) });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to load theme' });
+  }
+});
+
+app.post('/theme', authRequired, async (req, res) => {
+  try {
+    const t = req.body || {};
+    const result = await pool.query(
+      `INSERT INTO user_theme (user_id, primary_color, text_color, accent1, accent2, accent3, accent4, accent5, logo_url, bg_image_url, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW())
+       ON CONFLICT (user_id) DO UPDATE SET
+         primary_color=EXCLUDED.primary_color,
+         text_color=EXCLUDED.text_color,
+         accent1=EXCLUDED.accent1,
+         accent2=EXCLUDED.accent2,
+         accent3=EXCLUDED.accent3,
+         accent4=EXCLUDED.accent4,
+         accent5=EXCLUDED.accent5,
+         logo_url=EXCLUDED.logo_url,
+         bg_image_url=EXCLUDED.bg_image_url,
+         updated_at=NOW()
+       RETURNING user_id`,
+      [
+        req.user.id,
+        t.primary_color ?? null,
+        t.text_color ?? null,
+        t.accent1 ?? null,
+        t.accent2 ?? null,
+        t.accent3 ?? null,
+        t.accent4 ?? null,
+        t.accent5 ?? null,
+        t.logo_url ?? null,
+        t.bg_image_url ?? null,
+      ]
+    );
+    res.json({ ok: true, user_id: result.rows[0].user_id });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+// --- Groups
+app.get('/groups', authRequired, async (req, res) => {
+  const groups = await pool.query('SELECT * FROM groups ORDER BY id');
+  res.json(groups.rows);
+});
+
+app.post('/groups', authRequired, superadminOnly, async (req, res) => {
+  try {
+    const { name, status } = req.body;
+    const result = await pool.query(
+      'INSERT INTO groups (name,status) VALUES ($1,$2) RETURNING id',
+      [name, status || 'active']
+    );
+    res.json({ id: result.rows[0].id });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+app.delete('/groups/:id', authRequired, superadminOnly, async (req, res) => {
+  await pool.query('DELETE FROM groups WHERE id=$1', [req.params.id]);
+  res.json({ ok: true });
+});
+
+// --- Events
+app.get('/events', authRequired, async (req, res) => {
+  if (req.user.role === 'superadmin') {
+    const events = await pool.query('SELECT * FROM events ORDER BY event_date DESC');
+    return res.json(events.rows);
+  }
+  const events = await pool.query('SELECT * FROM events WHERE group_id=$1 OR group_id IS NULL ORDER BY event_date DESC', [req.user.group_id]);
+  res.json(events.rows);
+});
+
+app.post('/events', authRequired, adminOnly, async (req, res) => {
+  try {
+    const { title, description, event_date, group_id } = req.body;
+    const result = await pool.query(
+      'INSERT INTO events (title,description,event_date,group_id) VALUES ($1,$2,$3,$4) RETURNING id',
+      [title, description, event_date, group_id]
+    );
+    res.json({ id: result.rows[0].id });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+// --- Duties
+app.get('/duties', authRequired, async (req, res) => {
+  if (req.user.role === 'superadmin') {
+    const duties = await pool.query('SELECT * FROM duties ORDER BY id');
+    return res.json(duties.rows);
+  }
+  const duties = await pool.query('SELECT * FROM duties WHERE group_id=$1 OR group_id IS NULL ORDER BY id', [req.user.group_id]);
+  res.json(duties.rows);
+});
+
+app.post('/duties', authRequired, async (req, res) => {
+  try {
+    const { title, description, status, group_id, event_id } = req.body || {};
+    let targetGroupId = group_id ?? null;
+    if (isAdmin(req.user)) {
+      // admins/superadmins may specify group_id; if omitted and they have a group, use it; otherwise allow global (NULL)
+      targetGroupId = (targetGroupId ?? req.user.group_id ?? null);
+    } else if (req.user.role === 'volunteer') {
+      // volunteers can only create within their own group and must have one
+      targetGroupId = req.user.group_id;
+      if (targetGroupId == null) return res.status(400).json({ message: 'Missing group context' });
+    } else {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+
+    const result = await pool.query(
+      'INSERT INTO duties (title,description,status,group_id,event_id) VALUES ($1,$2,$3,$4,$5) RETURNING id',
+      [title, description, status || 'open', targetGroupId, event_id ?? null]
+    );
+    res.json({ id: result.rows[0].id });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+// --- Time tracking
+app.post('/duties/:id/time/start', authRequired, async (req, res) => {
+  try {
+    const { duty_date } = req.body;
+    const result = await pool.query(
+      'INSERT INTO time_tracking (volunteer_id,duty_id,start_time,duty_date) VALUES ($1,$2,NOW(),$3) RETURNING id',
+      [req.user.id, req.params.id, duty_date]
+    );
+    res.json({ id: result.rows[0].id });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+app.post('/duties/:id/time/end', authRequired, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `UPDATE time_tracking
+       SET end_time=NOW(),
+           duration_hours=EXTRACT(EPOCH FROM (NOW()-start_time))/3600
+       WHERE volunteer_id=$1 AND duty_id=$2 AND end_time IS NULL
+       RETURNING id`,
+      [req.user.id, req.params.id]
+    );
+    if (result.rowCount === 0) return res.status(400).json({ message: 'No active clock-in' });
+    res.json({ id: result.rows[0].id });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+app.get('/time-tracking', authRequired, async (req, res) => {
+  if (req.user.role === 'superadmin') {
+    const rows = await pool.query('SELECT * FROM time_tracking ORDER BY start_time DESC');
+    return res.json(rows.rows);
+  }
+  if (req.user.role === 'admin') {
+    const rows = await pool.query(
+      `SELECT t.*
+       FROM time_tracking t
+       JOIN users u ON u.id = t.volunteer_id
+       WHERE u.group_id = $1
+       ORDER BY t.start_time DESC`,
+      [req.user.group_id]
+    );
+    return res.json(rows.rows);
+  }
+  const rows = await pool.query('SELECT * FROM time_tracking WHERE volunteer_id=$1 ORDER BY start_time DESC', [req.user.id]);
+  res.json(rows.rows);
+});
+
+// CSV export
+app.get('/time-tracking.csv', authRequired, async (req, res) => {
+  try {
+    let rows;
+    if (req.user.role === 'superadmin') {
+      rows = (await pool.query('SELECT * FROM time_tracking ORDER BY start_time DESC')).rows;
+    } else if (req.user.role === 'admin') {
+      rows = (await pool.query(
+        `SELECT t.*
+         FROM time_tracking t
+         JOIN users u ON u.id = t.volunteer_id
+         WHERE u.group_id = $1
+         ORDER BY t.start_time DESC`,
+        [req.user.group_id]
+      )).rows;
+    } else {
+      rows = (await pool.query('SELECT * FROM time_tracking WHERE volunteer_id=$1 ORDER BY start_time DESC', [req.user.id])).rows;
+    }
+    const header = ['id','volunteer_id','duty_id','event_id','start_time','end_time','duration_hours','duty_date','approved'];
+    const body = rows.map(r => header.map(h => r[h] == null ? '' : String(r[h]).replaceAll('"', '""')).map(v => `"${v}"`).join(','));
+    const csv = [header.join(','), ...body].join('\n');
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename="time-tracking.csv"');
+    res.send(csv);
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to export CSV' });
+  }
+});
+
+// Edit a time log (admin/superadmin)
+app.patch('/time-tracking/:id', authRequired, async (req, res) => {
+  if (!isAdmin(req.user)) return res.status(403).json({ message: 'Admins only' });
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) return res.status(400).json({ message: 'Invalid id' });
+  const { start_time, end_time, duty_date, duration_hours } = req.body || {};
+  try {
+    // Build update pieces
+    const setClauses = [];
+    const params = [];
+    let idx = 1;
+    if (start_time !== undefined) { setClauses.push(`start_time = $${idx++}::timestamp`); params.push(start_time || null); }
+    if (end_time !== undefined) { setClauses.push(`end_time = $${idx++}::timestamp`); params.push(end_time || null); }
+    if (duty_date !== undefined) { setClauses.push(`duty_date = $${idx++}::date`); params.push(duty_date || null); }
+    // duration computed if both times set, else accept manual override when provided
+    let computeDuration = false;
+    if (start_time !== undefined || end_time !== undefined) computeDuration = true;
+    if (!computeDuration && duration_hours !== undefined) {
+      setClauses.push(`duration_hours = $${idx++}`); params.push(duration_hours);
+    }
+    // Always recompute if both timestamps available in DB after update
+    // We implement recompute in SQL using CASE when computeDuration true
+    if (computeDuration) {
+      setClauses.push(`duration_hours = CASE WHEN (COALESCE((SELECT start_time FROM time_tracking WHERE id=$${idx}), start_time) IS NOT NULL AND COALESCE((SELECT end_time FROM time_tracking WHERE id=$${idx}), end_time) IS NOT NULL)
+        THEN EXTRACT(EPOCH FROM (COALESCE((SELECT end_time FROM time_tracking WHERE id=$${idx}), end_time) - COALESCE((SELECT start_time FROM time_tracking WHERE id=$${idx}), start_time)))/3600
+        ELSE duration_hours END`);
+      // Use id multiple times as placeholders
+      params.push(id, id, id, id);
+      idx += 4;
+    }
+
+    if (setClauses.length === 0) return res.json({ id });
+
+    let result;
+    if (req.user.role === 'superadmin') {
+      result = await pool.query(
+        `UPDATE time_tracking SET ${setClauses.join(', ')} WHERE id=$${idx} RETURNING id`,
+        [...params, id]
+      );
+    } else {
+      // Admins restricted to their group
+      result = await pool.query(
+        `UPDATE time_tracking t
+         SET ${setClauses.join(', ')}
+         FROM users u
+         WHERE t.id=$${idx} AND u.id=t.volunteer_id AND u.group_id=$${idx + 1}
+         RETURNING t.id`,
+        [...params, id, req.user.group_id]
+      );
+    }
+    if (result.rowCount === 0) return res.status(404).json({ message: 'Not found' });
+    res.json({ id: result.rows[0].id });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+// Delete a time log (admin/superadmin)
+app.delete('/time-tracking/:id', authRequired, async (req, res) => {
+  if (!isAdmin(req.user)) return res.status(403).json({ message: 'Admins only' });
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) return res.status(400).json({ message: 'Invalid id' });
+  try {
+    let result;
+    if (req.user.role === 'superadmin') {
+      result = await pool.query('DELETE FROM time_tracking WHERE id=$1 RETURNING id', [id]);
+    } else {
+      result = await pool.query(
+        `DELETE FROM time_tracking t USING users u
+         WHERE t.id=$1 AND u.id=t.volunteer_id AND u.group_id=$2
+         RETURNING t.id`,
+        [id, req.user.group_id]
+      );
+    }
+    if (result.rowCount === 0) return res.status(404).json({ message: 'Not found' });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+// --- Milestones
+app.get('/milestones', authRequired, async (req, res) => {
+  const rows = await pool.query('SELECT * FROM milestones WHERE volunteer_id=$1', [req.user.id]);
+  res.json(rows.rows);
+});
+
+// Alias to match frontend call /milestones/:id
+app.get('/milestones/:id', authRequired, async (req, res) => {
+  const targetId = Number(req.params.id);
+  if (!Number.isFinite(targetId)) return res.status(400).json({ message: 'Invalid id' });
+  if (req.user.id !== targetId && !isAdmin(req.user)) return res.status(403).json({ message: 'Forbidden' });
+  const rows = await pool.query('SELECT * FROM milestones WHERE volunteer_id=$1', [targetId]);
+  res.json(rows.rows);
+});
+
+app.post('/milestones', authRequired, async (req, res) => {
+  try {
+    const { goal_hours } = req.body;
+    const result = await pool.query(
+      'INSERT INTO milestones (volunteer_id,goal_hours) VALUES ($1,$2) RETURNING id',
+      [req.user.id, goal_hours]
+    );
+    res.json({ id: result.rows[0].id });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+// --- Approvals (admins)
+app.get('/approvals', authRequired, adminOnly, async (req, res) => {
+  const rows = await pool.query('SELECT * FROM time_tracking WHERE approved=false');
+  res.json(rows.rows);
+});
+
+app.post('/approvals/:id/approve', authRequired, adminOnly, async (req, res) => {
+  await pool.query('UPDATE time_tracking SET approved=true WHERE id=$1', [req.params.id]);
+  res.json({ ok: true });
+});
+
+// Alias to match frontend POST /time-tracking/:id/approve
+app.post('/time-tracking/:id/approve', authRequired, adminOnly, async (req, res) => {
+  await pool.query('UPDATE time_tracking SET approved=true WHERE id=$1', [req.params.id]);
+  res.json({ ok: true });
+});
+
+// --- Photo uploads (work evidence)
+const uploadDir = require('path').join(__dirname, 'uploads');
+try { fs.mkdirSync(uploadDir, { recursive: true }); } catch {}
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, uploadDir),
+  filename: (req, file, cb) => {
+    const ext = require('path').extname(file.originalname || '');
+    cb(null, `${Date.now()}-${Math.round(Math.random()*1e9)}${ext}`);
+  }
+});
+const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 } });
+
+// Upload photo for a duty
+app.post('/duties/:id/photos', authRequired, upload.single('photo'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
+    const dutyId = Number(req.params.id);
+    const caption = (req.body && req.body.caption) || null;
+    const publicPath = `/uploads/${req.file.filename}`;
+    const result = await pool.query(
+      `INSERT INTO work_photos (volunteer_id, duty_id, file_path, caption, approved)
+       VALUES ($1,$2,$3,$4,false) RETURNING id, file_path`,
+      [req.user.id, dutyId, publicPath, caption]
+    );
+    res.json({ id: result.rows[0].id, file_path: result.rows[0].file_path });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+// List photos (scoped)
+app.get('/photos', authRequired, async (req, res) => {
+  if (req.user.role === 'superadmin') {
+    const all = await pool.query('SELECT * FROM work_photos ORDER BY created_at DESC');
+    return res.json(all.rows);
+  }
+  if (req.user.role === 'admin') {
+    const rows = await pool.query(
+      `SELECT p.*
+       FROM work_photos p
+       JOIN users u ON u.id = p.volunteer_id
+       WHERE u.group_id = $1
+       ORDER BY p.created_at DESC`,
+      [req.user.group_id]
+    );
+    return res.json(rows.rows);
+  }
+  const mine = await pool.query('SELECT * FROM work_photos WHERE volunteer_id=$1 ORDER BY created_at DESC', [req.user.id]);
+  res.json(mine.rows);
+});
+
+// Approve a photo (admin/superadmin)
+app.post('/photos/:id/approve', authRequired, adminOnly, async (req, res) => {
+  if (req.user.role === 'superadmin') {
+    await pool.query('UPDATE work_photos SET approved=true WHERE id=$1', [req.params.id]);
+    return res.json({ ok: true });
+  }
+  const result = await pool.query(
+    `UPDATE work_photos p
+     SET approved=true
+     FROM users u
+     WHERE p.id=$1 AND u.id=p.volunteer_id AND u.group_id=$2
+     RETURNING p.id`,
+    [req.params.id, req.user.group_id]
+  );
+  if (result.rowCount === 0) return res.status(404).json({ message: 'Not found' });
+  res.json({ ok: true });
+});
+
+// --- Health
+app.get('/health', (req, res) => res.json({ ok: true }));
+
+// --- Serve frontend
+const path = require('path');
+app.use(express.static(path.join(__dirname, '/')));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`API listening on ${PORT}`));
