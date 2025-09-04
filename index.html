@@ -120,6 +120,8 @@
         <h3>Create Event</h3>
         <label>Title</label><input id="eventTitle2" type="text" />
         <label>Description</label><input id="eventDesc2" type="text" />
+        <label>Organization</label>
+        <select id="eventGroup2"><option value="">— Select group —</option></select>
         <label>Date</label><input id="eventDate2" type="date" />
         <button id="createEventBtn2">Create Event</button>
         <div id="createEventError2" class="error"></div>
@@ -138,6 +140,8 @@
         <h3>Admin Create Duty</h3>
         <label>Title</label><input id="dutyTitle" type="text" />
         <label>Description</label><input id="dutyDesc" type="text" />
+        <label>Group</label>
+        <select id="dutyGroup"><option value="">— Select group —</option></select>
         <label>Event (optional)</label>
         <select id="dutyEvent"><option value="">— None —</option></select>
         <label>Status</label>
@@ -269,6 +273,8 @@
       <div class="col">
         <label>Title</label><input id="eventTitle" type="text" />
         <label>Description</label><input id="eventDesc" type="text" />
+        <label>Organization</label>
+        <select id="eventGroupA"><option value="">— Select group —</option></select>
         <label>Date</label><input id="eventDate" type="date" />
         <button id="createEventBtn">Create Event</button>
         <div id="createEventError" class="error"></div>
@@ -580,7 +586,7 @@
           groupNameEl.textContent = '-';
         }
 
-        // superadmin: populate org list and new-user group selector(s)
+        // superadmin/admin: populate org list and new-user/duty group selector(s)
         const tbody = document.getElementById('groupList');
         if (tbody) {
           tbody.innerHTML = '';
@@ -597,7 +603,8 @@
           document.getElementById('newUserGroup'),
           document.getElementById('superGroup'),
           document.getElementById('adminGroup'),
-          document.getElementById('volGroup')
+          document.getElementById('volGroup'),
+          document.getElementById('dutyGroup')
         ];
         groupSelectors.forEach(sel => {
           if (!sel) return;
@@ -673,27 +680,48 @@
           });
           if (current) sel.value = current;
         });
+        // Populate event group selectors
+        const grpSels = [document.getElementById('eventGroupA'), document.getElementById('eventGroup2')];
+        for (const grpSel of grpSels) {
+          if (!grpSel) continue;
+          // ensure groups loaded
+          const resG = await authed('/groups');
+          const groups = await resG.json();
+          const current = grpSel.value;
+          grpSel.innerHTML = '<option value="">— Select group —</option>';
+          groups.forEach(g => {
+            const opt = document.createElement('option');
+            opt.value = g.id;
+            opt.textContent = g.name;
+            grpSel.appendChild(opt);
+          });
+          if (current) grpSel.value = current; else if (groupId != null) grpSel.value = String(groupId);
+        }
       } catch (e) { /* silent */ }
     }
 
     document.getElementById('createEventBtn')?.addEventListener('click', async () => {
       const title = document.getElementById('eventTitle').value.trim();
       const description = document.getElementById('eventDesc').value.trim();
+      const grpSel = document.getElementById('eventGroupA');
+      const gid = grpSel && grpSel.value ? Number(grpSel.value) : (groupId ?? null);
       const event_date = document.getElementById('eventDate').value;
       try {
         const res = await authed('/events', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title, description, event_date, group_id: groupId })
+          body: JSON.stringify({ title, description, event_date, group_id: gid })
         });
         if (!res.ok) {
-          document.getElementById('createEventError').textContent = 'Failed to create event';
+          const data = await res.json().catch(() => ({}));
+          document.getElementById('createEventError').textContent = data.message || 'Failed to create event';
           return;
         }
         document.getElementById('createEventError').textContent = '';
         document.getElementById('eventTitle').value = '';
         document.getElementById('eventDesc').value = '';
         document.getElementById('eventDate').value = '';
+        if (grpSel) grpSel.value = groupId != null ? String(groupId) : '';
         fetchEvents();
       } catch {
         document.getElementById('createEventError').textContent = 'Error creating event';
@@ -704,21 +732,25 @@
     document.getElementById('createEventBtn2')?.addEventListener('click', async () => {
       const title = document.getElementById('eventTitle2').value.trim();
       const description = document.getElementById('eventDesc2').value.trim();
+      const grpSel2 = document.getElementById('eventGroup2');
+      const gid2 = grpSel2 && grpSel2.value ? Number(grpSel2.value) : (groupId ?? null);
       const event_date = document.getElementById('eventDate2').value;
       try {
         const res = await authed('/events', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title, description, event_date, group_id: groupId })
+          body: JSON.stringify({ title, description, event_date, group_id: gid2 })
         });
         if (!res.ok) {
-          document.getElementById('createEventError2').textContent = 'Failed to create event';
+          const data = await res.json().catch(() => ({}));
+          document.getElementById('createEventError2').textContent = data.message || 'Failed to create event';
           return;
         }
         document.getElementById('createEventError2').textContent = '';
         document.getElementById('eventTitle2').value = '';
         document.getElementById('eventDesc2').value = '';
         document.getElementById('eventDate2').value = '';
+        if (grpSel2) grpSel2.value = groupId != null ? String(groupId) : '';
         fetchEvents();
       } catch {
         document.getElementById('createEventError2').textContent = 'Error creating event';
@@ -760,6 +792,8 @@
     document.getElementById('createDutyBtn')?.addEventListener('click', async () => {
       const title = document.getElementById('dutyTitle').value.trim();
       const description = document.getElementById('dutyDesc').value.trim();
+      const groupSel = document.getElementById('dutyGroup');
+      const group_id = groupSel && groupSel.value ? Number(groupSel.value) : (groupId ?? null);
       const eventSel = document.getElementById('dutyEvent');
       const event_id = eventSel && eventSel.value ? Number(eventSel.value) : null;
       const status = document.getElementById('dutyStatus').value;
@@ -767,10 +801,11 @@
         const res = await authed('/duties', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title, description, status, group_id: groupId, event_id })
+          body: JSON.stringify({ title, description, status, group_id, event_id })
         });
         if (!res.ok) {
-          document.getElementById('createDutyError').textContent = 'Failed to create duty';
+          const data = await res.json().catch(() => ({}));
+          document.getElementById('createDutyError').textContent = data.message || 'Failed to create duty';
           return;
         }
         document.getElementById('createDutyError').textContent = '';
