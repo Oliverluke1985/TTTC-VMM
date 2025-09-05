@@ -683,19 +683,19 @@
         const events = await res.json();
         const tbody = document.getElementById('eventList');
         if (tbody) {
-          tbody.innerHTML = '';
-          events.forEach(e => {
-            const tr = document.createElement('tr');
+        tbody.innerHTML = '';
+        events.forEach(e => {
+          const tr = document.createElement('tr');
             let actions = '';
             if (role === 'admin' || role === 'superadmin') {
               actions = `<button data-eid="${e.id}" class="editEventPrefillBtn">Edit</button> <button data-eid="${e.id}" class="archiveEventBtn">Archive</button> <button data-eid="${e.id}" class="deleteEventBtn">Delete</button>`;
             }
-            tr.innerHTML =
-              `<td>${e.id}</td><td>${e.title}</td><td>${e.event_date || ''}</td>
+          tr.innerHTML =
+            `<td>${e.id}</td><td>${e.title}</td><td>${e.event_date || ''}</td>
                <td>${e.joined ? `<button data-eid="${e.id}" class="leaveBtn">Leave</button>` : `<button data-eid=\"${e.id}\" class=\"joinBtn\">Join</button>`}</td>
                <td>${actions}</td>`;
-            tbody.appendChild(tr);
-          });
+          tbody.appendChild(tr);
+        });
           // wire actions
           tbody.querySelectorAll('.editEventPrefillBtn').forEach(btn => btn.addEventListener('click', (ev) => {
             const id = Number(ev.currentTarget.getAttribute('data-eid'));
@@ -1179,7 +1179,9 @@
         if (wrap) wrap.classList.toggle('hidden', !isAdminish);
         const actionsHeader = document.getElementById('eventActionsHeader');
         if (actionsHeader) actionsHeader.classList.toggle('hidden', !isAdminish);
-        document.getElementById('eventEditWrap').classList.toggle('hidden', !isAdminish);
+        // Keep edit form hidden until an event is selected to edit
+        const editWrap = document.getElementById('eventEditWrap');
+        if (editWrap) editWrap.classList.add('hidden');
         await fetchEvents();
       };
       document.getElementById('navClockBtn').onclick = async () => { navigateTo('clockSection'); await fetchDuties(); await fetchTimeTracking(); };
