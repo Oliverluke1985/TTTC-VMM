@@ -31,6 +31,7 @@
     th, td { border: 1px solid var(--accent3); padding: 6px 8px; vertical-align: top; }
     .hidden { display: none !important; }
     .error { color: #b00020; margin-top: 6px; }
+    .hint { color: var(--accent2); margin-top: 6px; }
     .ok { color: #0b6; }
     .nowrap { white-space: nowrap; }
     /* Defensive: hide extension popovers/overlays if present */
@@ -119,7 +120,7 @@
       <div class="col">
         <label>Organization (superadmin filter)</label>
         <select id="superEventGroupFilter"><option value="">— Select organization —</option></select>
-        <div id="eventsSuperNote" class="error"></div>
+        <div id="eventsSuperNote" class="hint"></div>
       </div>
     </div>
     <div id="eventsCreateWrap" class="row hidden">
@@ -157,7 +158,7 @@
       <div class="col">
         <label>Organization (superadmin filter)</label>
         <select id="superDutyGroupFilter"><option value="">— Select organization —</option></select>
-        <div id="dutiesSuperNote" class="error"></div>
+        <div id="dutiesSuperNote" class="hint"></div>
       </div>
     </div>
     <div id="createDutyAdmin" class="row">
@@ -680,7 +681,15 @@
             opt.textContent = `${g.name}`;
             sel.appendChild(opt);
           });
-          if (current) sel.value = current;
+          if (current) sel.value = current; else if (isFilter && groupId != null) sel.value = String(groupId);
+          // trigger refresh on filter change
+          if (isFilter && !sel._wiredChange) {
+            sel.addEventListener('change', () => {
+              if (sel.id === 'superEventGroupFilter') fetchEvents();
+              if (sel.id === 'superDutyGroupFilter') fetchDuties();
+            });
+            sel._wiredChange = true;
+          }
         });
       } catch (e) { /* silent */ }
     }
