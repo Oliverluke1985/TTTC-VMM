@@ -140,7 +140,7 @@ app.post('/signup', async (req, res) => {
 app.get('/public/groups', async (req, res) => {
   try {
     // Support schemas with either 'status' or 'group_status'
-    const rows = await pool.query("SELECT id, name FROM groups WHERE COALESCE(status, group_status, 'active') = 'active' ORDER BY name");
+    const rows = await pool.query("SELECT id, name FROM groups WHERE LOWER(COALESCE(status, group_status, 'active')) = 'active' ORDER BY name");
     res.json(rows.rows);
   } catch (err) {
     res.status(500).json({ message: 'Failed to load groups' });
@@ -308,8 +308,14 @@ app.post('/groups', authRequired, superadminOnly, async (req, res) => {
     const fields = ['name'];
     const params = ['$1'];
     const values = [name];
-    if (has.has('status')) { fields.push('status'); params.push('$2'); values.push(status || 'active'); }
-    else if (has.has('group_status')) { fields.push('group_status'); params.push('$2'); values.push(status || 'Active'); }
+    if (has.has('status')) { fields.push('status'); params.push('$2'); values.push((status || 'active')); }
+    else if (has.has('group_status')) {
+      const normalized = (status || 'Active');
+      const mapped = normalized.toLowerCase() === 'active' ? 'Active'
+                   : normalized.toLowerCase() === 'inactive' ? 'Inactive'
+                   : normalized; // fall back to whatever caller sent
+      fields.push('group_status'); params.push('$2'); values.push(mapped);
+    }
     const sql = `INSERT INTO groups (${fields.join(',')}) VALUES (${params.join(',')}) RETURNING id`;
     const result = await pool.query(sql, values);
     res.json({ id: result.rows[0].id });
