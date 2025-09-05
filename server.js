@@ -140,7 +140,7 @@ app.post('/signup', async (req, res) => {
 app.get('/public/groups', async (req, res) => {
   try {
     // Support schemas with either 'status' or 'group_status'
-    const rows = await pool.query("SELECT id, name FROM groups WHERE LOWER(COALESCE(status, group_status, 'active')) = 'active' ORDER BY name");
+    const rows = await pool.query("SELECT id, name FROM groups WHERE LOWER(COALESCE(status, group_status, 'active')) = 'active' ORDER BY LOWER(name) ASC");
     res.json(rows.rows);
   } catch (err) {
     res.status(500).json({ message: 'Failed to load groups' });
@@ -292,11 +292,11 @@ app.post('/theme', authRequired, async (req, res) => {
 // --- Groups
 app.get('/groups', authRequired, async (req, res) => {
   if (req.user.role === 'superadmin') {
-    const groups = await pool.query('SELECT * FROM groups ORDER BY id');
+    const groups = await pool.query('SELECT * FROM groups ORDER BY LOWER(name) ASC');
     return res.json(groups.rows);
   }
   if (req.user.group_id == null) return res.json([]);
-  const groups = await pool.query('SELECT * FROM groups WHERE id=$1 ORDER BY id', [req.user.group_id]);
+  const groups = await pool.query('SELECT * FROM groups WHERE id=$1 ORDER BY LOWER(name) ASC', [req.user.group_id]);
   res.json(groups.rows);
 });
 
