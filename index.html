@@ -294,7 +294,7 @@
         <select id="superadminOrgPicker"><option value="">— Select organization —</option></select>
       </div>
     </div>
-    <table>
+    <table id="groupTable" class="hidden">
       <thead><tr><th>ID</th><th>Name</th><th>Status</th><th>Actions</th></tr></thead>
       <tbody id="groupList"></tbody>
     </table>
@@ -671,6 +671,10 @@
                <td><button onclick="deleteGroup(${g.id})">Delete</button></td>`;
             tbody.appendChild(tr);
           });
+          // Show the table only when the picker is empty; otherwise keep it hidden to avoid duplication
+          const picker = document.getElementById('superadminOrgPicker');
+          const table = document.getElementById('groupTable');
+          if (table) table.classList.toggle('hidden', !!(picker && picker.options.length > 1));
         }
 
         // Populate superadmin org picker
