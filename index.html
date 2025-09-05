@@ -692,7 +692,21 @@
           if (isFilter && !sel._wiredChange) {
             sel.addEventListener('change', () => {
               if (sel.id === 'superEventGroupFilter') fetchEvents();
-              if (sel.id === 'superDutyGroupFilter') { populateEventDropdownsForGroup(sel.value); fetchDuties(); }
+              if (sel.id === 'superDutyGroupFilter') {
+                // Clear current duties immediately and hide any open editor
+                const tbody = document.getElementById('dutyList');
+                if (tbody) tbody.innerHTML = '';
+                const editSel = document.getElementById('dutyEditSelect');
+                if (editSel) editSel.innerHTML = '<option value="">— Select duty —</option>';
+                const wrap = document.getElementById('dutyEditWrap');
+                if (wrap) wrap.classList.add('hidden');
+                // Keep Create Duty group selector in sync with chosen org
+                const dutyGroupSel = document.getElementById('dutyGroup');
+                if (dutyGroupSel) dutyGroupSel.value = sel.value || '';
+                // Refresh events for that org first, then duties
+                populateEventDropdownsForGroup(sel.value);
+                fetchDuties();
+              }
             });
             sel._wiredChange = true;
           }
