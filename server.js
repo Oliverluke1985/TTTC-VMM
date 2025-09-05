@@ -291,7 +291,12 @@ app.post('/theme', authRequired, async (req, res) => {
 
 // --- Groups
 app.get('/groups', authRequired, async (req, res) => {
-  const groups = await pool.query('SELECT * FROM groups ORDER BY id');
+  if (req.user.role === 'superadmin') {
+    const groups = await pool.query('SELECT * FROM groups ORDER BY id');
+    return res.json(groups.rows);
+  }
+  if (req.user.group_id == null) return res.json([]);
+  const groups = await pool.query('SELECT * FROM groups WHERE id=$1 ORDER BY id', [req.user.group_id]);
   res.json(groups.rows);
 });
 
@@ -342,7 +347,7 @@ app.get('/events', authRequired, async (req, res) => {
        SELECT 1 FROM event_attendees a WHERE a.event_id = e.id AND a.user_id = $1
      ) AS joined
      FROM events e
-     WHERE e.archived_at IS NULL AND (e.group_id=$2 OR e.group_id IS NULL)
+     WHERE e.archived_at IS NULL AND e.group_id=$2
      ORDER BY e.event_date DESC`,
     [req.user.id, req.user.group_id]
   );
@@ -475,7 +480,7 @@ app.get('/duties', authRequired, async (req, res) => {
     const duties = await pool.query('SELECT * FROM duties ORDER BY id');
     return res.json(duties.rows);
   }
-  const duties = await pool.query('SELECT * FROM duties WHERE group_id=$1 OR group_id IS NULL ORDER BY id', [req.user.group_id]);
+  const duties = await pool.query('SELECT * FROM duties WHERE group_id=$1 ORDER BY id', [req.user.group_id]);
   res.json(duties.rows);
 });
 
