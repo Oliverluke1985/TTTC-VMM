@@ -686,9 +686,17 @@
           if (isFilter && !sel._wiredChange) {
             sel.addEventListener('change', () => {
               if (sel.id === 'superEventGroupFilter') fetchEvents();
-              if (sel.id === 'superDutyGroupFilter') fetchDuties();
+              if (sel.id === 'superDutyGroupFilter') { fetchDuties(); populateEventDropdownsForGroup(sel.value); }
             });
             sel._wiredChange = true;
+          }
+          // when admin changes target group for new duty, repopulate event dropdowns to that org
+          if (sel.id === 'dutyGroup' && !sel._wiredDuty) {
+            sel.addEventListener('change', () => {
+              const gid = sel.value || (groupId != null ? String(groupId) : '');
+              populateEventDropdownsForGroup(gid);
+            });
+            sel._wiredDuty = true;
           }
         });
       } catch (e) { /* silent */ }
@@ -830,6 +838,31 @@
           if (current) grpSel.value = current; else if (groupId != null) grpSel.value = String(groupId);
         }
       } catch (e) { /* silent */ }
+    }
+
+    // Populate duty event dropdowns for a specific organization
+    async function populateEventDropdownsForGroup(gid) {
+      try {
+        const dutySel = document.getElementById('dutyEvent');
+        const volSel = document.getElementById('volDutyEvent');
+        const clear = (sel) => { if (sel) sel.innerHTML = '<option value="">— None —</option>'; };
+        if (!gid) { clear(dutySel); clear(volSel); return; }
+        const res = await authed(`/events?group_id=${encodeURIComponent(gid)}`);
+        if (!res.ok) { clear(dutySel); clear(volSel); return; }
+        const events = await res.json();
+        [dutySel, volSel].forEach(sel => {
+          if (!sel) return;
+          const current = sel.value;
+          sel.innerHTML = '<option value="">— None —</option>';
+          events.forEach(e => {
+            const opt = document.createElement('option');
+            opt.value = e.id;
+            opt.textContent = `${e.title} ${e.event_date ? '— ' + e.event_date : ''}`;
+            sel.appendChild(opt);
+          });
+          if (current) sel.value = current;
+        });
+      } catch { /* silent */ }
     }
 
     document.getElementById('createEventBtn')?.addEventListener('click', async () => {
@@ -1268,6 +1301,9 @@
         // Superadmin must pick org to view duties
         const dFilter = document.getElementById('dutiesSuperFilter');
         if (dFilter) dFilter.classList.toggle('hidden', currentRole !== 'superadmin');
+        // Ensure duty event dropdowns reflect selected org context
+        const gid = (currentRole === 'superadmin') ? (document.getElementById('superDutyGroupFilter')?.value || '') : (groupId != null ? String(groupId) : '');
+        populateEventDropdownsForGroup(gid);
       };
       document.getElementById('navEventsBtn').onclick = async () => {
         navigateTo('eventsSection');
