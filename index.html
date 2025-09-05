@@ -115,6 +115,13 @@
   <!-- VOLUNTEER: EVENTS PAGE -->
   <section id="eventsSection" class="col hidden">
     <h2>Events</h2>
+    <div id="eventsSuperFilter" class="row hidden">
+      <div class="col">
+        <label>Organization (superadmin filter)</label>
+        <select id="superEventGroupFilter"><option value="">— Select organization —</option></select>
+        <div id="eventsSuperNote" class="error"></div>
+      </div>
+    </div>
     <div id="eventsCreateWrap" class="row hidden">
       <div class="col">
         <h3>Create Event</h3>
@@ -146,6 +153,13 @@
 
   <section id="createDutySection" class="col hidden">
     <h2>Create Duty</h2>
+    <div id="dutiesSuperFilter" class="row hidden">
+      <div class="col">
+        <label>Organization (superadmin filter)</label>
+        <select id="superDutyGroupFilter"><option value="">— Select organization —</option></select>
+        <div id="dutiesSuperNote" class="error"></div>
+      </div>
+    </div>
     <div id="createDutyAdmin" class="row">
       <div class="col">
         <h3>Admin Create Duty</h3>
@@ -651,12 +665,15 @@
           document.getElementById('superGroup'),
           document.getElementById('adminGroup'),
           document.getElementById('volGroup'),
-          document.getElementById('dutyGroup')
+          document.getElementById('dutyGroup'),
+          document.getElementById('superEventGroupFilter'),
+          document.getElementById('superDutyGroupFilter')
         ];
         groupSelectors.forEach(sel => {
           if (!sel) return;
           const current = sel.value;
-          sel.innerHTML = '<option value="">— None —</option>';
+          const isFilter = sel.id === 'superEventGroupFilter' || sel.id === 'superDutyGroupFilter';
+          sel.innerHTML = isFilter ? '<option value="">— Select organization —</option>' : '<option value="">— None —</option>';
           groups.forEach(g => {
             const opt = document.createElement('option');
             opt.value = g.id;
@@ -702,6 +719,16 @@
         const res = await authed('/events');
         const events = await res.json();
         const tbody = document.getElementById('eventList');
+        if (role === 'superadmin') {
+          const filterSel = document.getElementById('superEventGroupFilter');
+          const note = document.getElementById('eventsSuperNote');
+          if (filterSel && (!filterSel.value || filterSel.value === '')) {
+            if (tbody) tbody.innerHTML = '';
+            if (note) note.textContent = 'Select an organization above to view events.';
+            return;
+          }
+          if (note) note.textContent = '';
+        }
         if (tbody) {
         tbody.innerHTML = '';
         events.forEach(e => {
@@ -874,6 +901,16 @@
         const res = await authed('/duties'); // backend should return duties user can see
         const duties = await res.json();
         const tbody = document.getElementById('dutyList');
+        if (role === 'superadmin') {
+          const filterSel = document.getElementById('superDutyGroupFilter');
+          const note = document.getElementById('dutiesSuperNote');
+          if (filterSel && (!filterSel.value || filterSel.value === '')) {
+            if (tbody) tbody.innerHTML = '';
+            if (note) note.textContent = 'Select an organization above to view duties.';
+            return;
+          }
+          if (note) note.textContent = '';
+        }
         if (!tbody) return;
         tbody.innerHTML = '';
         // populate duty table rows and photo duty select
@@ -1209,6 +1246,9 @@
         // Keep Edit Duty hidden until a duty is selected to edit
         const dutyEdit = document.getElementById('dutyEditWrap');
         if (dutyEdit) dutyEdit.classList.add('hidden');
+        // Superadmin must pick org to view duties
+        const dFilter = document.getElementById('dutiesSuperFilter');
+        if (dFilter) dFilter.classList.toggle('hidden', currentRole !== 'superadmin');
       };
       document.getElementById('navEventsBtn').onclick = async () => {
         navigateTo('eventsSection');
@@ -1220,6 +1260,9 @@
         // Keep edit form hidden until an event is selected to edit
         const editWrap = document.getElementById('eventEditWrap');
         if (editWrap) editWrap.classList.add('hidden');
+        // Superadmin must pick org to view events
+        const eFilter = document.getElementById('eventsSuperFilter');
+        if (eFilter) eFilter.classList.toggle('hidden', currentRole !== 'superadmin');
         await fetchEvents();
       };
       document.getElementById('navClockBtn').onclick = async () => { navigateTo('clockSection'); await fetchDuties(); await fetchTimeTracking(); };
