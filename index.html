@@ -692,7 +692,7 @@
           if (isFilter && !sel._wiredChange) {
             sel.addEventListener('change', () => {
               if (sel.id === 'superEventGroupFilter') fetchEvents();
-              if (sel.id === 'superDutyGroupFilter') { fetchDuties(); populateEventDropdownsForGroup(sel.value); }
+              if (sel.id === 'superDutyGroupFilter') { populateEventDropdownsForGroup(sel.value); fetchDuties(); }
             });
             sel._wiredChange = true;
           }
@@ -1351,6 +1351,8 @@
         // Ensure duty event dropdowns reflect selected org context
         const gid = (currentRole === 'superadmin') ? (document.getElementById('superDutyGroupFilter')?.value || '') : (groupId != null ? String(groupId) : '');
         populateEventDropdownsForGroup(gid);
+        // Populate duties list/select for current org context
+        fetchDuties();
       };
       document.getElementById('navEventsBtn').onclick = async () => {
         navigateTo('eventsSection');
