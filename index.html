@@ -414,6 +414,21 @@
     }
     fetchConfig();
 
+    // Try to restore session on page load
+    (async function restoreSession() {
+      try {
+        const saved = localStorage.getItem('auth');
+        if (!saved) return;
+        const parsed = JSON.parse(saved);
+        if (!parsed || !parsed.token) return;
+        token = parsed.token;
+        const res = await authed('/me');
+        if (!res.ok) { try { localStorage.removeItem('auth'); } catch {} ; return; }
+        const me = await res.json();
+        await bootstrapAfterAuth({ token: parsed.token, role: me.role, group_id: me.group_id, id: me.id });
+      } catch {}
+    })();
+
     // (Per-user theming removed)
     // SUPERADMIN: Create User
     document.getElementById('createUserBtn')?.addEventListener('click', async () => {
@@ -490,6 +505,10 @@
       role = data.role;
       groupId = data.group_id || null;
       userId = data.id;
+
+      try {
+        localStorage.setItem('auth', JSON.stringify({ token, role, group_id: groupId, id: userId }));
+      } catch {}
 
       document.getElementById('role').textContent = role;
       document.getElementById('groupId').textContent = groupId ?? '-';
@@ -590,6 +609,7 @@
     // LOGOUT
     document.getElementById('logoutBtn').addEventListener('click', () => {
       token = null; role = null; groupId = null; userId = null;
+      try { localStorage.removeItem('auth'); } catch {}
       show('authSection');
       ['infoSection','superadminSection','adminSection','homeSection','createDutySection','clockSection','eventsSection','photosSection']
         .forEach(id => { const el = document.getElementById(id); if (el) el.classList.add('hidden'); });
