@@ -739,7 +739,8 @@
           body: JSON.stringify({ name, status })
         });
         if (!res.ok) {
-          document.getElementById('createGroupError').textContent = 'Failed to create group';
+          const data = await res.json().catch(() => ({}));
+          document.getElementById('createGroupError').textContent = data.message || 'Failed to create group';
           return;
         }
         document.getElementById('createGroupError').textContent = '';
