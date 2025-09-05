@@ -288,6 +288,12 @@
     </div>
 
     <h3>All Organizations</h3>
+    <div class="row">
+      <div class="col">
+        <label>Organizations</label>
+        <select id="superadminOrgPicker"><option value="">— Select organization —</option></select>
+      </div>
+    </div>
     <table>
       <thead><tr><th>ID</th><th>Name</th><th>Status</th><th>Actions</th></tr></thead>
       <tbody id="groupList"></tbody>
@@ -665,6 +671,20 @@
                <td><button onclick="deleteGroup(${g.id})">Delete</button></td>`;
             tbody.appendChild(tr);
           });
+        }
+
+        // Populate superadmin org picker
+        const orgPicker = document.getElementById('superadminOrgPicker');
+        if (orgPicker) {
+          const current = orgPicker.value;
+          orgPicker.innerHTML = '<option value="">— Select organization —</option>';
+          groups.forEach(g => {
+            const opt = document.createElement('option');
+            opt.value = g.id;
+            opt.textContent = `${g.name}`;
+            orgPicker.appendChild(opt);
+          });
+          if (current) orgPicker.value = current;
         }
 
         const groupSelectors = [
@@ -1352,6 +1372,21 @@
       document.getElementById('navPhotosBtn').classList.toggle('hidden', !isVolunteer);
       document.getElementById('navHomeBtn').onclick = () => navigateTo('homeSection');
       document.getElementById('navAdminBtn').onclick = () => navigateTo(currentRole === 'superadmin' ? 'superadminSection' : 'adminSection');
+      // Wire superadmin org picker to filter-linked UI pieces
+      const orgPicker = document.getElementById('superadminOrgPicker');
+      if (orgPicker && !orgPicker._wired) {
+        orgPicker.addEventListener('change', () => {
+          // Keep superadmin page pickers in sync
+          const eFilter = document.getElementById('superEventGroupFilter');
+          if (eFilter) eFilter.value = orgPicker.value || '';
+          const dFilter = document.getElementById('superDutyGroupFilter');
+          if (dFilter) dFilter.value = orgPicker.value || '';
+          // Refresh pages that depend on org
+          fetchEvents();
+          fetchDuties();
+        });
+        orgPicker._wired = true;
+      }
       document.getElementById('navCreateDutyBtn').onclick = () => {
         navigateTo('createDutySection');
         document.getElementById('createDutyAdmin').classList.toggle('hidden', !isAdminish);
