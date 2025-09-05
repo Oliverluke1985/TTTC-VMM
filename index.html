@@ -743,8 +743,10 @@
         const tbody = document.getElementById('eventList');
         if (role === 'superadmin') {
           const filterSel = document.getElementById('superEventGroupFilter');
+          const filterWrap = document.getElementById('eventsSuperFilter');
           const note = document.getElementById('eventsSuperNote');
-          if (filterSel && (!filterSel.value || filterSel.value === '')) {
+          const enforcing = filterWrap && !filterWrap.classList.contains('hidden');
+          if (enforcing && filterSel && (!filterSel.value || filterSel.value === '')) {
             if (tbody) tbody.innerHTML = '';
             if (note) { note.classList.remove('error'); note.classList.add('hint'); note.textContent = 'Select an organization above to view events.'; }
             return;
@@ -955,8 +957,10 @@
         const tbody = document.getElementById('dutyList');
         if (role === 'superadmin') {
           const filterSel = document.getElementById('superDutyGroupFilter');
+          const filterWrap = document.getElementById('dutiesSuperFilter');
           const note = document.getElementById('dutiesSuperNote');
-          if (filterSel && (!filterSel.value || filterSel.value === '')) {
+          const enforcing = filterWrap && !filterWrap.classList.contains('hidden');
+          if (enforcing && filterSel && (!filterSel.value || filterSel.value === '')) {
             if (tbody) tbody.innerHTML = '';
             if (note) { note.classList.remove('error'); note.classList.add('hint'); note.textContent = 'Select an organization above to view duties.'; }
             return;
@@ -1028,6 +1032,11 @@
         document.getElementById('dutyTitle').value = '';
         document.getElementById('dutyDesc').value = '';
         if (eventSel) eventSel.value = '';
+        // If superadmin, sync the top org filter to the group used so list shows immediately
+        if (role === 'superadmin') {
+          const topFilter = document.getElementById('superDutyGroupFilter');
+          if (topFilter && group_id != null) topFilter.value = String(group_id);
+        }
         fetchDuties();
       } catch {
         document.getElementById('createDutyError').textContent = 'Error creating duty';
