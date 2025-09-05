@@ -881,12 +881,17 @@
         if (dutySelect) { dutySelect.innerHTML = ''; }
         duties.forEach(d => {
           const tr = document.createElement('tr');
+          let adminActions = '';
+          if (role === 'admin' || role === 'superadmin') {
+            adminActions = `<button data-did="${d.id}" class="prefillDutyEditBtn">Edit</button>`;
+          }
           tr.innerHTML =
             `<td>${d.id}</td><td>${d.title}</td><td>${d.description || ''}</td><td>${d.status}</td>
              <td>
                <input type="date" id="dutyDate-${d.id}" required>
                <button onclick="startTime(${d.id})">Clock In</button>
                <button onclick="stopTime(${d.id})">Clock Out</button>
+               ${adminActions}
              </td>`;
           tbody.appendChild(tr);
           if (dutySelect) {
@@ -896,6 +901,17 @@
             dutySelect.appendChild(opt);
           }
         });
+        // wire prefill duty edit
+        tbody.querySelectorAll('.prefillDutyEditBtn').forEach(btn => btn.addEventListener('click', (ev) => {
+          const id = Number(ev.currentTarget.getAttribute('data-did'));
+          const row = ev.currentTarget.closest('tr').children;
+          const wrap = document.getElementById('dutyEditWrap');
+          if (wrap) wrap.classList.remove('hidden');
+          document.getElementById('editDutyId').value = String(id);
+          document.getElementById('editDutyTitle').value = row[1].textContent || '';
+          document.getElementById('editDutyDesc').value = row[2].textContent || '';
+          document.getElementById('editDutyStatus').value = (row[3].textContent || 'pending');
+        }));
       } catch (e) { /* silent */ }
     }
 
@@ -1190,7 +1206,9 @@
         navigateTo('createDutySection');
         document.getElementById('createDutyAdmin').classList.toggle('hidden', !isAdminish);
         document.getElementById('createDutyVol').classList.toggle('hidden', isAdminish);
-        document.getElementById('dutyEditWrap').classList.toggle('hidden', !isAdminish);
+        // Keep Edit Duty hidden until a duty is selected to edit
+        const dutyEdit = document.getElementById('dutyEditWrap');
+        if (dutyEdit) dutyEdit.classList.add('hidden');
       };
       document.getElementById('navEventsBtn').onclick = async () => {
         navigateTo('eventsSection');
