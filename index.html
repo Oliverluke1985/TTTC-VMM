@@ -294,6 +294,14 @@
         <select id="superadminOrgPicker"><option value="">— Select organization —</option></select>
       </div>
     </div>
+    <div id="superadminOrgInfo" class="row hidden">
+      <div class="col">
+        <table>
+          <thead><tr><th>ID</th><th>Name</th><th>Status</th></tr></thead>
+          <tbody id="superadminOrgInfoBody"></tbody>
+        </table>
+      </div>
+    </div>
     <table id="groupTable" class="hidden">
       <thead><tr><th>ID</th><th>Name</th><th>Status</th><th>Actions</th></tr></thead>
       <tbody id="groupList"></tbody>
@@ -667,14 +675,10 @@
           groups.forEach(g => {
             const tr = document.createElement('tr');
             tr.innerHTML =
-              `<td>${g.id}</td><td>${g.name}</td><td>${g.status}</td>
+              `<td>${g.id}</td><td>${g.name}</td><td>${g.status ?? g.group_status ?? ''}</td>
                <td><button onclick="deleteGroup(${g.id})">Delete</button></td>`;
             tbody.appendChild(tr);
           });
-          // Show the table only when the picker is empty; otherwise keep it hidden to avoid duplication
-          const picker = document.getElementById('superadminOrgPicker');
-          const table = document.getElementById('groupTable');
-          if (table) table.classList.toggle('hidden', !!(picker && picker.options.length > 1));
         }
 
         // Populate superadmin org picker
@@ -689,6 +693,25 @@
             orgPicker.appendChild(opt);
           });
           if (current) orgPicker.value = current;
+          // Update single-org info panel based on current selection
+          const infoWrap = document.getElementById('superadminOrgInfo');
+          const infoBody = document.getElementById('superadminOrgInfoBody');
+          if (infoWrap && infoBody) {
+            if (orgPicker.value) {
+              const g = groups.find(x => String(x.id) === String(orgPicker.value));
+              if (g) {
+                const statusTxt = g.status ?? g.group_status ?? '';
+                infoBody.innerHTML = `<tr><td>${g.id}</td><td>${g.name}</td><td>${statusTxt}</td></tr>`;
+                infoWrap.classList.remove('hidden');
+              } else {
+                infoBody.innerHTML = '';
+                infoWrap.classList.add('hidden');
+              }
+            } else {
+              infoBody.innerHTML = '';
+              infoWrap.classList.add('hidden');
+            }
+          }
         }
 
         const groupSelectors = [
@@ -1375,7 +1398,25 @@
       document.getElementById('navClockBtn').classList.toggle('hidden', !isVolunteer);
       document.getElementById('navPhotosBtn').classList.toggle('hidden', !isVolunteer);
       document.getElementById('navHomeBtn').onclick = () => navigateTo('homeSection');
-      document.getElementById('navAdminBtn').onclick = () => navigateTo(currentRole === 'superadmin' ? 'superadminSection' : 'adminSection');
+      document.getElementById('navAdminBtn').onclick = () => {
+        navigateTo(currentRole === 'superadmin' ? 'superadminSection' : 'adminSection');
+        const table = document.getElementById('groupTable');
+        if (table) table.classList.add('hidden');
+        const infoWrap = document.getElementById('superadminOrgInfo');
+        const infoBody = document.getElementById('superadminOrgInfoBody');
+        if (infoWrap && infoBody) {
+          const picker = document.getElementById('superadminOrgPicker');
+          if (picker && picker.value) {
+            const id = picker.value;
+            const name = picker.options[picker.selectedIndex]?.textContent || '';
+            infoBody.innerHTML = `<tr><td>${id}</td><td>${name}</td><td></td></tr>`;
+            infoWrap.classList.remove('hidden');
+          } else {
+            infoBody.innerHTML = '';
+            infoWrap.classList.add('hidden');
+          }
+        }
+      };
       // Wire superadmin org picker to filter-linked UI pieces
       const orgPicker = document.getElementById('superadminOrgPicker');
       if (orgPicker && !orgPicker._wired) {
@@ -1385,9 +1426,26 @@
           if (eFilter) eFilter.value = orgPicker.value || '';
           const dFilter = document.getElementById('superDutyGroupFilter');
           if (dFilter) dFilter.value = orgPicker.value || '';
+          // Update single-org info panel and keep full table hidden
+          const infoWrap = document.getElementById('superadminOrgInfo');
+          const infoBody = document.getElementById('superadminOrgInfoBody');
+          const table = document.getElementById('groupTable');
+          if (table) table.classList.add('hidden');
+          if (infoWrap && infoBody) {
+            if (orgPicker.value) {
+              const id = orgPicker.value;
+              const name = orgPicker.options[orgPicker.selectedIndex]?.textContent || '';
+              infoBody.innerHTML = `<tr><td>${id}</td><td>${name}</td><td></td></tr>`;
+              infoWrap.classList.remove('hidden');
+            } else {
+              infoBody.innerHTML = '';
+              infoWrap.classList.add('hidden');
+            }
+          }
           // Refresh pages that depend on org
           fetchEvents();
           fetchDuties();
+          populateEventDropdownsForGroup(orgPicker.value);
         });
         orgPicker._wired = true;
       }
