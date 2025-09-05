@@ -322,14 +322,18 @@ app.delete('/groups/:id', authRequired, superadminOnly, async (req, res) => {
 app.get('/events', authRequired, async (req, res) => {
   // Return events plus a joined flag for the current user
   if (req.user.role === 'superadmin') {
+    const groupFilter = req.query.group_id ? Number(req.query.group_id) : null;
+    const params = [req.user.id];
+    let where = 'e.archived_at IS NULL';
+    if (Number.isFinite(groupFilter)) { where += ' AND e.group_id = $2'; params.push(groupFilter); }
     const events = await pool.query(
       `SELECT e.*, EXISTS(
          SELECT 1 FROM event_attendees a WHERE a.event_id = e.id AND a.user_id = $1
        ) AS joined
        FROM events e
-       WHERE e.archived_at IS NULL
+       WHERE ${where}
        ORDER BY e.event_date DESC`,
-      [req.user.id]
+      params
     );
     return res.json(events.rows);
   }
@@ -463,6 +467,11 @@ app.post('/events/:id/leave', authRequired, async (req, res) => {
 // --- Duties
 app.get('/duties', authRequired, async (req, res) => {
   if (req.user.role === 'superadmin') {
+    const groupFilter = req.query.group_id ? Number(req.query.group_id) : null;
+    if (Number.isFinite(groupFilter)) {
+      const duties = await pool.query('SELECT * FROM duties WHERE group_id=$1 ORDER BY id', [groupFilter]);
+      return res.json(duties.rows);
+    }
     const duties = await pool.query('SELECT * FROM duties ORDER BY id');
     return res.json(duties.rows);
   }

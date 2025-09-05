@@ -725,7 +725,12 @@
     // EVENTS
     async function fetchEvents() {
       try {
-        const res = await authed('/events');
+        let path = '/events';
+        if (role === 'superadmin') {
+          const sel = document.getElementById('superEventGroupFilter');
+          if (sel && sel.value) path = `/events?group_id=${encodeURIComponent(sel.value)}`;
+        }
+        const res = await authed(path);
         const events = await res.json();
         const tbody = document.getElementById('eventList');
         if (role === 'superadmin') {
@@ -733,7 +738,7 @@
           const note = document.getElementById('eventsSuperNote');
           if (filterSel && (!filterSel.value || filterSel.value === '')) {
             if (tbody) tbody.innerHTML = '';
-            if (note) note.textContent = 'Select an organization above to view events.';
+            if (note) { note.classList.remove('error'); note.classList.add('hint'); note.textContent = 'Select an organization above to view events.'; }
             return;
           }
           if (note) note.textContent = '';
@@ -907,7 +912,12 @@
     // DUTIES (admin-managed; volunteer sees assigned duties)
     async function fetchDuties() {
       try {
-        const res = await authed('/duties'); // backend should return duties user can see
+        let path = '/duties';
+        if (role === 'superadmin') {
+          const sel = document.getElementById('superDutyGroupFilter');
+          if (sel && sel.value) path = `/duties?group_id=${encodeURIComponent(sel.value)}`;
+        }
+        const res = await authed(path); // backend should return duties user can see
         const duties = await res.json();
         const tbody = document.getElementById('dutyList');
         if (role === 'superadmin') {
@@ -915,7 +925,7 @@
           const note = document.getElementById('dutiesSuperNote');
           if (filterSel && (!filterSel.value || filterSel.value === '')) {
             if (tbody) tbody.innerHTML = '';
-            if (note) note.textContent = 'Select an organization above to view duties.';
+            if (note) { note.classList.remove('error'); note.classList.add('hint'); note.textContent = 'Select an organization above to view duties.'; }
             return;
           }
           if (note) note.textContent = '';
