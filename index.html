@@ -190,6 +190,12 @@
         <div id="volCreateDutyError" class="error"></div>
       </div>
     </div>
+    <div id="dutyEditSelectorWrap" class="row hidden">
+      <div class="col">
+        <label>Select Duty to Edit</label>
+        <select id="dutyEditSelect"><option value="">— Select duty —</option></select>
+      </div>
+    </div>
     <div id="dutyEditWrap" class="row hidden">
       <div class="col">
         <h3>Edit Duty</h3>
@@ -971,7 +977,9 @@
         tbody.innerHTML = '';
         // populate duty table rows and photo duty select
         const dutySelect = document.getElementById('photoDuty');
+        const editSelect = document.getElementById('dutyEditSelect');
         if (dutySelect) { dutySelect.innerHTML = ''; }
+        if (editSelect) { editSelect.innerHTML = '<option value="">— Select duty —</option>'; }
         duties.forEach(d => {
           const tr = document.createElement('tr');
           let adminActions = '';
@@ -993,6 +1001,12 @@
             opt.textContent = `${d.id} — ${d.title}`;
             dutySelect.appendChild(opt);
           }
+          if (editSelect) {
+            const opt = document.createElement('option');
+            opt.value = d.id;
+            opt.textContent = `${d.id} — ${d.title}`;
+            editSelect.appendChild(opt);
+          }
         });
         // wire prefill duty edit
         tbody.querySelectorAll('.prefillDutyEditBtn').forEach(btn => btn.addEventListener('click', (ev) => {
@@ -1007,6 +1021,21 @@
         }));
       } catch (e) { /* silent */ }
     }
+
+    // Wire selecting a duty to prefill edit form
+    document.getElementById('dutyEditSelect')?.addEventListener('change', () => {
+      const sel = document.getElementById('dutyEditSelect');
+      if (!sel || !sel.value) return;
+      const id = Number(sel.value);
+      const row = Array.from(document.querySelectorAll('#dutyList tr')).find(tr => tr.firstChild?.textContent == String(id));
+      if (!row) { document.getElementById('dutyEditWrap').classList.remove('hidden'); document.getElementById('editDutyId').value = String(id); return; }
+      const cells = row.children;
+      document.getElementById('dutyEditWrap').classList.remove('hidden');
+      document.getElementById('editDutyId').value = String(id);
+      document.getElementById('editDutyTitle').value = cells[1].textContent || '';
+      document.getElementById('editDutyDesc').value = cells[2].textContent || '';
+      document.getElementById('editDutyStatus').value = (cells[3].textContent || 'pending');
+    });
 
     // Create Duty (admin)
     document.getElementById('createDutyBtn')?.addEventListener('click', async () => {
@@ -1037,7 +1066,15 @@
           const topFilter = document.getElementById('superDutyGroupFilter');
           if (topFilter && group_id != null) topFilter.value = String(group_id);
         }
-        fetchDuties();
+        await fetchDuties();
+        // Select the newly created duty in the edit dropdown
+        const editSel = document.getElementById('dutyEditSelect');
+        if (editSel && group_id != null) {
+          // Pick the last option (newest) if present
+          if (editSel.options.length > 1) editSel.selectedIndex = editSel.options.length - 1;
+          const evt = new Event('change');
+          editSel.dispatchEvent(evt);
+        }
       } catch {
         document.getElementById('createDutyError').textContent = 'Error creating duty';
       }
@@ -1304,6 +1341,7 @@
         navigateTo('createDutySection');
         document.getElementById('createDutyAdmin').classList.toggle('hidden', !isAdminish);
         document.getElementById('createDutyVol').classList.toggle('hidden', isAdminish);
+        document.getElementById('dutyEditSelectorWrap').classList.toggle('hidden', !isAdminish);
         // Keep Edit Duty hidden until a duty is selected to edit
         const dutyEdit = document.getElementById('dutyEditWrap');
         if (dutyEdit) dutyEdit.classList.add('hidden');
