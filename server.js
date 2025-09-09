@@ -83,6 +83,10 @@ app.post('/register', authRequired, adminOnly, async (req, res) => {
   try {
     const { name, email, phone, address, password, role, group_id } = req.body || {};
     if (!email || !password || !role) return res.status(400).json({ message: 'Missing required fields' });
+    // Enforce: Admins cannot create superadmins
+    if (req.user.role === 'admin' && String(role).toLowerCase() === 'superadmin') {
+      return res.status(403).json({ message: 'Admins cannot create superadmins' });
+    }
 
     const hash = await bcrypt.hash(password, 10);
 

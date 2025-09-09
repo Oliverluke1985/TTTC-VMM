@@ -296,7 +296,7 @@
     </div>
     <div id="superadminOrgInfo" class="row hidden">
       <div class="col">
-        <table>
+    <table>
           <thead><tr><th>ID</th><th>Name</th><th>Status</th></tr></thead>
           <tbody id="superadminOrgInfoBody"></tbody>
         </table>
@@ -343,17 +343,7 @@
       </div>
     </div>
 
-    <h3>Create Superadmin</h3>
-    <div class="row">
-      <div class="col">
-        <label>Email</label><input id="superEmail" type="email" />
-        <label>Password</label><input id="superPassword" type="password" />
-        <label>Group (optional)</label>
-        <select id="superGroup"><option value="">— None —</option></select>
-        <button id="createSuperBtn">Create Superadmin</button>
-        <div id="createSuperErr" class="error"></div>
-      </div>
-    </div>
+    
 
     <h3>Create Admin</h3>
     <div class="row">
@@ -518,9 +508,7 @@
       } catch { errEl.textContent = 'Error creating user'; }
     }
 
-    document.getElementById('createSuperBtn')?.addEventListener('click', async () => {
-      await createUserWith('superadmin', 'superEmail', 'superPassword', 'superGroup', 'createSuperErr');
-    });
+    // Removed ability for admins to create superadmins
     document.getElementById('createAdminBtn')?.addEventListener('click', async () => {
       await createUserWith('admin', 'adminEmail', 'adminPassword', 'adminGroup', 'createAdminErr');
     });
