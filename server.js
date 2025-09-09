@@ -1000,11 +1000,22 @@ app.post('/duties/:id/photos', authRequired, upload.single('photo'), async (req,
 
 // List photos (scoped)
 app.get('/photos', authRequired, async (req, res) => {
+  const volunteerFilter = req.query.volunteer_id ? Number(req.query.volunteer_id) : null;
   if (req.user.role === 'superadmin') {
+    if (Number.isFinite(volunteerFilter)) {
+      const rows = await pool.query('SELECT * FROM work_photos WHERE volunteer_id=$1 ORDER BY created_at DESC', [volunteerFilter]);
+      return res.json(rows.rows);
+    }
     const all = await pool.query('SELECT * FROM work_photos ORDER BY created_at DESC');
     return res.json(all.rows);
   }
   if (req.user.role === 'admin') {
+    if (Number.isFinite(volunteerFilter)) {
+      const ok = await pool.query('SELECT 1 FROM users WHERE id=$1 AND group_id=$2', [volunteerFilter, req.user.group_id]);
+      if (ok.rowCount === 0) return res.status(403).json({ message: 'Forbidden' });
+      const rows = await pool.query('SELECT * FROM work_photos WHERE volunteer_id=$1 ORDER BY created_at DESC', [volunteerFilter]);
+      return res.json(rows.rows);
+    }
     const rows = await pool.query(
       `SELECT p.*
        FROM work_photos p

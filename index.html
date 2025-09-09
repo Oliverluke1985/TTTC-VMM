@@ -103,6 +103,12 @@
   <!-- VOLUNTEER: PHOTOS PAGE -->
   <section id="photosSection" class="col hidden">
     <h2>Photos</h2>
+    <div id="photosFilterWrap" class="row hidden">
+      <div class="col">
+        <label>Volunteer (filter)</label>
+        <select id="photosVolunteerFilter"><option value="">— All —</option></select>
+      </div>
+    </div>
     <div id="photoUploadWrap">
       <label for="photoDuty">Duty</label>
       <select id="photoDuty"></select>
@@ -1605,7 +1611,32 @@
         await fetchEvents();
       };
       document.getElementById('navClockBtn').onclick = async () => { navigateTo('clockSection'); await fetchDuties(); await fetchTimeTracking(); };
-      document.getElementById('navPhotosBtn').onclick = async () => { navigateTo('photosSection'); await fetchDuties(); await fetchPhotos(); };
+      document.getElementById('navPhotosBtn').onclick = async () => {
+        navigateTo('photosSection');
+        await fetchDuties();
+        const wrap = document.getElementById('photosFilterWrap');
+        if (wrap) wrap.classList.toggle('hidden', !(currentRole === 'admin' || currentRole === 'superadmin'));
+        if (currentRole === 'admin' || currentRole === 'superadmin') {
+          try {
+            const res = await authed('/users?role=volunteer');
+            const vols = await res.json();
+            const sel = document.getElementById('photosVolunteerFilter');
+            if (sel) {
+              const current = sel.value;
+              sel.innerHTML = '<option value="">— All —</option>';
+              vols.forEach(v => {
+                const opt = document.createElement('option');
+                opt.value = v.id;
+                opt.textContent = v.name ? `${v.name} — ${v.email}` : v.email;
+                sel.appendChild(opt);
+              });
+              if (current) sel.value = current;
+              if (!sel._wired) { sel.addEventListener('change', fetchPhotos); sel._wired = true; }
+            }
+          } catch { /* silent */ }
+        }
+        await fetchPhotos();
+      };
       document.getElementById('navVolunteerMgmtBtn').onclick = async () => {
         navigateTo('volMgmtSection');
         await populateVolunteerMgmt();
@@ -1709,7 +1740,12 @@
     // Photos
     async function fetchPhotos() {
       try {
-        const res = await authed('/photos');
+        let path = '/photos';
+        if (role === 'superadmin' || role === 'admin') {
+          const sel = document.getElementById('photosVolunteerFilter');
+          if (sel && sel.value) path = `/photos?volunteer_id=${encodeURIComponent(sel.value)}`;
+        }
+        const res = await authed(path);
         if (!res.ok) return;
         const rows = await res.json();
         const gallery = document.getElementById('photoGallery');
