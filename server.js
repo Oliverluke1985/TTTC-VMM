@@ -284,17 +284,93 @@ app.get('/users', authRequired, async (req, res) => {
     const where = [];
     const params = [];
     let idx = 1;
-    if (roleFilter) { where.push(`role = $${idx++}`); params.push(roleFilter); }
+    if (roleFilter) { where.push(`u.role = $${idx++}`); params.push(roleFilter); }
     if (req.user.role === 'superadmin') {
-      if (Number.isFinite(groupFilter)) { where.push(`group_id = $${idx++}`); params.push(groupFilter); }
+      if (Number.isFinite(groupFilter)) { where.push(`u.group_id = $${idx++}`); params.push(groupFilter); }
     } else if (req.user.role === 'admin') {
-      where.push(`group_id = $${idx++}`); params.push(req.user.group_id);
+      where.push(`u.group_id = $${idx++}`); params.push(req.user.group_id);
     } else {
       return res.status(403).json({ message: 'Admins only' });
     }
-    const sql = `SELECT id, email, role, group_id, name FROM users${where.length ? ' WHERE ' + where.join(' AND ') : ''} ORDER BY LOWER(COALESCE(name, email)) ASC`;
+    const colsRes = await pool.query("SELECT column_name FROM information_schema.columns WHERE table_name='users'");
+    const has = new Set(colsRes.rows.map(r => r.column_name));
+    const selectCols = ['u.id','u.email','u.role','u.group_id'];
+    const joins = [];
+    if (has.has('name')) selectCols.push('u.name'); else { joins.push('LEFT JOIN user_profile p ON p.user_id = u.id'); selectCols.push('p.name AS name'); }
+    if (has.has('phone')) selectCols.push('u.phone'); else if (!joins.find(j=>j.includes('user_profile'))) { joins.push('LEFT JOIN user_profile p ON p.user_id = u.id'); selectCols.push('p.phone AS phone'); } else { selectCols.push('p.phone AS phone'); }
+    if (has.has('address')) selectCols.push('u.address'); else if (!joins.find(j=>j.includes('user_profile'))) { joins.push('LEFT JOIN user_profile p ON p.user_id = u.id'); selectCols.push('p.address AS address'); } else { selectCols.push('p.address AS address'); }
+    const sql = `SELECT ${selectCols.join(', ')} FROM users u ${joins.join(' ')}${where.length ? ' WHERE ' + where.join(' AND ') : ''} ORDER BY LOWER(COALESCE(${has.has('name') ? 'u.name' : 'p.name'}, u.email)) ASC`;
     const rows = await pool.query(sql, params);
     res.json(rows.rows);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+// Edit user (admin/superadmin)
+app.patch('/users/:id', authRequired, async (req, res) => {
+  try {
+    const targetId = Number(req.params.id);
+    if (!Number.isFinite(targetId)) return res.status(400).json({ message: 'Invalid id' });
+    const t = req.body || {};
+    // Load target for checks
+    const existing = await pool.query('SELECT id, role, group_id FROM users WHERE id=$1', [targetId]);
+    if (existing.rowCount === 0) return res.status(404).json({ message: 'Not found' });
+    const target = existing.rows[0];
+    if (!isAdmin(req.user)) return res.status(403).json({ message: 'Admins only' });
+    if (req.user.role === 'admin') {
+      // Admin can only edit within their group and cannot edit superadmins
+      if (target.group_id !== req.user.group_id) return res.status(403).json({ message: 'Forbidden' });
+      if (target.role === 'superadmin') return res.status(403).json({ message: 'Forbidden' });
+      if (t.role && String(t.role).toLowerCase() === 'superadmin') return res.status(403).json({ message: 'Cannot assign superadmin' });
+      // Admin cannot move user to another group
+      if (t.group_id && Number(t.group_id) !== req.user.group_id) return res.status(403).json({ message: 'Cannot change group' });
+    }
+    const colsRes = await pool.query("SELECT column_name FROM information_schema.columns WHERE table_name='users'");
+    const has = new Set(colsRes.rows.map(r => r.column_name));
+    const setClauses = [];
+    const params = [];
+    let idx = 1;
+    if (has.has('name') && t.name !== undefined) { setClauses.push(`name=COALESCE($${idx++},name)`); params.push(t.name); }
+    if (t.email !== undefined) { setClauses.push(`email=COALESCE($${idx++},email)`); params.push(t.email); }
+    if (has.has('phone') && t.phone !== undefined) { setClauses.push(`phone=COALESCE($${idx++},phone)`); params.push(t.phone); }
+    if (has.has('address') && t.address !== undefined) { setClauses.push(`address=COALESCE($${idx++},address)`); params.push(t.address); }
+    if (t.role !== undefined) {
+      const roleVal = String(t.role).toLowerCase();
+      if (roleVal === 'superadmin' && req.user.role !== 'superadmin') return res.status(403).json({ message: 'Cannot assign superadmin' });
+      setClauses.push(`role=$${idx++}`); params.push(roleVal);
+    }
+    if (t.group_id !== undefined) {
+      const gid = t.group_id == null ? null : Number(t.group_id);
+      if (req.user.role === 'admin' && gid !== req.user.group_id) return res.status(403).json({ message: 'Cannot change group' });
+      if (has.has('group_id')) { setClauses.push(`group_id=$${idx++}`); params.push(gid); }
+    }
+    let updated = false;
+    if (setClauses.length > 0) {
+      const sql = `UPDATE users SET ${setClauses.join(', ')} WHERE id=$${idx} RETURNING id`;
+      const result = await pool.query(sql, [...params, targetId]);
+      updated = result.rowCount > 0;
+    }
+    // Persist to user_profile for any missing columns
+    const p = {
+      name: (!has.has('name') && t.name !== undefined) ? t.name : undefined,
+      phone: (!has.has('phone') && t.phone !== undefined) ? t.phone : undefined,
+      address: (!has.has('address') && t.address !== undefined) ? t.address : undefined,
+    };
+    if (p.name !== undefined || p.phone !== undefined || p.address !== undefined) {
+      await pool.query(
+        `INSERT INTO user_profile (user_id,name,phone,address,updated_at)
+         VALUES ($1,$2,$3,$4,NOW())
+         ON CONFLICT (user_id) DO UPDATE SET
+           name=COALESCE(EXCLUDED.name,user_profile.name),
+           phone=COALESCE(EXCLUDED.phone,user_profile.phone),
+           address=COALESCE(EXCLUDED.address,user_profile.address),
+           updated_at=NOW()`,
+        [targetId, p.name ?? null, p.phone ?? null, p.address ?? null]
+      );
+      updated = true;
+    }
+    res.json({ id: targetId, updated });
   } catch (err) {
     res.status(400).json({ message: err.message });
   }

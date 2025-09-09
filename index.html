@@ -391,6 +391,27 @@
     </div>
     <div class="row">
       <div class="col">
+        <h3>Volunteers</h3>
+        <table>
+          <thead><tr><th>ID</th><th>Name</th><th>Email</th><th>Actions</th></tr></thead>
+          <tbody id="vmVolunteerList"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col">
+        <h3>Edit Volunteer</h3>
+        <label>User ID</label><input id="vmEditId" type="number" />
+        <label>Name</label><input id="vmEditName" type="text" />
+        <label>Email</label><input id="vmEditEmail" type="email" />
+        <label>Phone</label><input id="vmEditPhone" type="text" />
+        <label>Address</label><input id="vmEditAddress" type="text" />
+        <button id="vmSaveUserBtn">Save User</button>
+        <div id="vmSaveUserErr" class="error"></div>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col">
         <label>Volunteer</label>
         <select id="vmVolunteer"><option value="">— Select volunteer —</option></select>
         <label style="margin-top:10px">Duty</label>
@@ -1264,6 +1285,27 @@
           });
           if (current) volSel.value = current;
         }
+        // Populate volunteer list table
+        const listBody = document.getElementById('vmVolunteerList');
+        if (listBody) {
+          listBody.innerHTML = '';
+          volunteers.forEach(v => {
+            const tr = document.createElement('tr');
+            const displayName = v.name || '';
+            tr.innerHTML = `<td>${v.id}</td><td>${displayName}</td><td>${v.email}</td><td><button data-uid="${v.id}" class="vmEditBtn">Edit</button></td>`;
+            listBody.appendChild(tr);
+          });
+          listBody.querySelectorAll('.vmEditBtn').forEach(btn => btn.addEventListener('click', (ev) => {
+            const id = Number(ev.currentTarget.getAttribute('data-uid'));
+            const v = volunteers.find(x => x.id === id);
+            if (!v) return;
+            document.getElementById('vmEditId').value = String(v.id);
+            document.getElementById('vmEditName').value = v.name || '';
+            document.getElementById('vmEditEmail').value = v.email || '';
+            document.getElementById('vmEditPhone').value = v.phone || '';
+            document.getElementById('vmEditAddress').value = v.address || '';
+          }));
+        }
         // Groups for Create Volunteer
         const resG = await authed('/groups');
         const groups = await resG.json();
@@ -1599,6 +1641,29 @@
             }
           });
           addBtn._wired = true;
+        }
+        const saveUserBtn = document.getElementById('vmSaveUserBtn');
+        if (saveUserBtn && !saveUserBtn._wired) {
+          saveUserBtn.addEventListener('click', async () => {
+            const id = Number(document.getElementById('vmEditId').value);
+            const name = document.getElementById('vmEditName').value.trim();
+            const email = document.getElementById('vmEditEmail').value.trim();
+            const phone = document.getElementById('vmEditPhone').value.trim();
+            const address = document.getElementById('vmEditAddress').value.trim();
+            const err = document.getElementById('vmSaveUserErr');
+            if (err) err.textContent = '';
+            try {
+              const res = await authed(`/users/${id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, email, phone, address })
+              });
+              const data = await res.json().catch(() => ({}));
+              if (!res.ok) { if (err) err.textContent = data.message || 'Failed to save user'; return; }
+              await populateVolunteerMgmt();
+            } catch { if (err) err.textContent = 'Error saving user'; }
+          });
+          saveUserBtn._wired = true;
         }
       }
     }
