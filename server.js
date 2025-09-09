@@ -1037,6 +1037,29 @@ app.post('/photos/:id/approve', authRequired, adminOnly, async (req, res) => {
   res.json({ ok: true });
 });
 
+// Delete a photo (admin/superadmin)
+app.delete('/photos/:id', authRequired, adminOnly, async (req, res) => {
+  try {
+    const photoId = Number(req.params.id);
+    if (!Number.isFinite(photoId)) return res.status(400).json({ message: 'Invalid id' });
+    let result;
+    if (req.user.role === 'superadmin') {
+      result = await pool.query('DELETE FROM work_photos WHERE id=$1 RETURNING id', [photoId]);
+    } else {
+      result = await pool.query(
+        `DELETE FROM work_photos p USING users u
+         WHERE p.id=$1 AND u.id=p.volunteer_id AND u.group_id=$2
+         RETURNING p.id`,
+        [photoId, req.user.group_id]
+      );
+    }
+    if (result.rowCount === 0) return res.status(404).json({ message: 'Not found' });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
 // --- Health
 app.get('/health', (req, res) => res.json({ ok: true }));
 

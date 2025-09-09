@@ -1718,9 +1718,19 @@
         rows.forEach(p => {
           const div = document.createElement('div');
           div.style.marginTop = '8px';
-          div.innerHTML = `<img src="${p.file_path}" alt="photo" style="max-width:200px;border-radius:8px;"> <div>${p.caption || ''} ${p.approved ? '✔️' : '⏳'}</div>`;
+          const delBtn = (role === 'admin' || role === 'superadmin') ? `<button data-pid="${p.id}" class="photoDelBtn" style="margin-left:8px">Delete</button>` : '';
+          div.innerHTML = `<img src="${p.file_path}" alt="photo" style="max-width:200px;border-radius:8px;"> <div>${p.caption || ''} ${p.approved ? '✔️' : '⏳'} ${delBtn}</div>`;
           gallery.appendChild(div);
         });
+        // wire delete
+        gallery.querySelectorAll('.photoDelBtn').forEach(btn => btn.addEventListener('click', async (ev) => {
+          const id = Number(ev.currentTarget.getAttribute('data-pid'));
+          if (!confirm('Delete this photo?')) return;
+          try {
+            const res = await authed(`/photos/${id}`, { method: 'DELETE' });
+            if (res.ok) fetchPhotos();
+          } catch { /* silent */ }
+        }));
       } catch { /* silent */ }
     }
     // Admin photo approvals
@@ -1738,9 +1748,18 @@
           div.style.marginTop = '8px';
           div.innerHTML = `<img src="${p.file_path}" alt="pending" style="max-width:160px;border-radius:6px;margin-right:8px;vertical-align:middle;">` +
                           `<span>#${p.id} — Volunteer ${p.volunteer_id} — Duty ${p.duty_id} — ${p.caption || ''}</span> ` +
-                          `<button onclick="approvePhoto(${p.id})">Approve</button>`;
+                          `<button onclick="approvePhoto(${p.id})">Approve</button> ` +
+                          `<button data-pid="${p.id}" class="photoDelBtn">Delete</button>`;
           wrap.appendChild(div);
         });
+        wrap.querySelectorAll('.photoDelBtn').forEach(btn => btn.addEventListener('click', async (ev) => {
+          const id = Number(ev.currentTarget.getAttribute('data-pid'));
+          if (!confirm('Delete this photo?')) return;
+          try {
+            const res = await authed(`/photos/${id}`, { method: 'DELETE' });
+            if (res.ok) { fetchPhotoApprovals(); fetchPhotos(); }
+          } catch { /* silent */ }
+        }));
       } catch { /* silent */ }
     }
     async function approvePhoto(id) {
