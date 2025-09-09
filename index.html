@@ -74,6 +74,7 @@
     <button id="navClockBtn">Time Clock</button>
     <button id="navPhotosBtn">Photos</button>
     <button id="navAdminBtn">Admin Tools</button>
+    <button id="navVolunteerMgmtBtn" class="hidden">Volunteer Management</button>
     <button id="navAccountBtn">Account</button>
     <button id="navLogoutBtn">Logout</button>
   </nav>
@@ -1434,6 +1435,7 @@
       const isVolunteer = currentRole === 'volunteer';
       const isAdminish = currentRole === 'admin' || currentRole === 'superadmin';
       document.getElementById('navAdminBtn').classList.toggle('hidden', !isAdminish);
+      document.getElementById('navVolunteerMgmtBtn').classList.toggle('hidden', !isAdminish);
       document.getElementById('navClockBtn').classList.toggle('hidden', !isVolunteer);
       document.getElementById('navPhotosBtn').classList.toggle('hidden', !isVolunteer);
       document.getElementById('navHomeBtn').onclick = () => navigateTo('homeSection');
@@ -1522,6 +1524,11 @@
       };
       document.getElementById('navClockBtn').onclick = async () => { navigateTo('clockSection'); await fetchDuties(); await fetchTimeTracking(); };
       document.getElementById('navPhotosBtn').onclick = async () => { navigateTo('photosSection'); await fetchDuties(); await fetchPhotos(); };
+      document.getElementById('navVolunteerMgmtBtn').onclick = async () => {
+        navigateTo('adminSection');
+        await populateVolunteerMgmt();
+        await refreshVolunteerLogs();
+      };
       document.getElementById('navAccountBtn').onclick = () => navigateTo('infoSection');
       document.getElementById('navLogoutBtn').onclick = () => document.getElementById('logoutBtn').click();
       // Populate Volunteer Management when entering Admin section

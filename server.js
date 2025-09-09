@@ -41,6 +41,16 @@ const pool = new Pool({
          UNIQUE (event_id, user_id)
        )`
     );
+    // Fallback profile storage when users table lacks optional columns
+    await pool.query(
+      `CREATE TABLE IF NOT EXISTS user_profile (
+         user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+         name TEXT NULL,
+         phone TEXT NULL,
+         address TEXT NULL,
+         updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+       )`
+    );
   } catch (e) {
     console.error('Schema ensure failed (duties.event_id):', e?.message || e);
   }
@@ -184,14 +194,16 @@ app.get('/me', authRequired, async (req, res) => {
   try {
     const colsRes = await pool.query("SELECT column_name FROM information_schema.columns WHERE table_name='users'");
     const has = new Set(colsRes.rows.map(r => r.column_name));
-    const selectCols = ['id','email','role','group_id'];
-    if (has.has('name')) selectCols.push('name');
-    if (has.has('phone')) selectCols.push('phone');
-    if (has.has('address')) selectCols.push('address');
-    const sql = `SELECT ${selectCols.join(', ')} FROM users WHERE id=$1`;
+    const selectCols = ['u.id','u.email','u.role','u.group_id'];
+    const joins = [];
+    if (has.has('name')) selectCols.push('u.name'); else { joins.push('LEFT JOIN user_profile p ON p.user_id = u.id'); selectCols.push('p.name'); }
+    if (has.has('phone')) selectCols.push('u.phone'); else if (!joins.find(j=>j.includes('user_profile'))) { joins.push('LEFT JOIN user_profile p ON p.user_id = u.id'); selectCols.push('p.phone'); } else { selectCols.push('p.phone'); }
+    if (has.has('address')) selectCols.push('u.address'); else if (!joins.find(j=>j.includes('user_profile'))) { joins.push('LEFT JOIN user_profile p ON p.user_id = u.id'); selectCols.push('p.address'); } else { selectCols.push('p.address'); }
+    const sql = `SELECT ${selectCols.join(', ')} FROM users u ${joins.join(' ')} WHERE u.id=$1`;
     const result = await pool.query(sql, [req.user.id]);
     if (result.rowCount === 0) return res.status(404).json({ message: 'Not found' });
-    res.json(result.rows[0]);
+    const row = result.rows[0];
+    res.json({ id: row.id, email: row.email, role: row.role, group_id: row.group_id, name: row.name || null, phone: row.phone || null, address: row.address || null });
   } catch (err) {
     res.status(500).json({ message: 'Error loading profile' });
   }
@@ -209,10 +221,32 @@ app.post('/account', authRequired, async (req, res) => {
     if (t.email !== undefined) { setClauses.push(`email=COALESCE($${idx++},email)`); params.push(t.email); }
     if (has.has('phone') && t.phone !== undefined) { setClauses.push(`phone=COALESCE($${idx++},phone)`); params.push(t.phone); }
     if (has.has('address') && t.address !== undefined) { setClauses.push(`address=COALESCE($${idx++},address)`); params.push(t.address); }
-    if (setClauses.length === 0) return res.json({ id: req.user.id });
-    const sql = `UPDATE users SET ${setClauses.join(', ')} WHERE id=$${idx} RETURNING id`;
-    const result = await pool.query(sql, [...params, req.user.id]);
-    res.json({ id: result.rows[0].id });
+    let updated = false;
+    if (setClauses.length > 0) {
+      const sql = `UPDATE users SET ${setClauses.join(', ')} WHERE id=$${idx} RETURNING id`;
+      const result = await pool.query(sql, [...params, req.user.id]);
+      updated = result.rowCount > 0;
+    }
+    // Persist to user_profile for any fields missing on users table
+    const p = {
+      name: (!has.has('name') && t.name !== undefined) ? t.name : undefined,
+      phone: (!has.has('phone') && t.phone !== undefined) ? t.phone : undefined,
+      address: (!has.has('address') && t.address !== undefined) ? t.address : undefined,
+    };
+    if (p.name !== undefined || p.phone !== undefined || p.address !== undefined) {
+      await pool.query(
+        `INSERT INTO user_profile (user_id,name,phone,address,updated_at)
+         VALUES ($1,$2,$3,$4,NOW())
+         ON CONFLICT (user_id) DO UPDATE SET
+           name=COALESCE(EXCLUDED.name,user_profile.name),
+           phone=COALESCE(EXCLUDED.phone,user_profile.phone),
+           address=COALESCE(EXCLUDED.address,user_profile.address),
+           updated_at=NOW()`,
+        [req.user.id, p.name ?? null, p.phone ?? null, p.address ?? null]
+      );
+      updated = true;
+    }
+    res.json({ id: req.user.id, updated });
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
