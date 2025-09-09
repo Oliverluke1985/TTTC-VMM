@@ -347,17 +347,7 @@
       </div>
     </div>
 
-    <h3>Create Volunteer</h3>
-    <div class="row">
-      <div class="col">
-        <label>Email</label><input id="volEmail" type="email" />
-        <label>Password</label><input id="volPassword" type="password" />
-        <label>Group</label>
-        <select id="volGroup"><option value="">— None —</option></select>
-        <button id="createVolBtn">Create Volunteer</button>
-        <div id="createVolErr" class="error"></div>
-      </div>
-    </div>
+    
 
     
 
@@ -386,6 +376,17 @@
   <!-- VOLUNTEER MANAGEMENT (Admin/Superadmin) -->
   <section id="volMgmtSection" class="col hidden">
     <h2>Volunteer Management</h2>
+    <div class="row">
+      <div class="col">
+        <h3>Create Volunteer</h3>
+        <label>Email</label><input id="vmVolEmail" type="email" />
+        <label>Password</label><input id="vmVolPassword" type="password" />
+        <label>Group</label>
+        <select id="vmVolGroup"><option value="">— None —</option></select>
+        <button id="vmCreateVolBtn">Create Volunteer</button>
+        <div id="vmCreateVolErr" class="error"></div>
+      </div>
+    </div>
     <div class="row">
       <div class="col">
         <label>Volunteer</label>
@@ -535,6 +536,11 @@
     });
     document.getElementById('createVolBtn')?.addEventListener('click', async () => {
       await createUserWith('volunteer', 'volEmail', 'volPassword', 'volGroup', 'createVolErr');
+    });
+    // Volunteer Management: Create Volunteer
+    document.getElementById('vmCreateVolBtn')?.addEventListener('click', async () => {
+      await createUserWith('volunteer', 'vmVolEmail', 'vmVolPassword', 'vmVolGroup', 'vmCreateVolErr');
+      await populateVolunteerMgmt();
     });
 
     // UTIL: fetch wrapper with auth
@@ -1248,6 +1254,21 @@
             volSel.appendChild(opt);
           });
           if (current) volSel.value = current;
+        }
+        // Groups for Create Volunteer
+        const resG = await authed('/groups');
+        const groups = await resG.json();
+        const gSel = document.getElementById('vmVolGroup');
+        if (gSel) {
+          const current = gSel.value;
+          gSel.innerHTML = '<option value="">— None —</option>';
+          groups.forEach(g => {
+            const opt = document.createElement('option');
+            opt.value = g.id;
+            opt.textContent = `${g.name}`;
+            gSel.appendChild(opt);
+          });
+          if (current) gSel.value = current; else if (groupId != null) gSel.value = String(groupId);
         }
         // Duties list (current org)
         const res = await authed('/duties');
