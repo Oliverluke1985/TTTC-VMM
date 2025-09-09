@@ -235,6 +235,30 @@ app.get('/config', (req, res) => {
   });
 });
 
+// --- Users listing (admin/superadmin)
+app.get('/users', authRequired, async (req, res) => {
+  try {
+    const roleFilter = req.query.role ? String(req.query.role) : null;
+    const groupFilter = req.query.group_id ? Number(req.query.group_id) : null;
+    const where = [];
+    const params = [];
+    let idx = 1;
+    if (roleFilter) { where.push(`role = $${idx++}`); params.push(roleFilter); }
+    if (req.user.role === 'superadmin') {
+      if (Number.isFinite(groupFilter)) { where.push(`group_id = $${idx++}`); params.push(groupFilter); }
+    } else if (req.user.role === 'admin') {
+      where.push(`group_id = $${idx++}`); params.push(req.user.group_id);
+    } else {
+      return res.status(403).json({ message: 'Admins only' });
+    }
+    const sql = `SELECT id, email, role, group_id, name FROM users${where.length ? ' WHERE ' + where.join(' AND ') : ''} ORDER BY LOWER(COALESCE(name, email)) ASC`;
+    const rows = await pool.query(sql, params);
+    res.json(rows.rows);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
 // Per-user theme endpoints
 app.get('/theme', authRequired, async (req, res) => {
   try {
@@ -618,11 +642,23 @@ app.post('/duties/:id/time/end', authRequired, async (req, res) => {
 });
 
 app.get('/time-tracking', authRequired, async (req, res) => {
+  const volunteerFilter = req.query.volunteer_id ? Number(req.query.volunteer_id) : null;
   if (req.user.role === 'superadmin') {
+    if (Number.isFinite(volunteerFilter)) {
+      const rows = await pool.query('SELECT * FROM time_tracking WHERE volunteer_id=$1 ORDER BY start_time DESC', [volunteerFilter]);
+      return res.json(rows.rows);
+    }
     const rows = await pool.query('SELECT * FROM time_tracking ORDER BY start_time DESC');
     return res.json(rows.rows);
   }
   if (req.user.role === 'admin') {
+    if (Number.isFinite(volunteerFilter)) {
+      // Ensure volunteer belongs to admin's group
+      const ok = await pool.query('SELECT 1 FROM users WHERE id=$1 AND group_id=$2', [volunteerFilter, req.user.group_id]);
+      if (ok.rowCount === 0) return res.status(403).json({ message: 'Forbidden' });
+      const rows = await pool.query('SELECT * FROM time_tracking WHERE volunteer_id=$1 ORDER BY start_time DESC', [volunteerFilter]);
+      return res.json(rows.rows);
+    }
     const rows = await pool.query(
       `SELECT t.*
        FROM time_tracking t
@@ -742,6 +778,27 @@ app.delete('/time-tracking/:id', authRequired, async (req, res) => {
     }
     if (result.rowCount === 0) return res.status(404).json({ message: 'Not found' });
     res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+// Admin create time entry for volunteer
+app.post('/admin/time-tracking', authRequired, async (req, res) => {
+  if (!isAdmin(req.user)) return res.status(403).json({ message: 'Admins only' });
+  try {
+    const { volunteer_id, duty_id, start_time, end_time, duty_date } = req.body || {};
+    if (!volunteer_id || !duty_id || !start_time) return res.status(400).json({ message: 'volunteer_id, duty_id, start_time required' });
+    if (req.user.role === 'admin') {
+      const ok = await pool.query('SELECT 1 FROM users WHERE id=$1 AND group_id=$2', [volunteer_id, req.user.group_id]);
+      if (ok.rowCount === 0) return res.status(403).json({ message: 'Forbidden' });
+    }
+    const result = await pool.query(
+      `INSERT INTO time_tracking (volunteer_id,duty_id,start_time,end_time,duty_date)
+       VALUES ($1,$2,$3::timestamp,$4::timestamp,$5::date) RETURNING id`,
+      [volunteer_id, duty_id, start_time, end_time || null, duty_date || null]
+    );
+    res.json({ id: result.rows[0].id });
   } catch (err) {
     res.status(400).json({ message: err.message });
   }

@@ -377,6 +377,32 @@
       <tbody id="adminTimeList"></tbody>
     </table>
 
+    <h3>Volunteer Management</h3>
+    <div class="row">
+      <div class="col">
+        <label>Volunteer</label>
+        <select id="vmVolunteer"><option value="">— Select volunteer —</option></select>
+        <label style="margin-top:10px">Duty</label>
+        <select id="vmDuty"><option value="">— Select duty —</option></select>
+        <label>Start Time</label>
+        <input id="vmStart" type="datetime-local" />
+        <label>End Time (optional)</label>
+        <input id="vmEnd" type="datetime-local" />
+        <label>Date (optional)</label>
+        <input id="vmDate" type="date" />
+        <button id="vmAddBtn">Add Time Entry</button>
+        <div id="vmErr" class="error"></div>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col">
+        <h4>Selected Volunteer Logs</h4>
+        <table>
+          <thead><tr><th>ID</th><th>Duty</th><th>Start</th><th>End</th><th>Hours</th><th>Date</th></tr></thead>
+          <tbody id="vmLogList"></tbody>
+        </table>
+      </div>
+    </div>
     <h3>Photo Approvals</h3>
     <div id="photoApprovals"></div>
   </section>
@@ -1193,6 +1219,68 @@
       } catch (e) { /* silent */ }
     }
 
+    // Volunteer Management helpers
+    async function fetchVolunteers() {
+      try {
+        const roleParam = 'role=volunteer';
+        const res = await authed(`/users?${roleParam}`);
+        if (!res.ok) return [];
+        return await res.json();
+      } catch { return []; }
+    }
+    async function populateVolunteerMgmt() {
+      try {
+        const volunteers = await fetchVolunteers();
+        const volSel = document.getElementById('vmVolunteer');
+        if (volSel) {
+          const current = volSel.value;
+          volSel.innerHTML = '<option value="">— Select volunteer —</option>';
+          volunteers.forEach(v => {
+            const opt = document.createElement('option');
+            opt.value = v.id;
+            opt.textContent = v.name ? `${v.name} — ${v.email}` : v.email;
+            volSel.appendChild(opt);
+          });
+          if (current) volSel.value = current;
+        }
+        // Duties list (current org)
+        const res = await authed('/duties');
+        const duties = await res.json();
+        const dutySel = document.getElementById('vmDuty');
+        if (dutySel) {
+          const current = dutySel.value;
+          dutySel.innerHTML = '<option value="">— Select duty —</option>';
+          duties.forEach(d => {
+            const opt = document.createElement('option');
+            opt.value = d.id;
+            opt.textContent = `${d.id} — ${d.title}`;
+            dutySel.appendChild(opt);
+          });
+          if (current) dutySel.value = current;
+        }
+      } catch { /* silent */ }
+    }
+    async function fetchVolunteerLogs(volunteerId) {
+      try {
+        const res = await authed(`/time-tracking?volunteer_id=${encodeURIComponent(volunteerId)}`);
+        if (!res.ok) return [];
+        return await res.json();
+      } catch { return []; }
+    }
+    async function refreshVolunteerLogs() {
+      const sel = document.getElementById('vmVolunteer');
+      const tbody = document.getElementById('vmLogList');
+      if (!sel || !tbody || !sel.value) { if (tbody) tbody.innerHTML=''; return; }
+      const logs = await fetchVolunteerLogs(sel.value);
+      tbody.innerHTML = '';
+      logs.forEach(r => {
+        const tr = document.createElement('tr');
+        const hours = (r.duration_hours != null ? Number(r.duration_hours).toFixed(2) : '');
+        tr.innerHTML = `<td>${r.id}</td><td>${r.duty_id || ''}</td><td>${r.start_time || ''}</td><td>${r.end_time || ''}</td><td>${hours}</td><td>${r.duty_date || ''}</td>`;
+        tbody.appendChild(tr);
+      });
+    }
+
     // APPROVAL QUEUE (admin)
     async function fetchApprovals() {
       if (role !== 'admin' && role !== 'superadmin') return;
@@ -1436,6 +1524,41 @@
       document.getElementById('navPhotosBtn').onclick = async () => { navigateTo('photosSection'); await fetchDuties(); await fetchPhotos(); };
       document.getElementById('navAccountBtn').onclick = () => navigateTo('infoSection');
       document.getElementById('navLogoutBtn').onclick = () => document.getElementById('logoutBtn').click();
+      // Populate Volunteer Management when entering Admin section
+      if (isAdminish) {
+        populateVolunteerMgmt();
+        const volSel = document.getElementById('vmVolunteer');
+        if (volSel && !volSel._wired) {
+          volSel.addEventListener('change', refreshVolunteerLogs);
+          volSel._wired = true;
+        }
+        const addBtn = document.getElementById('vmAddBtn');
+        if (addBtn && !addBtn._wired) {
+          addBtn.addEventListener('click', async () => {
+            const err = document.getElementById('vmErr');
+            if (err) err.textContent = '';
+            const volunteer_id = Number(document.getElementById('vmVolunteer').value);
+            const duty_id = Number(document.getElementById('vmDuty').value);
+            const start_time = document.getElementById('vmStart').value;
+            const end_time = document.getElementById('vmEnd').value || null;
+            const duty_date = document.getElementById('vmDate').value || null;
+            try {
+              const res = await authed('/admin/time-tracking', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ volunteer_id, duty_id, start_time, end_time, duty_date })
+              });
+              const data = await res.json().catch(() => ({}));
+              if (!res.ok) { if (err) err.textContent = data.message || 'Failed to add time'; return; }
+              await fetchTimeTracking();
+              await refreshVolunteerLogs();
+            } catch {
+              if (err) err.textContent = 'Error adding time';
+            }
+          });
+          addBtn._wired = true;
+        }
+      }
     }
 
     // CSV download (role-scoped)
