@@ -378,7 +378,14 @@
       <tbody id="adminTimeList"></tbody>
     </table>
 
-    <h3>Volunteer Management</h3>
+    
+    <h3>Photo Approvals</h3>
+    <div id="photoApprovals"></div>
+  </section>
+
+  <!-- VOLUNTEER MANAGEMENT (Admin/Superadmin) -->
+  <section id="volMgmtSection" class="col hidden">
+    <h2>Volunteer Management</h2>
     <div class="row">
       <div class="col">
         <label>Volunteer</label>
@@ -397,15 +404,13 @@
     </div>
     <div class="row">
       <div class="col">
-        <h4>Selected Volunteer Logs</h4>
+        <h3>Selected Volunteer Logs</h3>
         <table>
           <thead><tr><th>ID</th><th>Duty</th><th>Start</th><th>End</th><th>Hours</th><th>Date</th></tr></thead>
           <tbody id="vmLogList"></tbody>
         </table>
       </div>
     </div>
-    <h3>Photo Approvals</h3>
-    <div id="photoApprovals"></div>
   </section>
 
   <!-- VOLUNTEER (legacy combined section removed; now split into dedicated pages) -->
@@ -1419,7 +1424,7 @@
 
     // NAVIGATION / TOOLBAR
     function hideMainSections() {
-      ['infoSection','superadminSection','homeSection','createDutySection','clockSection','photosSection','eventsSection','adminSection'].forEach(id => {
+      ['infoSection','superadminSection','homeSection','createDutySection','clockSection','photosSection','eventsSection','adminSection','volMgmtSection'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.classList.add('hidden');
       });
@@ -1525,7 +1530,7 @@
       document.getElementById('navClockBtn').onclick = async () => { navigateTo('clockSection'); await fetchDuties(); await fetchTimeTracking(); };
       document.getElementById('navPhotosBtn').onclick = async () => { navigateTo('photosSection'); await fetchDuties(); await fetchPhotos(); };
       document.getElementById('navVolunteerMgmtBtn').onclick = async () => {
-        navigateTo('adminSection');
+        navigateTo('volMgmtSection');
         await populateVolunteerMgmt();
         await refreshVolunteerLogs();
       };
