@@ -391,15 +391,6 @@
     </div>
     <div class="row">
       <div class="col">
-        <h3>Volunteers</h3>
-        <table>
-          <thead><tr><th>ID</th><th>Name</th><th>Email</th><th>Actions</th></tr></thead>
-          <tbody id="vmVolunteerList"></tbody>
-        </table>
-      </div>
-    </div>
-    <div class="row">
-      <div class="col">
         <h3>Edit Volunteer</h3>
         <label>User ID</label><input id="vmEditId" type="number" />
         <label>Name</label><input id="vmEditName" type="text" />
@@ -433,6 +424,12 @@
           <thead><tr><th>ID</th><th>Duty</th><th>Start</th><th>End</th><th>Hours</th><th>Date</th></tr></thead>
           <tbody id="vmLogList"></tbody>
         </table>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col">
+        <label>Select Volunteer to Edit</label>
+        <select id="vmEditSelect"><option value="">— Select volunteer —</option></select>
       </div>
     </div>
   </section>
@@ -1285,26 +1282,31 @@
           });
           if (current) volSel.value = current;
         }
-        // Populate volunteer list table
-        const listBody = document.getElementById('vmVolunteerList');
-        if (listBody) {
-          listBody.innerHTML = '';
+        // Populate volunteer edit dropdown
+        const editSel = document.getElementById('vmEditSelect');
+        if (editSel) {
+          const current = editSel.value;
+          editSel.innerHTML = '<option value="">— Select volunteer —</option>';
           volunteers.forEach(v => {
-            const tr = document.createElement('tr');
-            const displayName = v.name || '';
-            tr.innerHTML = `<td>${v.id}</td><td>${displayName}</td><td>${v.email}</td><td><button data-uid="${v.id}" class="vmEditBtn">Edit</button></td>`;
-            listBody.appendChild(tr);
+            const opt = document.createElement('option');
+            opt.value = v.id;
+            opt.textContent = `${v.id} — ${v.name || v.email}`;
+            editSel.appendChild(opt);
           });
-          listBody.querySelectorAll('.vmEditBtn').forEach(btn => btn.addEventListener('click', (ev) => {
-            const id = Number(ev.currentTarget.getAttribute('data-uid'));
-            const v = volunteers.find(x => x.id === id);
-            if (!v) return;
-            document.getElementById('vmEditId').value = String(v.id);
-            document.getElementById('vmEditName').value = v.name || '';
-            document.getElementById('vmEditEmail').value = v.email || '';
-            document.getElementById('vmEditPhone').value = v.phone || '';
-            document.getElementById('vmEditAddress').value = v.address || '';
-          }));
+          if (current) editSel.value = current;
+          if (!editSel._wired) {
+            editSel.addEventListener('change', () => {
+              const id = Number(editSel.value);
+              const v = volunteers.find(x => x.id === id);
+              if (!v) return;
+              document.getElementById('vmEditId').value = String(v.id);
+              document.getElementById('vmEditName').value = v.name || '';
+              document.getElementById('vmEditEmail').value = v.email || '';
+              document.getElementById('vmEditPhone').value = v.phone || '';
+              document.getElementById('vmEditAddress').value = v.address || '';
+            });
+            editSel._wired = true;
+          }
         }
         // Groups for Create Volunteer
         const resG = await authed('/groups');
