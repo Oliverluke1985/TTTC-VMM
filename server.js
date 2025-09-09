@@ -31,6 +31,13 @@ const pool = new Pool({
     await pool.query(
       'ALTER TABLE IF EXISTS events ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP NULL'
     );
+    // Event date range support
+    await pool.query(
+      'ALTER TABLE IF EXISTS events ADD COLUMN IF NOT EXISTS start_date DATE NULL'
+    );
+    await pool.query(
+      'ALTER TABLE IF EXISTS events ADD COLUMN IF NOT EXISTS end_date DATE NULL'
+    );
     // RSVP table
     await pool.query(
       `CREATE TABLE IF NOT EXISTS event_attendees (
@@ -405,7 +412,7 @@ app.get('/events', authRequired, async (req, res) => {
        ) AS joined
        FROM events e
        WHERE ${where}
-       ORDER BY e.event_date DESC`,
+       ORDER BY COALESCE(e.start_date, e.event_date) DESC`,
       params
     );
     return res.json(events.rows);
@@ -416,7 +423,7 @@ app.get('/events', authRequired, async (req, res) => {
      ) AS joined
      FROM events e
      WHERE e.archived_at IS NULL AND e.group_id=$2
-     ORDER BY e.event_date DESC`,
+     ORDER BY COALESCE(e.start_date, e.event_date) DESC`,
     [req.user.id, req.user.group_id]
   );
   res.json(events.rows);
@@ -424,13 +431,13 @@ app.get('/events', authRequired, async (req, res) => {
 
 app.post('/events', authRequired, adminOnly, async (req, res) => {
   try {
-    const { title, description, event_date } = req.body || {};
+    const { title, description, event_date, start_date, end_date } = req.body || {};
     let { group_id } = req.body || {};
     if (!group_id) group_id = req.user.group_id || null;
     if (!group_id) return res.status(400).json({ message: 'Group is required for events' });
     const result = await pool.query(
-      'INSERT INTO events (title,description,event_date,group_id) VALUES ($1,$2,$3,$4) RETURNING id',
-      [title, description ?? null, event_date ?? null, group_id]
+      'INSERT INTO events (title,description,event_date,start_date,end_date,group_id) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id',
+      [title, description ?? null, event_date ?? null, start_date ?? null, end_date ?? null, group_id]
     );
     res.json({ id: result.rows[0].id });
   } catch (err) {
@@ -443,13 +450,15 @@ app.patch('/events/:id', authRequired, adminOnly, async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (!Number.isFinite(id)) return res.status(400).json({ message: 'Invalid id' });
-    const { title, description, event_date, group_id } = req.body || {};
+    const { title, description, event_date, start_date, end_date, group_id } = req.body || {};
     const setClauses = [];
     const params = [];
     let idx = 1;
     if (title !== undefined) { setClauses.push(`title = $${idx++}`); params.push(title); }
     if (description !== undefined) { setClauses.push(`description = $${idx++}`); params.push(description); }
     if (event_date !== undefined) { setClauses.push(`event_date = $${idx++}`); params.push(event_date); }
+    if (start_date !== undefined) { setClauses.push(`start_date = $${idx++}`); params.push(start_date); }
+    if (end_date !== undefined) { setClauses.push(`end_date = $${idx++}`); params.push(end_date); }
     if (group_id !== undefined) { setClauses.push(`group_id = $${idx++}`); params.push(group_id); }
     if (setClauses.length === 0) return res.json({ id });
     let result;

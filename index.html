@@ -131,13 +131,14 @@
         <label>Description</label><input id="eventDesc2" type="text" />
         <label>Organization</label>
         <select id="eventGroup2"><option value="">— Select group —</option></select>
-        <label>Date</label><input id="eventDate2" type="date" />
+        <label>Start Date</label><input id="eventStart2" type="date" />
+        <label>End Date</label><input id="eventEnd2" type="date" />
         <button id="createEventBtn2">Create Event</button>
         <div id="createEventError2" class="error"></div>
       </div>
     </div>
     <table>
-      <thead><tr><th>ID</th><th>Title</th><th>Date</th><th>Join</th><th id="eventActionsHeader" class="hidden">Actions</th></tr></thead>
+      <thead><tr><th>ID</th><th>Title</th><th>Date(s)</th><th>Join</th><th id="eventActionsHeader" class="hidden">Actions</th></tr></thead>
       <tbody id="eventList"></tbody>
     </table>
     <div id="eventEditWrap" class="row hidden">
@@ -146,7 +147,8 @@
         <label>Event ID</label><input id="editEventId" type="number" />
         <label>Title</label><input id="editEventTitle" type="text" />
         <label>Description</label><input id="editEventDesc" type="text" />
-        <label>Date</label><input id="editEventDate" type="date" />
+        <label>Start Date</label><input id="editEventStart" type="date" />
+        <label>End Date</label><input id="editEventEnd" type="date" />
         <button id="saveEventBtn">Save Event</button>
         <div id="editEventError" class="error"></div>
       </div>
@@ -844,8 +846,9 @@
             if (role === 'admin' || role === 'superadmin') {
               actions = `<button data-eid="${e.id}" class="editEventPrefillBtn">Edit</button> <button data-eid="${e.id}" class="archiveEventBtn">Archive</button> <button data-eid="${e.id}" class="deleteEventBtn">Delete</button>`;
             }
+          const dateTxt = e.start_date ? (e.end_date ? `${e.start_date} – ${e.end_date}` : `${e.start_date}`) : (e.event_date || '');
           tr.innerHTML =
-            `<td>${e.id}</td><td>${e.title}</td><td>${e.event_date || ''}</td>
+            `<td>${e.id}</td><td>${e.title}</td><td>${dateTxt}</td>
                <td>${e.joined ? `<button data-eid="${e.id}" class="leaveBtn">Leave</button>` : `<button data-eid=\"${e.id}\" class=\"joinBtn\">Join</button>`}</td>
                <td>${actions}</td>`;
           tbody.appendChild(tr);
@@ -857,7 +860,8 @@
             document.getElementById('editEventId').value = String(id);
             const row = Array.from(ev.currentTarget.closest('tr').children);
             document.getElementById('editEventTitle').value = row[1].textContent || '';
-            document.getElementById('editEventDate').value = row[2].textContent || '';
+            document.getElementById('editEventStart').value = e.start_date || '';
+            document.getElementById('editEventEnd').value = e.end_date || '';
             document.getElementById('editEventDesc').value = '';
           }));
           tbody.querySelectorAll('.joinBtn').forEach(btn => btn.addEventListener('click', async (ev) => {
@@ -900,7 +904,8 @@
           events.forEach(e => {
             const opt = document.createElement('option');
             opt.value = e.id;
-            opt.textContent = `${e.title} ${e.event_date ? '— ' + e.event_date : ''}`;
+            const d = e.start_date ? (e.end_date ? `${e.start_date} – ${e.end_date}` : `${e.start_date}`) : (e.event_date || '');
+            opt.textContent = `${e.title} ${d ? '— ' + d : ''}`;
             sel.appendChild(opt);
           });
           if (current) sel.value = current;
@@ -942,7 +947,8 @@
           events.forEach(e => {
             const opt = document.createElement('option');
             opt.value = e.id;
-            opt.textContent = `${e.title} ${e.event_date ? '— ' + e.event_date : ''}`;
+            const d = e.start_date ? (e.end_date ? `${e.start_date} – ${e.end_date}` : `${e.start_date}`) : (e.event_date || '');
+            opt.textContent = `${e.title} ${d ? '— ' + d : ''}`;
             sel.appendChild(opt);
           });
           if (current) sel.value = current;
@@ -958,12 +964,13 @@
       const description = document.getElementById('eventDesc2').value.trim();
       const grpSel2 = document.getElementById('eventGroup2');
       const gid2 = grpSel2 && grpSel2.value ? Number(grpSel2.value) : (groupId ?? null);
-      const event_date = document.getElementById('eventDate2').value;
+      const start_date = document.getElementById('eventStart2').value;
+      const end_date = document.getElementById('eventEnd2').value;
       try {
         const res = await authed('/events', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title, description, event_date, group_id: gid2 })
+          body: JSON.stringify({ title, description, start_date, end_date, group_id: gid2 })
         });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
@@ -973,7 +980,8 @@
         document.getElementById('createEventError2').textContent = '';
         document.getElementById('eventTitle2').value = '';
         document.getElementById('eventDesc2').value = '';
-        document.getElementById('eventDate2').value = '';
+        document.getElementById('eventStart2').value = '';
+        document.getElementById('eventEnd2').value = '';
         if (grpSel2) grpSel2.value = groupId != null ? String(groupId) : '';
         fetchEvents();
       } catch {
@@ -986,12 +994,13 @@
       const id = Number(document.getElementById('editEventId').value);
       const title = document.getElementById('editEventTitle').value.trim();
       const description = document.getElementById('editEventDesc').value.trim();
-      const event_date = document.getElementById('editEventDate').value;
+      const start_date = document.getElementById('editEventStart').value;
+      const end_date = document.getElementById('editEventEnd').value;
       try {
         const res = await authed(`/events/${id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title, description, event_date })
+          body: JSON.stringify({ title, description, start_date, end_date })
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) { document.getElementById('editEventError').textContent = data.message || 'Failed to save event'; return; }
