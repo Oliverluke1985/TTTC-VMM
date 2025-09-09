@@ -389,7 +389,7 @@
         <div id="vmCreateVolErr" class="error"></div>
       </div>
     </div>
-    <div class="row">
+    <div id="vmEditPanel" class="row hidden">
       <div class="col">
         <h3>Edit Volunteer</h3>
         <label>User ID</label><input id="vmEditId" type="number" />
@@ -398,6 +398,7 @@
         <label>Phone</label><input id="vmEditPhone" type="text" />
         <label>Address</label><input id="vmEditAddress" type="text" />
         <button id="vmSaveUserBtn">Save User</button>
+        <button id="vmCloseEditBtn" style="margin-left:8px">Close</button>
         <div id="vmSaveUserErr" class="error"></div>
       </div>
     </div>
@@ -1299,6 +1300,8 @@
               const id = Number(editSel.value);
               const v = volunteers.find(x => x.id === id);
               if (!v) return;
+              const panel = document.getElementById('vmEditPanel');
+              if (panel) panel.classList.remove('hidden');
               document.getElementById('vmEditId').value = String(v.id);
               document.getElementById('vmEditName').value = v.name || '';
               document.getElementById('vmEditEmail').value = v.email || '';
@@ -1663,9 +1666,19 @@
               const data = await res.json().catch(() => ({}));
               if (!res.ok) { if (err) err.textContent = data.message || 'Failed to save user'; return; }
               await populateVolunteerMgmt();
+              const panel = document.getElementById('vmEditPanel');
+              if (panel) panel.classList.add('hidden');
             } catch { if (err) err.textContent = 'Error saving user'; }
           });
           saveUserBtn._wired = true;
+        }
+        const closeBtn = document.getElementById('vmCloseEditBtn');
+        if (closeBtn && !closeBtn._wired) {
+          closeBtn.addEventListener('click', () => {
+            const panel = document.getElementById('vmEditPanel');
+            if (panel) panel.classList.add('hidden');
+          });
+          closeBtn._wired = true;
         }
       }
     }
