@@ -330,18 +330,7 @@
   <section id="adminSection" class="col hidden">
     <h2>Admin Tools</h2>
 
-    <h3>Create Event</h3>
-    <div class="row">
-      <div class="col">
-        <label>Title</label><input id="eventTitle" type="text" />
-        <label>Description</label><input id="eventDesc" type="text" />
-        <label>Organization</label>
-        <select id="eventGroupA"><option value="">— Select group —</option></select>
-        <label>Date</label><input id="eventDate" type="date" />
-        <button id="createEventBtn">Create Event</button>
-        <div id="createEventError" class="error"></div>
-      </div>
-    </div>
+    
 
     
 
@@ -879,7 +868,7 @@
           if (current) sel.value = current;
         });
         // Populate event group selectors
-        const grpSels = [document.getElementById('eventGroupA'), document.getElementById('eventGroup2')];
+        const grpSels = [document.getElementById('eventGroup2')];
         for (const grpSel of grpSels) {
           if (!grpSel) continue;
           // ensure groups loaded
@@ -923,33 +912,7 @@
       } catch { /* silent */ }
     }
 
-    document.getElementById('createEventBtn')?.addEventListener('click', async () => {
-      const title = document.getElementById('eventTitle').value.trim();
-      const description = document.getElementById('eventDesc').value.trim();
-      const grpSel = document.getElementById('eventGroupA');
-      const gid = grpSel && grpSel.value ? Number(grpSel.value) : (groupId ?? null);
-      const event_date = document.getElementById('eventDate').value;
-      try {
-        const res = await authed('/events', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title, description, event_date, group_id: gid })
-        });
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          document.getElementById('createEventError').textContent = data.message || 'Failed to create event';
-          return;
-        }
-        document.getElementById('createEventError').textContent = '';
-        document.getElementById('eventTitle').value = '';
-        document.getElementById('eventDesc').value = '';
-        document.getElementById('eventDate').value = '';
-        if (grpSel) grpSel.value = groupId != null ? String(groupId) : '';
-        fetchEvents();
-      } catch {
-        document.getElementById('createEventError').textContent = 'Error creating event';
-      }
-    });
+    // Removed duplicate Admin Tools create-event handler; use Events page create form instead
 
     // Create Event (from Events page admin-only form)
     document.getElementById('createEventBtn2')?.addEventListener('click', async () => {
