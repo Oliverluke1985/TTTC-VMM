@@ -350,7 +350,6 @@
         <label>New Password (leave blank to keep)</label><input id="saAdminEditPassword" type="password" />
         <div style="margin:6px 0">
           <button id="saTogglePwBtn" type="button">Show</button>
-          <button id="saGenPwBtn" type="button" style="margin-left:8px">Generate</button>
           <button id="saUpdatePwBtn" type="button" style="margin-left:8px">Update Password</button>
         </div>
         <label>Phone</label><input id="saAdminEditPhone" type="text" />
@@ -453,7 +452,6 @@
         <label>New Password (leave blank to keep)</label><input id="vmEditPassword" type="password" />
         <div style="margin:6px 0">
           <button id="vmTogglePwBtn" type="button">Show</button>
-          <button id="vmGenPwBtn" type="button" style="margin-left:8px">Generate</button>
           <button id="vmUpdatePwBtn" type="button" style="margin-left:8px">Update Password</button>
         </div>
         <label>Phone</label><input id="vmEditPhone" type="text" />
@@ -1812,11 +1810,7 @@
           });
           vmToggle._wired = true;
         }
-        const vmGen = document.getElementById('vmGenPwBtn');
-        if (vmGen && !vmGen._wired) {
-          vmGen.addEventListener('click', () => { if (vmPw) { vmPw.value = generateStrongPassword(); vmPw.type = 'text'; if (vmToggle) vmToggle.textContent = 'Hide'; } });
-          vmGen._wired = true;
-        }
+        // removed Generate button per request
         const vmUpdate = document.getElementById('vmUpdatePwBtn');
         if (vmUpdate && !vmUpdate._wired) {
           vmUpdate.addEventListener('click', async () => {
@@ -1871,17 +1865,7 @@
           });
           toggleBtn._wired = true;
         }
-        const genBtn = document.getElementById('saGenPwBtn');
-        if (genBtn && !genBtn._wired) {
-          genBtn.addEventListener('click', () => {
-            if (!pwInput) return;
-            const pwd = generateStrongPassword();
-            pwInput.value = pwd;
-            pwInput.type = 'text';
-            if (toggleBtn) toggleBtn.textContent = 'Hide';
-          });
-          genBtn._wired = true;
-        }
+        // removed Generate button per request
         const updatePwBtn = document.getElementById('saUpdatePwBtn');
         if (updatePwBtn && !updatePwBtn._wired) {
           updatePwBtn.addEventListener('click', async () => {
@@ -1942,19 +1926,7 @@
         }
       }
     }
-    function generateStrongPassword() {
-      const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
-      const lower = 'abcdefghijkmnopqrstuvwxyz';
-      const digits = '23456789';
-      const symbols = '!@#$%^&*()-_=+';
-      const all = upper + lower + digits + symbols;
-      const pick = (s) => s[Math.floor(Math.random() * s.length)];
-      const parts = [pick(upper), pick(lower), pick(digits), pick(symbols)];
-      for (let i = 0; i < 8; i++) parts.push(pick(all));
-      // shuffle
-      for (let i = parts.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [parts[i], parts[j]] = [parts[j], parts[i]]; }
-      return parts.join('');
-    }
+    // password generation removed per request
 
     // CSV download (role-scoped)
     document.getElementById('downloadCsvBtn')?.addEventListener('click', async () => {
