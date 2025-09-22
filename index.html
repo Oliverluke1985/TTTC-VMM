@@ -349,9 +349,9 @@
         <label>Email</label><input id="saAdminEditEmail" type="email" />
         <label>New Password (leave blank to keep)</label><input id="saAdminEditPassword" type="password" />
         <div style="margin:6px 0">
-          <label class="nowrap"><input id="saShowPwChk" type="checkbox" /> Show</label>
+          <button id="saTogglePwBtn" type="button">Show</button>
           <button id="saGenPwBtn" type="button" style="margin-left:8px">Generate</button>
-          <button id="saCopyPwBtn" type="button" style="margin-left:8px">Copy</button>
+          <button id="saUpdatePwBtn" type="button" style="margin-left:8px">Update Password</button>
         </div>
         <label>Phone</label><input id="saAdminEditPhone" type="text" />
         <label>Address</label><input id="saAdminEditAddress" type="text" />
@@ -452,9 +452,9 @@
         <label>Email</label><input id="vmEditEmail" type="email" />
         <label>New Password (leave blank to keep)</label><input id="vmEditPassword" type="password" />
         <div style="margin:6px 0">
-          <label class="nowrap"><input id="vmShowPwChk" type="checkbox" /> Show</label>
+          <button id="vmTogglePwBtn" type="button">Show</button>
           <button id="vmGenPwBtn" type="button" style="margin-left:8px">Generate</button>
-          <button id="vmCopyPwBtn" type="button" style="margin-left:8px">Copy</button>
+          <button id="vmUpdatePwBtn" type="button" style="margin-left:8px">Update Password</button>
         </div>
         <label>Phone</label><input id="vmEditPhone" type="text" />
         <label>Address</label><input id="vmEditAddress" type="text" />
@@ -1801,21 +1801,42 @@
           closeBtn._wired = true;
         }
         // Volunteer password helpers
-        const vmShow = document.getElementById('vmShowPwChk');
         const vmPw = document.getElementById('vmEditPassword');
-        if (vmShow && !vmShow._wired) {
-          vmShow.addEventListener('change', () => { if (vmPw) vmPw.type = vmShow.checked ? 'text' : 'password'; });
-          vmShow._wired = true;
+        const vmToggle = document.getElementById('vmTogglePwBtn');
+        if (vmToggle && !vmToggle._wired) {
+          vmToggle.addEventListener('click', () => {
+            if (!vmPw) return;
+            const show = vmPw.type !== 'text';
+            vmPw.type = show ? 'text' : 'password';
+            vmToggle.textContent = show ? 'Hide' : 'Show';
+          });
+          vmToggle._wired = true;
         }
         const vmGen = document.getElementById('vmGenPwBtn');
         if (vmGen && !vmGen._wired) {
-          vmGen.addEventListener('click', () => { if (vmPw) { vmPw.value = generateStrongPassword(); if (vmShow) vmShow.checked = true; vmPw.type = 'text'; } });
+          vmGen.addEventListener('click', () => { if (vmPw) { vmPw.value = generateStrongPassword(); vmPw.type = 'text'; if (vmToggle) vmToggle.textContent = 'Hide'; } });
           vmGen._wired = true;
         }
-        const vmCopy = document.getElementById('vmCopyPwBtn');
-        if (vmCopy && !vmCopy._wired) {
-          vmCopy.addEventListener('click', async () => { if (vmPw && vmPw.value) { try { await navigator.clipboard.writeText(vmPw.value); } catch { /* ignore */ } } });
-          vmCopy._wired = true;
+        const vmUpdate = document.getElementById('vmUpdatePwBtn');
+        if (vmUpdate && !vmUpdate._wired) {
+          vmUpdate.addEventListener('click', async () => {
+            if (!vmPw || !vmPw.value) return;
+            const id = Number(document.getElementById('vmEditId').value);
+            const err = document.getElementById('vmSaveUserErr');
+            if (err) err.textContent = '';
+            if (vmPw.value.length < 6) { if (err) err.textContent = 'Password must be at least 6 chars'; return; }
+            try {
+              const res = await authed(`/users/${id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: vmPw.value })
+              });
+              const data = await res.json().catch(() => ({}));
+              if (!res.ok) { if (err) err.textContent = data.message || 'Failed to update password'; return; }
+              vmPw.value = '';
+            } catch { if (err) err.textContent = 'Error updating password'; }
+          });
+          vmUpdate._wired = true;
         }
       }
       // Superadmin admin-management wiring
@@ -1839,14 +1860,16 @@
           sel._wired = true;
         }
         // Password helpers
-        const showChk = document.getElementById('saShowPwChk');
         const pwInput = document.getElementById('saAdminEditPassword');
-        if (showChk && !showChk._wired) {
-          showChk.addEventListener('change', () => {
+        const toggleBtn = document.getElementById('saTogglePwBtn');
+        if (toggleBtn && !toggleBtn._wired) {
+          toggleBtn.addEventListener('click', () => {
             if (!pwInput) return;
-            pwInput.type = showChk.checked ? 'text' : 'password';
+            const show = pwInput.type !== 'text';
+            pwInput.type = show ? 'text' : 'password';
+            toggleBtn.textContent = show ? 'Hide' : 'Show';
           });
-          showChk._wired = true;
+          toggleBtn._wired = true;
         }
         const genBtn = document.getElementById('saGenPwBtn');
         if (genBtn && !genBtn._wired) {
@@ -1854,18 +1877,31 @@
             if (!pwInput) return;
             const pwd = generateStrongPassword();
             pwInput.value = pwd;
-            if (showChk) showChk.checked = true;
-            if (pwInput) pwInput.type = 'text';
+            pwInput.type = 'text';
+            if (toggleBtn) toggleBtn.textContent = 'Hide';
           });
           genBtn._wired = true;
         }
-        const copyBtn = document.getElementById('saCopyPwBtn');
-        if (copyBtn && !copyBtn._wired) {
-          copyBtn.addEventListener('click', async () => {
+        const updatePwBtn = document.getElementById('saUpdatePwBtn');
+        if (updatePwBtn && !updatePwBtn._wired) {
+          updatePwBtn.addEventListener('click', async () => {
             if (!pwInput || !pwInput.value) return;
-            try { await navigator.clipboard.writeText(pwInput.value); } catch { /* ignore */ }
+            const id = Number(document.getElementById('saAdminEditId').value);
+            const err = document.getElementById('saAdminSaveErr');
+            if (err) err.textContent = '';
+            if (pwInput.value.length < 6) { if (err) err.textContent = 'Password must be at least 6 chars'; return; }
+            try {
+              const res = await authed(`/users/${id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: pwInput.value })
+              });
+              const data = await res.json().catch(() => ({}));
+              if (!res.ok) { if (err) err.textContent = data.message || 'Failed to update password'; return; }
+              pwInput.value = '';
+            } catch { if (err) err.textContent = 'Error updating password'; }
           });
-          copyBtn._wired = true;
+          updatePwBtn._wired = true;
         }
         const saveBtn = document.getElementById('saSaveAdminBtn');
         if (saveBtn && !saveBtn._wired) {
