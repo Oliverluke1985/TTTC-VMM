@@ -333,6 +333,27 @@
         <div id="createUserError" class="error"></div>
       </div>
     </div>
+
+    <h3>Admin Management</h3>
+    <div class="row">
+      <div class="col">
+        <label>Select Admin to Edit</label>
+        <select id="saAdminSelect"><option value="">— Select admin —</option></select>
+      </div>
+    </div>
+    <div id="saAdminEditPanel" class="row hidden">
+      <div class="col">
+        <h3>Edit Admin</h3>
+        <label>User ID</label><input id="saAdminEditId" type="number" />
+        <label>Name</label><input id="saAdminEditName" type="text" />
+        <label>Email</label><input id="saAdminEditEmail" type="email" />
+        <label>Phone</label><input id="saAdminEditPhone" type="text" />
+        <label>Address</label><input id="saAdminEditAddress" type="text" />
+        <button id="saSaveAdminBtn">Save User</button>
+        <button id="saCloseAdminEditBtn" style="margin-left:8px">Close</button>
+        <div id="saAdminSaveErr" class="error"></div>
+      </div>
+    </div>
   </section>
 
   <!-- ADMIN -->
@@ -1274,6 +1295,38 @@
         return await res.json();
       } catch { return []; }
     }
+    async function fetchAdminsForSuperadmin() {
+      try {
+        // Filter by selected org if present; otherwise show all admins
+        const sel = document.getElementById('superadminOrgPicker');
+        const params = new URLSearchParams();
+        params.set('role', 'admin');
+        if (sel && sel.value) params.set('group_id', sel.value);
+        const res = await authed(`/users?${params.toString()}`);
+        if (!res.ok) return [];
+        return await res.json();
+      } catch { return []; }
+    }
+    async function populateSuperadminAdmins() {
+      try {
+        const admins = await fetchAdminsForSuperadmin();
+        const sel = document.getElementById('saAdminSelect');
+        if (!sel) return;
+        const current = sel.value;
+        sel.innerHTML = '<option value="">— Select admin —</option>';
+        admins.forEach(u => {
+          const opt = document.createElement('option');
+          opt.value = u.id;
+          opt.textContent = u.name ? `${u.name} — ${u.email}` : u.email;
+          sel.appendChild(opt);
+        });
+        sel._admins = admins;
+        if (current) sel.value = current;
+        // Hide edit panel if selection cleared or missing user
+        const panel = document.getElementById('saAdminEditPanel');
+        if (panel && (!sel.value || !admins.find(a => String(a.id) === sel.value))) panel.classList.add('hidden');
+      } catch { /* silent */ }
+    }
     async function populateVolunteerMgmt() {
       try {
         const volunteers = await fetchVolunteers();
@@ -1575,6 +1628,8 @@
           fetchEvents();
           fetchDuties();
           populateEventDropdownsForGroup(orgPicker.value);
+          // Refresh Admin Management list when org changes
+          populateSuperadminAdmins();
         });
         orgPicker._wired = true;
       }
@@ -1707,6 +1762,60 @@
         if (closeBtn && !closeBtn._wired) {
           closeBtn.addEventListener('click', () => {
             const panel = document.getElementById('vmEditPanel');
+            if (panel) panel.classList.add('hidden');
+          });
+          closeBtn._wired = true;
+        }
+      }
+      // Superadmin admin-management wiring
+      if (currentRole === 'superadmin') {
+        populateSuperadminAdmins();
+        const sel = document.getElementById('saAdminSelect');
+        if (sel && !sel._wired) {
+          sel.addEventListener('change', () => {
+            const id = Number(sel.value);
+            const optionData = sel._admins || [];
+            const u = optionData.find(x => x.id === id);
+            if (!u) return;
+            const panel = document.getElementById('saAdminEditPanel');
+            if (panel) panel.classList.remove('hidden');
+            document.getElementById('saAdminEditId').value = String(u.id);
+            document.getElementById('saAdminEditName').value = u.name || '';
+            document.getElementById('saAdminEditEmail').value = u.email || '';
+            document.getElementById('saAdminEditPhone').value = u.phone || '';
+            document.getElementById('saAdminEditAddress').value = u.address || '';
+          });
+          sel._wired = true;
+        }
+        const saveBtn = document.getElementById('saSaveAdminBtn');
+        if (saveBtn && !saveBtn._wired) {
+          saveBtn.addEventListener('click', async () => {
+            const id = Number(document.getElementById('saAdminEditId').value);
+            const name = document.getElementById('saAdminEditName').value.trim();
+            const email = document.getElementById('saAdminEditEmail').value.trim();
+            const phone = document.getElementById('saAdminEditPhone').value.trim();
+            const address = document.getElementById('saAdminEditAddress').value.trim();
+            const err = document.getElementById('saAdminSaveErr');
+            if (err) err.textContent = '';
+            try {
+              const res = await authed(`/users/${id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, email, phone, address })
+              });
+              const data = await res.json().catch(() => ({}));
+              if (!res.ok) { if (err) err.textContent = data.message || 'Failed to save user'; return; }
+              await populateSuperadminAdmins();
+              const panel = document.getElementById('saAdminEditPanel');
+              if (panel) panel.classList.add('hidden');
+            } catch { if (err) err.textContent = 'Error saving user'; }
+          });
+          saveBtn._wired = true;
+        }
+        const closeBtn = document.getElementById('saCloseAdminEditBtn');
+        if (closeBtn && !closeBtn._wired) {
+          closeBtn.addEventListener('click', () => {
+            const panel = document.getElementById('saAdminEditPanel');
             if (panel) panel.classList.add('hidden');
           });
           closeBtn._wired = true;
