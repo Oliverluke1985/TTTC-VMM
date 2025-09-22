@@ -348,6 +348,11 @@
         <label>Name</label><input id="saAdminEditName" type="text" />
         <label>Email</label><input id="saAdminEditEmail" type="email" />
         <label>New Password (leave blank to keep)</label><input id="saAdminEditPassword" type="password" />
+        <div style="margin:6px 0">
+          <label class="nowrap"><input id="saShowPwChk" type="checkbox" /> Show</label>
+          <button id="saGenPwBtn" type="button" style="margin-left:8px">Generate</button>
+          <button id="saCopyPwBtn" type="button" style="margin-left:8px">Copy</button>
+        </div>
         <label>Phone</label><input id="saAdminEditPhone" type="text" />
         <label>Address</label><input id="saAdminEditAddress" type="text" />
         <button id="saSaveAdminBtn">Save User</button>
@@ -1788,6 +1793,35 @@
           });
           sel._wired = true;
         }
+        // Password helpers
+        const showChk = document.getElementById('saShowPwChk');
+        const pwInput = document.getElementById('saAdminEditPassword');
+        if (showChk && !showChk._wired) {
+          showChk.addEventListener('change', () => {
+            if (!pwInput) return;
+            pwInput.type = showChk.checked ? 'text' : 'password';
+          });
+          showChk._wired = true;
+        }
+        const genBtn = document.getElementById('saGenPwBtn');
+        if (genBtn && !genBtn._wired) {
+          genBtn.addEventListener('click', () => {
+            if (!pwInput) return;
+            const pwd = generateStrongPassword();
+            pwInput.value = pwd;
+            if (showChk) showChk.checked = true;
+            if (pwInput) pwInput.type = 'text';
+          });
+          genBtn._wired = true;
+        }
+        const copyBtn = document.getElementById('saCopyPwBtn');
+        if (copyBtn && !copyBtn._wired) {
+          copyBtn.addEventListener('click', async () => {
+            if (!pwInput || !pwInput.value) return;
+            try { await navigator.clipboard.writeText(pwInput.value); } catch { /* ignore */ }
+          });
+          copyBtn._wired = true;
+        }
         const saveBtn = document.getElementById('saSaveAdminBtn');
         if (saveBtn && !saveBtn._wired) {
           saveBtn.addEventListener('click', async () => {
@@ -1826,6 +1860,19 @@
           closeBtn._wired = true;
         }
       }
+    }
+    function generateStrongPassword() {
+      const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+      const lower = 'abcdefghijkmnopqrstuvwxyz';
+      const digits = '23456789';
+      const symbols = '!@#$%^&*()-_=+';
+      const all = upper + lower + digits + symbols;
+      const pick = (s) => s[Math.floor(Math.random() * s.length)];
+      const parts = [pick(upper), pick(lower), pick(digits), pick(symbols)];
+      for (let i = 0; i < 8; i++) parts.push(pick(all));
+      // shuffle
+      for (let i = parts.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [parts[i], parts[j]] = [parts[j], parts[i]]; }
+      return parts.join('');
     }
 
     // CSV download (role-scoped)
