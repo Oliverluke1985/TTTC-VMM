@@ -347,6 +347,7 @@
         <label>User ID</label><input id="saAdminEditId" type="number" />
         <label>Name</label><input id="saAdminEditName" type="text" />
         <label>Email</label><input id="saAdminEditEmail" type="email" />
+        <label>New Password (leave blank to keep)</label><input id="saAdminEditPassword" type="password" />
         <label>Phone</label><input id="saAdminEditPhone" type="text" />
         <label>Address</label><input id="saAdminEditAddress" type="text" />
         <button id="saSaveAdminBtn">Save User</button>
@@ -448,10 +449,10 @@
     <div class="row">
       <div class="col">
         <h3>Selected Volunteer Logs</h3>
-        <table>
-          <thead><tr><th>ID</th><th>Duty</th><th>Start</th><th>End</th><th>Hours</th><th>Date</th></tr></thead>
+    <table>
+      <thead><tr><th>ID</th><th>Duty</th><th>Start</th><th>End</th><th>Hours</th><th>Date</th></tr></thead>
           <tbody id="vmLogList"></tbody>
-        </table>
+    </table>
       </div>
     </div>
     <div class="row">
@@ -1793,6 +1794,7 @@
             const id = Number(document.getElementById('saAdminEditId').value);
             const name = document.getElementById('saAdminEditName').value.trim();
             const email = document.getElementById('saAdminEditEmail').value.trim();
+            const password = document.getElementById('saAdminEditPassword').value;
             const phone = document.getElementById('saAdminEditPhone').value.trim();
             const address = document.getElementById('saAdminEditAddress').value.trim();
             const err = document.getElementById('saAdminSaveErr');
@@ -1801,10 +1803,13 @@
               const res = await authed(`/users/${id}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, email, phone, address })
+                body: JSON.stringify({ name, email, phone, address, ...(password ? { password } : {}) })
               });
               const data = await res.json().catch(() => ({}));
               if (!res.ok) { if (err) err.textContent = data.message || 'Failed to save user'; return; }
+              // Clear password field after save
+              const pw = document.getElementById('saAdminEditPassword');
+              if (pw) pw.value = '';
               await populateSuperadminAdmins();
               const panel = document.getElementById('saAdminEditPanel');
               if (panel) panel.classList.add('hidden');

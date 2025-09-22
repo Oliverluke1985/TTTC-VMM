@@ -335,6 +335,17 @@ app.patch('/users/:id', authRequired, async (req, res) => {
     if (t.email !== undefined) { setClauses.push(`email=COALESCE($${idx++},email)`); params.push(t.email); }
     if (has.has('phone') && t.phone !== undefined) { setClauses.push(`phone=COALESCE($${idx++},phone)`); params.push(t.phone); }
     if (has.has('address') && t.address !== undefined) { setClauses.push(`address=COALESCE($${idx++},address)`); params.push(t.address); }
+  // Optional password reset/change
+  if (t.password !== undefined) {
+    if (typeof t.password !== 'string' || t.password.length < 6) {
+      return res.status(400).json({ message: 'Password must be at least 6 characters' });
+    }
+    if (has.has('password')) {
+      const hash = await bcrypt.hash(String(t.password), 10);
+      setClauses.push(`password=$${idx++}`);
+      params.push(hash);
+    }
+  }
     if (t.role !== undefined) {
       const roleVal = String(t.role).toLowerCase();
       if (roleVal === 'superadmin' && req.user.role !== 'superadmin') return res.status(403).json({ message: 'Cannot assign superadmin' });
