@@ -424,6 +424,12 @@
     </div>
     <div class="row">
       <div class="col">
+        <label>Search volunteers (name or email)</label>
+        <input id="vmVolunteerSearch" type="text" placeholder="Start typing..." />
+      </div>
+    </div>
+    <div class="row">
+      <div class="col">
         <label>Volunteer</label>
         <select id="vmVolunteer"><option value="">— Select volunteer —</option></select>
         <label style="margin-top:10px">Duty</label>
@@ -444,6 +450,12 @@
         <label>User ID</label><input id="vmEditId" type="number" />
         <label>Name</label><input id="vmEditName" type="text" />
         <label>Email</label><input id="vmEditEmail" type="email" />
+        <label>New Password (leave blank to keep)</label><input id="vmEditPassword" type="password" />
+        <div style="margin:6px 0">
+          <label class="nowrap"><input id="vmShowPwChk" type="checkbox" /> Show</label>
+          <button id="vmGenPwBtn" type="button" style="margin-left:8px">Generate</button>
+          <button id="vmCopyPwBtn" type="button" style="margin-left:8px">Copy</button>
+        </div>
         <label>Phone</label><input id="vmEditPhone" type="text" />
         <label>Address</label><input id="vmEditAddress" type="text" />
         <button id="vmSaveUserBtn">Save User</button>
@@ -1340,12 +1352,24 @@
         if (volSel) {
           const current = volSel.value;
           volSel.innerHTML = '<option value="">— Select volunteer —</option>';
-          volunteers.forEach(v => {
-            const opt = document.createElement('option');
-            opt.value = v.id;
-            opt.textContent = v.name ? `${v.name} — ${v.email}` : v.email;
-            volSel.appendChild(opt);
-          });
+          // cache list and apply search filter
+          volSel._all = volunteers;
+          const search = document.getElementById('vmVolunteerSearch');
+          const applyFilter = () => {
+            const q = (search?.value || '').trim().toLowerCase();
+            const list = volSel._all || [];
+            volSel.innerHTML = '<option value="">— Select volunteer —</option>';
+            list.filter(v => !q || (v.name && v.name.toLowerCase().includes(q)) || (v.email && v.email.toLowerCase().includes(q)))
+                .forEach(v => {
+                  const opt = document.createElement('option');
+                  opt.value = v.id;
+                  opt.textContent = v.name ? `${v.name} — ${v.email}` : v.email;
+                  volSel.appendChild(opt);
+                });
+            if (current) volSel.value = current;
+          };
+          applyFilter();
+          if (search && !search._wired) { search.addEventListener('input', applyFilter); search._wired = true; }
           if (current) volSel.value = current;
         }
         // Populate volunteer edit dropdown
@@ -1370,6 +1394,7 @@
               document.getElementById('vmEditId').value = String(v.id);
               document.getElementById('vmEditName').value = v.name || '';
               document.getElementById('vmEditEmail').value = v.email || '';
+              const pw = document.getElementById('vmEditPassword'); if (pw) pw.value = '';
               document.getElementById('vmEditPhone').value = v.phone || '';
               document.getElementById('vmEditAddress').value = v.address || '';
             });
@@ -1745,6 +1770,7 @@
             const id = Number(document.getElementById('vmEditId').value);
             const name = document.getElementById('vmEditName').value.trim();
             const email = document.getElementById('vmEditEmail').value.trim();
+            const password = document.getElementById('vmEditPassword')?.value || '';
             const phone = document.getElementById('vmEditPhone').value.trim();
             const address = document.getElementById('vmEditAddress').value.trim();
             const err = document.getElementById('vmSaveUserErr');
@@ -1753,10 +1779,12 @@
               const res = await authed(`/users/${id}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, email, phone, address })
+                body: JSON.stringify({ name, email, phone, address, ...(password ? { password } : {}) })
               });
               const data = await res.json().catch(() => ({}));
               if (!res.ok) { if (err) err.textContent = data.message || 'Failed to save user'; return; }
+              const pw = document.getElementById('vmEditPassword');
+              if (pw) pw.value = '';
               await populateVolunteerMgmt();
               const panel = document.getElementById('vmEditPanel');
               if (panel) panel.classList.add('hidden');
@@ -1771,6 +1799,23 @@
             if (panel) panel.classList.add('hidden');
           });
           closeBtn._wired = true;
+        }
+        // Volunteer password helpers
+        const vmShow = document.getElementById('vmShowPwChk');
+        const vmPw = document.getElementById('vmEditPassword');
+        if (vmShow && !vmShow._wired) {
+          vmShow.addEventListener('change', () => { if (vmPw) vmPw.type = vmShow.checked ? 'text' : 'password'; });
+          vmShow._wired = true;
+        }
+        const vmGen = document.getElementById('vmGenPwBtn');
+        if (vmGen && !vmGen._wired) {
+          vmGen.addEventListener('click', () => { if (vmPw) { vmPw.value = generateStrongPassword(); if (vmShow) vmShow.checked = true; vmPw.type = 'text'; } });
+          vmGen._wired = true;
+        }
+        const vmCopy = document.getElementById('vmCopyPwBtn');
+        if (vmCopy && !vmCopy._wired) {
+          vmCopy.addEventListener('click', async () => { if (vmPw && vmPw.value) { try { await navigator.clipboard.writeText(vmPw.value); } catch { /* ignore */ } } });
+          vmCopy._wired = true;
         }
       }
       // Superadmin admin-management wiring
