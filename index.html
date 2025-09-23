@@ -1806,6 +1806,9 @@
                 vmOrgSel.appendChild(opt);
               });
               if (current) vmOrgSel.value = current;
+              // mirror top superadmin org if already chosen
+              const topOrg = document.getElementById('superadminOrgPicker');
+              if (topOrg && topOrg.value && !vmOrgSel.value) vmOrgSel.value = topOrg.value;
             }
           } catch { /* silent */ }
           // Gate duty/volunteer selects until org chosen
@@ -1813,6 +1816,8 @@
           const volSel = document.getElementById('vmVolunteer');
           if (dutySel) { dutySel.innerHTML = '<option value="">— Select organization first —</option>'; dutySel.disabled = true; }
           if (volSel) { volSel.innerHTML = '<option value="">— Select organization first —</option>'; volSel.disabled = true; }
+          // If org was mirrored above, trigger change to load
+          if (vmOrgSel && vmOrgSel.value) { const evt = new Event('change'); vmOrgSel.dispatchEvent(evt); }
         } else {
           if (vmOrgRow) vmOrgRow.classList.add('hidden');
         }
