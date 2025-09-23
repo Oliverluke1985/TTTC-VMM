@@ -336,7 +336,7 @@
     </div>
 
     <h3>Admin Management</h3>
-    <div class="row">
+    <div class="row hidden" id="saAdminRow">
       <div class="col">
         <label>Select Admin to Edit</label>
         <select id="saAdminSelect"><option value="">— Select admin —</option></select>
@@ -1352,6 +1352,8 @@
       try {
         const admins = await fetchAdminsForSuperadmin();
         const sel = document.getElementById('saAdminSelect');
+        const selRow = document.getElementById('saAdminRow');
+        if (selRow) selRow.classList.toggle('hidden', admins.length === 0);
         if (!sel) return;
         const current = sel.value;
         sel.innerHTML = '<option value="">— Select admin —</option>';
@@ -1823,6 +1825,8 @@
           populateEventDropdownsForGroup(orgPicker.value);
           // Refresh Admin Management list when org changes
           populateSuperadminAdmins();
+          const selRow = document.getElementById('saAdminRow');
+          if (selRow) selRow.classList.toggle('hidden', !orgPicker.value);
           // Refresh Volunteer Mgmt scoped to org
           populateVolunteerMgmt();
           refreshVolunteerLogs();
@@ -2109,6 +2113,8 @@
       // Superadmin admin-management wiring
       if (currentRole === 'superadmin') {
         populateSuperadminAdmins();
+        const selRow = document.getElementById('saAdminRow');
+        if (selRow) selRow.classList.toggle('hidden', !orgPicker.value);
         const sel = document.getElementById('saAdminSelect');
         if (sel && !sel._wired) {
           sel.addEventListener('change', () => {
