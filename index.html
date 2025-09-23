@@ -1312,10 +1312,13 @@
     }
 
     // Volunteer Management helpers
-    async function fetchVolunteers() {
+    async function fetchVolunteers(groupIdForFilter) {
       try {
-        const roleParam = 'role=volunteer';
-        const res = await authed(`/users?${roleParam}`);
+        const params = new URLSearchParams();
+        params.set('role', 'volunteer');
+        // superadmin may filter by selected org
+        if (role === 'superadmin' && groupIdForFilter) params.set('group_id', String(groupIdForFilter));
+        const res = await authed(`/users?${params.toString()}`);
         if (!res.ok) return [];
         return await res.json();
       } catch { return []; }
@@ -1354,7 +1357,21 @@
     }
     async function populateVolunteerMgmt() {
       try {
-        const volunteers = await fetchVolunteers();
+        const orgVal = (role === 'superadmin') ? (document.getElementById('superadminOrgPicker')?.value || '') : (groupId != null ? String(groupId) : '');
+        // Gate volunteer controls until org is selected for superadmin
+        if (role === 'superadmin' && !orgVal) {
+          const vSel = document.getElementById('vmVolunteer');
+          if (vSel) { vSel.innerHTML = '<option value="">— Select organization first —</option>'; vSel.disabled = true; }
+          const eSel = document.getElementById('vmEditSelect');
+          if (eSel) { eSel.innerHTML = '<option value="">— Select organization first —</option>'; eSel.disabled = true; }
+          const logBody = document.getElementById('vmLogList');
+          if (logBody) logBody.innerHTML = '';
+          // Also set Create Volunteer group to selected org when user picks it later
+          const gSelInit = document.getElementById('vmVolGroup');
+          if (gSelInit) gSelInit.value = '';
+          return;
+        }
+        const volunteers = await fetchVolunteers(orgVal);
         const volSel = document.getElementById('vmVolunteer');
         if (volSel) {
           const current = volSel.value;
@@ -1377,6 +1394,7 @@
           };
           applyFilter();
           if (search && !search._wired) { search.addEventListener('input', applyFilter); search._wired = true; }
+          volSel.disabled = false;
           if (current) volSel.value = current;
         }
         // Populate volunteer edit dropdown
@@ -1407,6 +1425,7 @@
             });
             editSel._wired = true;
           }
+          editSel.disabled = false;
         }
         // Groups for Create Volunteer
         const resG = await authed('/groups');
@@ -1421,7 +1440,7 @@
             opt.textContent = `${g.name}`;
             gSel.appendChild(opt);
           });
-          if (current) gSel.value = current; else if (groupId != null) gSel.value = String(groupId);
+          if (current) gSel.value = current; else if (role === 'superadmin' && orgVal) gSel.value = String(orgVal); else if (groupId != null) gSel.value = String(groupId);
         }
         // Duties list (current org)
         const res = await authed('/duties');
@@ -1668,6 +1687,9 @@
           populateEventDropdownsForGroup(orgPicker.value);
           // Refresh Admin Management list when org changes
           populateSuperadminAdmins();
+          // Refresh Volunteer Mgmt scoped to org
+          populateVolunteerMgmt();
+          refreshVolunteerLogs();
         });
         orgPicker._wired = true;
       }
