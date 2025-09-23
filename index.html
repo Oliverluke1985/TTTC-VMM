@@ -433,6 +433,12 @@
         <input id="vmVolunteerSearch" type="text" placeholder="Start typing..." />
       </div>
     </div>
+    <div id="vmEventRow" class="row hidden">
+      <div class="col">
+        <label>Event</label>
+        <select id="vmEvent"><option value="">— Select event —</option></select>
+      </div>
+    </div>
     <div class="row">
       <div class="col">
         <label>Volunteer</label>
@@ -1363,7 +1369,7 @@
     }
     async function populateVolunteerMgmt() {
       try {
-        const orgVal = (role === 'superadmin') ? (document.getElementById('superadminOrgPicker')?.value || '') : (groupId != null ? String(groupId) : '');
+        const orgVal = (role === 'superadmin') ? (document.getElementById('vmOrgPicker')?.value || document.getElementById('superadminOrgPicker')?.value || '') : (groupId != null ? String(groupId) : '');
         // Gate volunteer controls until org is selected for superadmin
         if (role === 'superadmin' && !orgVal) {
           const vSel = document.getElementById('vmVolunteer');
@@ -1452,9 +1458,37 @@
           });
           if (current) gSel.value = current; else if (role === 'superadmin' && orgVal) gSel.value = String(orgVal); else if (groupId != null) gSel.value = String(groupId);
         }
-        // Duties list (current org)
-        const res = await authed('/duties');
-        const duties = await res.json();
+        // Events list (current org) for cascade
+        const vmEventRow = document.getElementById('vmEventRow');
+        const vmEventSel = document.getElementById('vmEvent');
+        if (role === 'superadmin') { if (vmEventRow) vmEventRow.classList.toggle('hidden', !orgVal); }
+        let events = [];
+        if (orgVal) {
+          const resE = await authed(`/events?group_id=${encodeURIComponent(orgVal)}`);
+          events = await resE.json();
+        }
+        if (vmEventSel) {
+          const currentEvt = vmEventSel.value;
+          vmEventSel.innerHTML = '<option value="">— Select event —</option>';
+          events.forEach(e => {
+            const opt = document.createElement('option');
+            opt.value = e.id;
+            opt.textContent = e.title || `Event #${e.id}`;
+            vmEventSel.appendChild(opt);
+          });
+          if (currentEvt) vmEventSel.value = currentEvt;
+        }
+        // Duties list (current org, optionally filter by selected event)
+        let duties = [];
+        if (orgVal) {
+          const res = await authed(`/duties?group_id=${encodeURIComponent(orgVal)}`);
+          duties = await res.json();
+        } else {
+          const res = await authed('/duties');
+          duties = await res.json();
+        }
+        const eventFilterId = Number(document.getElementById('vmEvent')?.value || '') || null;
+        if (eventFilterId) duties = duties.filter(d => Number(d.event_id) === eventFilterId);
         const dutySel = document.getElementById('vmDuty');
         if (dutySel) {
           const current = dutySel.value;
@@ -1711,7 +1745,11 @@
           const dutySel = document.getElementById('vmDuty');
           const volSel = document.getElementById('vmVolunteer');
           if (dutySel) { dutySel.disabled = !vmOrgSel.value; dutySel.innerHTML = vmOrgSel.value ? '<option value="">— Select duty —</option>' : '<option value="">— Select organization first —</option>'; }
-          if (volSel) { volSel.disabled = true; volSel.innerHTML = '<option value="">— Select duty —</option>'; }
+          if (volSel) { volSel.disabled = true; volSel.innerHTML = '<option value="">— Select event —</option>'; }
+          const evtSel = document.getElementById('vmEvent');
+          const evtRow = document.getElementById('vmEventRow');
+          if (evtRow) evtRow.classList.toggle('hidden', !vmOrgSel.value);
+          if (evtSel) { evtSel.innerHTML = '<option value="">— Select event —</option>'; }
           // Sync top superadmin pickers
           const dFilter = document.getElementById('superDutyGroupFilter'); if (dFilter) dFilter.value = vmOrgSel.value || '';
           const eFilter = document.getElementById('superEventGroupFilter'); if (eFilter) eFilter.value = vmOrgSel.value || '';
@@ -1720,6 +1758,18 @@
           await refreshVolunteerLogs();
         });
         vmOrgSel._wired = true;
+      }
+      // When an event is chosen, reload duties filtered by event and enable volunteer once duty chosen later
+      const vmEventSel2 = document.getElementById('vmEvent');
+      if (vmEventSel2 && !vmEventSel2._wired) {
+        vmEventSel2.addEventListener('change', async () => {
+          const volSel = document.getElementById('vmVolunteer');
+          const dutySel = document.getElementById('vmDuty');
+          if (volSel) { volSel.disabled = true; volSel.innerHTML = '<option value="">— Select duty —</option>'; }
+          if (dutySel) { dutySel.disabled = !vmEventSel2.value; }
+          await populateVolunteerMgmt();
+        });
+        vmEventSel2._wired = true;
       }
       // When a duty is chosen, unlock volunteer selection
       const vmDutySel = document.getElementById('vmDuty');
