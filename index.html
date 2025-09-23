@@ -482,7 +482,7 @@
     </table>
       </div>
     </div>
-    <div class="row">
+    <div class="row hidden" id="vmEditSelectRow">
       <div class="col">
         <label>Select Volunteer to Edit</label>
         <select id="vmEditSelect"><option value="">— Select volunteer —</option></select>
@@ -1429,7 +1429,7 @@
             editSel.addEventListener('change', () => {
               const id = Number(editSel.value);
               const v = volunteers.find(x => x.id === id);
-              if (!v) return;
+          if (!v) return;
               const panel = document.getElementById('vmEditPanel');
               if (panel) panel.classList.remove('hidden');
               document.getElementById('vmEditId').value = String(v.id);
@@ -1762,7 +1762,7 @@
       const vmOrgSel = document.getElementById('vmOrgPicker');
       if (vmOrgSel && !vmOrgSel._wired) {
         vmOrgSel.addEventListener('change', async () => {
-          // On change: enable duty dropdown and reload duties/volunteers for this org
+          // On change: enable event row, gate others, and reload data for this org
           const dutySel = document.getElementById('vmDuty');
           const volSel = document.getElementById('vmVolunteer');
           if (dutySel) { dutySel.disabled = !vmOrgSel.value; dutySel.innerHTML = vmOrgSel.value ? '<option value="">— Select duty —</option>' : '<option value="">— Select organization first —</option>'; }
@@ -1771,6 +1771,8 @@
           const evtRow = document.getElementById('vmEventRow');
           if (evtRow) evtRow.classList.toggle('hidden', !vmOrgSel.value);
           if (evtSel) { evtSel.innerHTML = '<option value="">— Select event —</option>'; }
+          const vmEditRow = document.getElementById('vmEditSelectRow'); if (vmEditRow) vmEditRow.classList.add('hidden');
+          const vmEditPanel = document.getElementById('vmEditPanel'); if (vmEditPanel) vmEditPanel.classList.add('hidden');
           // Sync top superadmin pickers
           const dFilter = document.getElementById('superDutyGroupFilter'); if (dFilter) dFilter.value = vmOrgSel.value || '';
           const eFilter = document.getElementById('superEventGroupFilter'); if (eFilter) eFilter.value = vmOrgSel.value || '';
@@ -1788,6 +1790,8 @@
           const dutySel = document.getElementById('vmDuty');
           if (volSel) { volSel.disabled = true; volSel.innerHTML = '<option value="">— Select duty —</option>'; }
           if (dutySel) { dutySel.disabled = !vmEventSel2.value; }
+          const vmEditRow = document.getElementById('vmEditSelectRow'); if (vmEditRow) vmEditRow.classList.add('hidden');
+          const vmEditPanel = document.getElementById('vmEditPanel'); if (vmEditPanel) vmEditPanel.classList.add('hidden');
           await populateVolunteerMgmt();
         });
         vmEventSel2._wired = true;
@@ -1798,6 +1802,11 @@
         vmDutySel.addEventListener('change', () => {
           const volSel = document.getElementById('vmVolunteer');
           if (volSel) volSel.disabled = !(vmDutySel.value);
+          // Show edit select only once duty is chosen and org+event exist
+          const hasOrg = !!document.getElementById('vmOrgPicker')?.value || !!document.getElementById('superadminOrgPicker')?.value;
+          const hasEvent = !!document.getElementById('vmEvent')?.value;
+          const vmEditRow = document.getElementById('vmEditSelectRow');
+          if (vmEditRow) vmEditRow.classList.toggle('hidden', !(hasOrg && hasEvent && vmDutySel.value));
         });
         vmDutySel._wired = true;
       }
