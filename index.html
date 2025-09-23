@@ -1381,14 +1381,16 @@
         const volSel = document.getElementById('vmVolunteer');
         if (volSel) {
           const current = volSel.value;
-          volSel.innerHTML = '<option value="">— Select volunteer —</option>';
+          // placeholder reflects gating
+          const needsDuty = (role === 'superadmin') && !(document.getElementById('vmDuty')?.value);
+          volSel.innerHTML = `<option value="">${needsDuty ? '— Select duty —' : '— Select volunteer —'}</option>`;
           // cache list and apply search filter
           volSel._all = volunteers;
           const search = document.getElementById('vmVolunteerSearch');
           const applyFilter = () => {
             const q = (search?.value || '').trim().toLowerCase();
             const list = volSel._all || [];
-            volSel.innerHTML = '<option value="">— Select volunteer —</option>';
+            volSel.innerHTML = `<option value=\"\">${needsDuty ? '— Select duty —' : '— Select volunteer —'}</option>`;
             list.filter(v => !q || (v.name && v.name.toLowerCase().includes(q)) || (v.email && v.email.toLowerCase().includes(q)))
                 .forEach(v => {
                   const opt = document.createElement('option');
@@ -1400,7 +1402,9 @@
           };
           applyFilter();
           if (search && !search._wired) { search.addEventListener('input', applyFilter); search._wired = true; }
-          volSel.disabled = false;
+          // enable only when allowed: for superadmin requires duty selected
+          const enableVol = (role !== 'superadmin') || !!(document.getElementById('vmDuty')?.value);
+          volSel.disabled = !enableVol;
           if (current) volSel.value = current;
         }
         // Populate volunteer edit dropdown
@@ -1707,7 +1711,7 @@
           const dutySel = document.getElementById('vmDuty');
           const volSel = document.getElementById('vmVolunteer');
           if (dutySel) { dutySel.disabled = !vmOrgSel.value; dutySel.innerHTML = vmOrgSel.value ? '<option value="">— Select duty —</option>' : '<option value="">— Select organization first —</option>'; }
-          if (volSel) { volSel.disabled = !vmOrgSel.value; volSel.innerHTML = vmOrgSel.value ? '<option value="">— Select volunteer —</option>' : '<option value="">— Select organization first —</option>'; }
+          if (volSel) { volSel.disabled = true; volSel.innerHTML = '<option value="">— Select duty —</option>'; }
           // Sync top superadmin pickers
           const dFilter = document.getElementById('superDutyGroupFilter'); if (dFilter) dFilter.value = vmOrgSel.value || '';
           const eFilter = document.getElementById('superEventGroupFilter'); if (eFilter) eFilter.value = vmOrgSel.value || '';
@@ -1716,6 +1720,15 @@
           await refreshVolunteerLogs();
         });
         vmOrgSel._wired = true;
+      }
+      // When a duty is chosen, unlock volunteer selection
+      const vmDutySel = document.getElementById('vmDuty');
+      if (vmDutySel && !vmDutySel._wired) {
+        vmDutySel.addEventListener('change', () => {
+          const volSel = document.getElementById('vmVolunteer');
+          if (volSel) volSel.disabled = !(vmDutySel.value);
+        });
+        vmDutySel._wired = true;
       }
       document.getElementById('navCreateDutyBtn').onclick = () => {
         navigateTo('createDutySection');
