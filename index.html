@@ -1388,7 +1388,7 @@
         if (volSel) {
           const current = volSel.value;
           // placeholder reflects gating
-          const needsDuty = (role === 'superadmin') && !(document.getElementById('vmDuty')?.value);
+          const needsDuty = (role === 'superadmin') && (!(document.getElementById('vmOrgPicker')?.value || document.getElementById('superadminOrgPicker')?.value) || !(document.getElementById('vmEvent')?.value) || !(document.getElementById('vmDuty')?.value));
           volSel.innerHTML = `<option value="">${needsDuty ? '— Select duty —' : '— Select volunteer —'}</option>`;
           // cache list and apply search filter
           volSel._all = volunteers;
@@ -1461,7 +1461,14 @@
         // Events list (current org) for cascade
         const vmEventRow = document.getElementById('vmEventRow');
         const vmEventSel = document.getElementById('vmEvent');
-        if (role === 'superadmin') { if (vmEventRow) vmEventRow.classList.toggle('hidden', !orgVal); }
+        if (role === 'superadmin') {
+          if (vmEventRow) vmEventRow.classList.toggle('hidden', !orgVal);
+          // Gate Duty/Volunteer placeholders firmly based on current cascade state
+          const dutySel = document.getElementById('vmDuty');
+          const volSel = document.getElementById('vmVolunteer');
+          if (dutySel) { dutySel.disabled = !orgVal; dutySel.innerHTML = orgVal ? '<option value="">— Select duty —</option>' : '<option value="">— Select organization first —</option>'; }
+          if (volSel) { volSel.disabled = true; volSel.innerHTML = '<option value="">— Select event —</option>'; }
+        }
         let events = [];
         if (orgVal) {
           const resE = await authed(`/events?group_id=${encodeURIComponent(orgVal)}`);
@@ -1482,9 +1489,6 @@
         let duties = [];
         if (orgVal) {
           const res = await authed(`/duties?group_id=${encodeURIComponent(orgVal)}`);
-          duties = await res.json();
-        } else {
-          const res = await authed('/duties');
           duties = await res.json();
         }
         const eventFilterId = Number(document.getElementById('vmEvent')?.value || '') || null;
