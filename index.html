@@ -1681,7 +1681,28 @@
       document.getElementById('navClockBtn').classList.toggle('hidden', !isVolunteer);
       document.getElementById('navPhotosBtn').classList.toggle('hidden', !isVolunteer);
       document.getElementById('navHomeBtn').onclick = () => navigateTo('homeSection');
+      function resetVolunteerMgmtUI() {
+        const orgRow = document.getElementById('vmSuperOrgRow');
+        const orgSel = document.getElementById('vmOrgPicker');
+        const evtRow = document.getElementById('vmEventRow');
+        const evtSel = document.getElementById('vmEvent');
+        const dutySel = document.getElementById('vmDuty');
+        const volSel = document.getElementById('vmVolunteer');
+        const search = document.getElementById('vmVolunteerSearch');
+        const logs = document.getElementById('vmLogList');
+        const editPanel = document.getElementById('vmEditPanel');
+        if (orgRow) orgRow.classList.add('hidden');
+        if (orgSel) orgSel.value = '';
+        if (evtRow) evtRow.classList.add('hidden');
+        if (evtSel) evtSel.innerHTML = '<option value="">— Select event —</option>';
+        if (dutySel) { dutySel.disabled = true; dutySel.innerHTML = '<option value="">— Select organization first —</option>'; }
+        if (volSel) { volSel.disabled = true; volSel.innerHTML = '<option value="">— Select organization first —</option>'; }
+        if (search) search.value = '';
+        if (logs) logs.innerHTML = '';
+        if (editPanel) editPanel.classList.add('hidden');
+      }
       document.getElementById('navAdminBtn').onclick = () => {
+        resetVolunteerMgmtUI();
         navigateTo(currentRole === 'superadmin' ? 'superadminSection' : 'adminSection');
         const table = document.getElementById('groupTable');
         if (table) table.classList.add('hidden');
@@ -1808,6 +1829,7 @@
         fetchDuties();
       };
       document.getElementById('navEventsBtn').onclick = async () => {
+        resetVolunteerMgmtUI();
         navigateTo('eventsSection');
         // Show create form only for admins/superadmins
         const wrap = document.getElementById('eventsCreateWrap');
@@ -1822,8 +1844,9 @@
         if (eFilter) eFilter.classList.toggle('hidden', currentRole !== 'superadmin');
         await fetchEvents();
       };
-      document.getElementById('navClockBtn').onclick = async () => { navigateTo('clockSection'); await fetchDuties(); await fetchTimeTracking(); };
+      document.getElementById('navClockBtn').onclick = async () => { resetVolunteerMgmtUI(); navigateTo('clockSection'); await fetchDuties(); await fetchTimeTracking(); };
       document.getElementById('navPhotosBtn').onclick = async () => {
+        resetVolunteerMgmtUI();
         navigateTo('photosSection');
         await fetchDuties();
         const wrap = document.getElementById('photosFilterWrap');
@@ -1850,6 +1873,7 @@
         await fetchPhotos();
       };
       document.getElementById('navVolunteerMgmtBtn').onclick = async () => {
+        resetVolunteerMgmtUI();
         navigateTo('volMgmtSection');
         // Superadmin: show VM org picker and load groups
         const vmOrgRow = document.getElementById('vmSuperOrgRow');
@@ -1887,7 +1911,7 @@
         await populateVolunteerMgmt();
         await refreshVolunteerLogs();
       };
-      document.getElementById('navAccountBtn').onclick = () => navigateTo('infoSection');
+      document.getElementById('navAccountBtn').onclick = () => { resetVolunteerMgmtUI(); navigateTo('infoSection'); };
       document.getElementById('navLogoutBtn').onclick = () => document.getElementById('logoutBtn').click();
       // Populate Volunteer Management when entering Admin section
       if (isAdminish) {
