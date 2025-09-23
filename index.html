@@ -305,10 +305,11 @@
     </div>
     <div id="superadminOrgInfo" class="row hidden">
       <div class="col">
-    <table>
-          <thead><tr><th>ID</th><th>Name</th><th>Status</th></tr></thead>
+        <table>
+          <thead><tr><th>ID</th><th>Name</th><th>Status</th><th>Save</th></tr></thead>
           <tbody id="superadminOrgInfoBody"></tbody>
         </table>
+        <div id="superadminOrgInfoErr" class="error"></div>
       </div>
     </div>
     <table id="groupTable" class="hidden">
@@ -1742,8 +1743,38 @@
           if (picker && picker.value) {
             const id = picker.value;
             const name = picker.options[picker.selectedIndex]?.textContent || '';
-            infoBody.innerHTML = `<tr><td>${id}</td><td>${name}</td><td></td></tr>`;
+            infoBody.innerHTML = `<tr>
+              <td>${id}</td>
+              <td><input id="saOrgName" type="text" value="${name}"></td>
+              <td>
+                <select id="saOrgStatus">
+                  <option value="active">active</option>
+                  <option value="inactive">inactive</option>
+                </select>
+              </td>
+              <td><button id="saOrgSaveBtn">Save</button></td>
+            </tr>`;
             infoWrap.classList.remove('hidden');
+            // preselect current status if known from groups list later (optional)
+            const err = document.getElementById('superadminOrgInfoErr'); if (err) err.textContent='';
+            const save = document.getElementById('saOrgSaveBtn');
+            if (save && !save._wired) {
+              save.addEventListener('click', async () => {
+                const nameVal = document.getElementById('saOrgName')?.value.trim();
+                const statusVal = document.getElementById('saOrgStatus')?.value;
+                const errEl = document.getElementById('superadminOrgInfoErr'); if (errEl) errEl.textContent='';
+                try {
+                  const res = await authed(`/groups/${id}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: nameVal, status: statusVal })
+                  });
+                  const data = await res.json().catch(() => ({}));
+                  if (!res.ok) { if (errEl) errEl.textContent = data.message || 'Failed to save'; return; }
+                } catch { const errEl2 = document.getElementById('superadminOrgInfoErr'); if (errEl2) errEl2.textContent = 'Error saving'; }
+              });
+              save._wired = true;
+            }
           } else {
             infoBody.innerHTML = '';
             infoWrap.classList.add('hidden');
@@ -1768,8 +1799,33 @@
             if (orgPicker.value) {
               const id = orgPicker.value;
               const name = orgPicker.options[orgPicker.selectedIndex]?.textContent || '';
-              infoBody.innerHTML = `<tr><td>${id}</td><td>${name}</td><td></td></tr>`;
+              infoBody.innerHTML = `<tr>
+                <td>${id}</td>
+                <td><input id=\"saOrgName\" type=\"text\" value=\"${name}\"></td>
+                <td>
+                  <select id=\"saOrgStatus\">
+                    <option value=\"active\">active</option>
+                    <option value=\"inactive\">inactive</option>
+                  </select>
+                </td>
+                <td><button id=\"saOrgSaveBtn\">Save</button></td>
+              </tr>`;
               infoWrap.classList.remove('hidden');
+              const err = document.getElementById('superadminOrgInfoErr'); if (err) err.textContent='';
+              const save = document.getElementById('saOrgSaveBtn');
+              if (save && !save._wired) {
+                save.addEventListener('click', async () => {
+                  const nameVal = document.getElementById('saOrgName')?.value.trim();
+                  const statusVal = document.getElementById('saOrgStatus')?.value;
+                  const errEl = document.getElementById('superadminOrgInfoErr'); if (errEl) errEl.textContent='';
+                  try {
+                    const res = await authed(`/groups/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: nameVal, status: statusVal }) });
+                    const data = await res.json().catch(() => ({}));
+                    if (!res.ok) { if (errEl) errEl.textContent = data.message || 'Failed to save'; return; }
+                  } catch { const errEl2 = document.getElementById('superadminOrgInfoErr'); if (errEl2) errEl2.textContent = 'Error saving'; }
+                });
+                save._wired = true;
+              }
             } else {
               infoBody.innerHTML = '';
               infoWrap.classList.add('hidden');

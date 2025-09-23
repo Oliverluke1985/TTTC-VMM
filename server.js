@@ -485,6 +485,33 @@ app.delete('/groups/:id', authRequired, superadminOnly, async (req, res) => {
   res.json({ ok: true });
 });
 
+// Update group (name/status)
+app.patch('/groups/:id', authRequired, superadminOnly, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) return res.status(400).json({ message: 'Invalid id' });
+    const { name, status } = req.body || {};
+    const colsRes = await pool.query("SELECT column_name FROM information_schema.columns WHERE table_name='groups'");
+    const has = new Set(colsRes.rows.map(r => r.column_name));
+    const setClauses = [];
+    const params = [];
+    let idx = 1;
+    if (name !== undefined) { setClauses.push(`name=$${idx++}`); params.push(name); }
+    if (status !== undefined) {
+      if (has.has('status')) { setClauses.push(`status=$${idx++}`); params.push(status); }
+      else if (has.has('group_status')) {
+        const normalized = String(status).toLowerCase();
+        const mapped = normalized === 'active' ? 'Active' : normalized === 'inactive' ? 'Inactive' : status;
+        setClauses.push(`group_status=$${idx++}`); params.push(mapped);
+      }
+    }
+    if (setClauses.length === 0) return res.json({ id });
+    const result = await pool.query(`UPDATE groups SET ${setClauses.join(', ')} WHERE id=$${idx} RETURNING id`, [...params, id]);
+    if (result.rowCount === 0) return res.status(404).json({ message: 'Not found' });
+    res.json({ id: result.rows[0].id });
+  } catch (err) { res.status(400).json({ message: err.message }); }
+});
+
 // --- Events
 app.get('/events', authRequired, async (req, res) => {
   // Return events plus a joined flag for the current user
