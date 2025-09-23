@@ -439,7 +439,7 @@
         <select id="vmEvent"><option value="">— Select event —</option></select>
       </div>
     </div>
-    <div class="row">
+    <div class="row hidden" id="vmVolunteerRow">
       <div class="col">
         <label>Volunteer</label>
         <select id="vmVolunteer"><option value="">— Select volunteer —</option></select>
@@ -473,7 +473,7 @@
         <div id="vmSaveUserErr" class="error"></div>
       </div>
     </div>
-    <div class="row">
+    <div class="row hidden" id="vmLogsRow">
       <div class="col">
         <h3>Selected Volunteer Logs</h3>
     <table>
@@ -1704,6 +1704,8 @@
         if (search) search.value = '';
         if (logs) logs.innerHTML = '';
         if (editPanel) editPanel.classList.add('hidden');
+        const vRow = document.getElementById('vmVolunteerRow'); if (vRow) vRow.classList.add('hidden');
+        const lRow = document.getElementById('vmLogsRow'); if (lRow) lRow.classList.add('hidden');
       }
       document.getElementById('navAdminBtn').onclick = () => {
         resetVolunteerMgmtUI();
@@ -1782,6 +1784,8 @@
           const eFilter = document.getElementById('superEventGroupFilter'); if (eFilter) eFilter.value = vmOrgSel.value || '';
           await fetchDuties();
           await populateVolunteerMgmt();
+          const vRow = document.getElementById('vmVolunteerRow'); if (vRow) vRow.classList.toggle('hidden', !vmOrgSel.value);
+          const lRow = document.getElementById('vmLogsRow'); if (lRow) lRow.classList.add('hidden');
           await refreshVolunteerLogs();
         });
         vmOrgSel._wired = true;
@@ -1811,6 +1815,7 @@
           const hasEvent = !!document.getElementById('vmEvent')?.value;
           const vmEditRow = document.getElementById('vmEditSelectRow');
           if (vmEditRow) vmEditRow.classList.toggle('hidden', !(hasOrg && hasEvent && vmDutySel.value));
+          const lRow = document.getElementById('vmLogsRow'); if (lRow) lRow.classList.toggle('hidden', !(hasOrg && hasEvent && vmDutySel.value));
         });
         vmDutySel._wired = true;
       }
@@ -1921,7 +1926,9 @@
         } else {
           if (vmOrgRow) vmOrgRow.classList.add('hidden');
         }
-        await populateVolunteerMgmt();
+          await populateVolunteerMgmt();
+          const vRow = document.getElementById('vmVolunteerRow'); if (vRow) vRow.classList.toggle('hidden', !vmEventSel2.value);
+          const lRow = document.getElementById('vmLogsRow'); if (lRow) lRow.classList.add('hidden');
         await refreshVolunteerLogs();
       };
       document.getElementById('navAccountBtn').onclick = () => { resetVolunteerMgmtUI(); navigateTo('infoSection'); };
