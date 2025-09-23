@@ -1090,6 +1090,13 @@
           const enforcing = filterWrap && !filterWrap.classList.contains('hidden');
           if (enforcing && filterSel && (!filterSel.value || filterSel.value === '')) {
             if (tbody) tbody.innerHTML = '';
+            // Disable dependent duty selects until org is chosen
+            const photoDutySel = document.getElementById('photoDuty');
+            if (photoDutySel) { photoDutySel.innerHTML = '<option value="">— Select organization first —</option>'; photoDutySel.disabled = true; }
+            const editSel = document.getElementById('dutyEditSelect');
+            if (editSel) { editSel.innerHTML = '<option value="">— Select organization first —</option>'; editSel.disabled = true; }
+            const vmDutySel = document.getElementById('vmDuty');
+            if (vmDutySel) { vmDutySel.innerHTML = '<option value="">— Select organization first —</option>'; vmDutySel.disabled = true; }
             if (note) { note.classList.remove('error'); note.classList.add('hint'); note.textContent = 'Select an organization above to view duties.'; }
             return;
           }
@@ -1100,8 +1107,10 @@
         // populate duty table rows and photo duty select
         const dutySelect = document.getElementById('photoDuty');
         const editSelect = document.getElementById('dutyEditSelect');
-        if (dutySelect) { dutySelect.innerHTML = ''; }
-        if (editSelect) { editSelect.innerHTML = '<option value="">— Select duty —</option>'; }
+        if (dutySelect) { dutySelect.innerHTML = ''; dutySelect.disabled = false; }
+        if (editSelect) { editSelect.innerHTML = '<option value="">— Select duty —</option>'; editSelect.disabled = false; }
+        const vmDutySelEnabled = document.getElementById('vmDuty');
+        if (vmDutySelEnabled) vmDutySelEnabled.disabled = false;
         duties.forEach(d => {
           const tr = document.createElement('tr');
           let adminActions = '';
@@ -1673,6 +1682,16 @@
         // Superadmin must pick org to view duties
         const dFilter = document.getElementById('dutiesSuperFilter');
         if (dFilter) dFilter.classList.toggle('hidden', currentRole !== 'superadmin');
+        if (currentRole === 'superadmin') {
+          const gSel = document.getElementById('superDutyGroupFilter');
+          const editSel = document.getElementById('dutyEditSelect');
+          const photoDutySel = document.getElementById('photoDuty');
+          const vmDutySel = document.getElementById('vmDuty');
+          const needsOrg = !(gSel && gSel.value);
+          if (editSel) { editSel.innerHTML = `<option value="">${needsOrg ? '— Select organization first —' : '— Select duty —'}</option>`; editSel.disabled = needsOrg; }
+          if (photoDutySel) { photoDutySel.innerHTML = `<option value="">${needsOrg ? '— Select organization first —' : ''}</option>`; photoDutySel.disabled = needsOrg; }
+          if (vmDutySel) { vmDutySel.innerHTML = `<option value=\"\">${needsOrg ? '— Select organization first —' : '— Select duty —'}</option>`; vmDutySel.disabled = needsOrg; }
+        }
         // Ensure duty event dropdowns reflect selected org context
         const gid = (currentRole === 'superadmin') ? (document.getElementById('superDutyGroupFilter')?.value || '') : (groupId != null ? String(groupId) : '');
         populateEventDropdownsForGroup(gid);
