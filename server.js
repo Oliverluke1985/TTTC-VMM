@@ -506,9 +506,13 @@ app.patch('/groups/:id', authRequired, superadminOnly, async (req, res) => {
       }
     }
     if (setClauses.length === 0) return res.json({ id });
-    const result = await pool.query(`UPDATE groups SET ${setClauses.join(', ')} WHERE id=$${idx} RETURNING id`, [...params, id]);
+    const returning = ['id'];
+    if (has.has('name')) returning.push('name');
+    if (has.has('status')) returning.push('status');
+    if (has.has('group_status')) returning.push('group_status');
+    const result = await pool.query(`UPDATE groups SET ${setClauses.join(', ')} WHERE id=$${idx} RETURNING ${returning.join(',')}`, [...params, id]);
     if (result.rowCount === 0) return res.status(404).json({ message: 'Not found' });
-    res.json({ id: result.rows[0].id });
+    res.json(result.rows[0]);
   } catch (err) { res.status(400).json({ message: err.message }); }
 });
 

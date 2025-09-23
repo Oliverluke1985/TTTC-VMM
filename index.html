@@ -1720,6 +1720,12 @@
               const res = await authed(`/groups/${selectedId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: nameVal, status: statusVal }) });
               const data = await res.json().catch(() => ({}));
               if (!res.ok) { if (errEl) errEl.textContent = data.message || 'Failed to save'; return; }
+              // Reflect updated values in picker
+              const picker = document.getElementById('superadminOrgPicker');
+              if (picker && nameVal) {
+                const opt = Array.from(picker.options).find(o => o.value === String(selectedId));
+                if (opt) opt.textContent = nameVal;
+              }
             } catch { if (errEl) errEl.textContent = 'Error saving'; }
           };
         }
