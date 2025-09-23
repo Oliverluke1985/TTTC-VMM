@@ -421,6 +421,12 @@
         <div id="vmCreateVolErr" class="error"></div>
       </div>
     </div>
+    <div id="vmSuperOrgRow" class="row hidden">
+      <div class="col">
+        <label>Organization</label>
+        <select id="vmOrgPicker"><option value="">— Select organization —</option></select>
+      </div>
+    </div>
     <div class="row">
       <div class="col">
         <label>Search volunteers (name or email)</label>
@@ -1693,6 +1699,24 @@
         });
         orgPicker._wired = true;
       }
+      // Wire VM org picker to duty/volunteer cascading
+      const vmOrgSel = document.getElementById('vmOrgPicker');
+      if (vmOrgSel && !vmOrgSel._wired) {
+        vmOrgSel.addEventListener('change', async () => {
+          // On change: enable duty dropdown and reload duties/volunteers for this org
+          const dutySel = document.getElementById('vmDuty');
+          const volSel = document.getElementById('vmVolunteer');
+          if (dutySel) { dutySel.disabled = !vmOrgSel.value; dutySel.innerHTML = vmOrgSel.value ? '<option value="">— Select duty —</option>' : '<option value="">— Select organization first —</option>'; }
+          if (volSel) { volSel.disabled = !vmOrgSel.value; volSel.innerHTML = vmOrgSel.value ? '<option value="">— Select volunteer —</option>' : '<option value="">— Select organization first —</option>'; }
+          // Sync top superadmin pickers
+          const dFilter = document.getElementById('superDutyGroupFilter'); if (dFilter) dFilter.value = vmOrgSel.value || '';
+          const eFilter = document.getElementById('superEventGroupFilter'); if (eFilter) eFilter.value = vmOrgSel.value || '';
+          await fetchDuties();
+          await populateVolunteerMgmt();
+          await refreshVolunteerLogs();
+        });
+        vmOrgSel._wired = true;
+      }
       document.getElementById('navCreateDutyBtn').onclick = () => {
         navigateTo('createDutySection');
         document.getElementById('createDutyAdmin').classList.toggle('hidden', !isAdminish);
@@ -1764,6 +1788,34 @@
       };
       document.getElementById('navVolunteerMgmtBtn').onclick = async () => {
         navigateTo('volMgmtSection');
+        // Superadmin: show VM org picker and load groups
+        const vmOrgRow = document.getElementById('vmSuperOrgRow');
+        const vmOrgSel = document.getElementById('vmOrgPicker');
+        if (currentRole === 'superadmin') {
+          if (vmOrgRow) vmOrgRow.classList.remove('hidden');
+          try {
+            const res = await authed('/groups');
+            const groups = await res.json();
+            if (vmOrgSel) {
+              const current = vmOrgSel.value;
+              vmOrgSel.innerHTML = '<option value="">— Select organization —</option>';
+              groups.forEach(g => {
+                const opt = document.createElement('option');
+                opt.value = g.id;
+                opt.textContent = g.name;
+                vmOrgSel.appendChild(opt);
+              });
+              if (current) vmOrgSel.value = current;
+            }
+          } catch { /* silent */ }
+          // Gate duty/volunteer selects until org chosen
+          const dutySel = document.getElementById('vmDuty');
+          const volSel = document.getElementById('vmVolunteer');
+          if (dutySel) { dutySel.innerHTML = '<option value="">— Select organization first —</option>'; dutySel.disabled = true; }
+          if (volSel) { volSel.innerHTML = '<option value="">— Select organization first —</option>'; volSel.disabled = true; }
+        } else {
+          if (vmOrgRow) vmOrgRow.classList.add('hidden');
+        }
         await populateVolunteerMgmt();
         await refreshVolunteerLogs();
       };
