@@ -1489,6 +1489,7 @@
             vmEventSel.appendChild(opt);
           });
           if (currentEvt) vmEventSel.value = currentEvt;
+          vmEventSel.disabled = !orgVal || events.length === 0;
         }
         // Duties list (current org, optionally filter by selected event)
         let duties = [];
@@ -1779,7 +1780,7 @@
         if (orgRow) orgRow.classList.add('hidden');
         if (orgSel) orgSel.value = '';
         if (evtRow) evtRow.classList.add('hidden');
-        if (evtSel) evtSel.innerHTML = '<option value="">— Select event —</option>';
+        if (evtSel) { evtSel.innerHTML = '<option value="">— Select event —</option>'; evtSel.disabled = true; }
         if (dutySel) { dutySel.disabled = true; dutySel.innerHTML = '<option value="">— Select organization first —</option>'; }
         if (volSel) { volSel.disabled = true; volSel.innerHTML = '<option value="">— Select organization first —</option>'; }
         if (search) search.value = '';
