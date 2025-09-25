@@ -1843,12 +1843,12 @@
           // On change: enable event row, gate others, and reload data for this org
           const dutySel = document.getElementById('vmDuty');
           const volSel = document.getElementById('vmVolunteer');
-          if (dutySel) { dutySel.disabled = !vmOrgSel.value; dutySel.innerHTML = vmOrgSel.value ? '<option value="">— Select duty —</option>' : '<option value="">— Select organization first —</option>'; }
-          if (volSel) { volSel.disabled = true; volSel.innerHTML = '<option value="">— Select event —</option>'; }
+          if (dutySel) { dutySel.disabled = true; dutySel.innerHTML = '<option value="">— Select event —</option>'; }
+          if (volSel) { volSel.disabled = !vmOrgSel.value; volSel.innerHTML = vmOrgSel.value ? '<option value="">— Select volunteer —</option>' : '<option value="">— Select organization first —</option>'; }
           const evtSel = document.getElementById('vmEvent');
           const evtRow = document.getElementById('vmEventRow');
           if (evtRow) evtRow.classList.toggle('hidden', !vmOrgSel.value);
-          if (evtSel) { evtSel.innerHTML = '<option value="">— Select event —</option>'; }
+          if (evtSel) { evtSel.disabled = !vmOrgSel.value; evtSel.innerHTML = '<option value="">— Select event —</option>'; }
           const vmEditRow = document.getElementById('vmEditSelectRow'); if (vmEditRow) vmEditRow.classList.add('hidden');
           const vmEditPanel = document.getElementById('vmEditPanel'); if (vmEditPanel) vmEditPanel.classList.add('hidden');
           // Sync top superadmin pickers
