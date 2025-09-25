@@ -414,6 +414,7 @@
     <div class="row">
       <div class="col">
         <h3>Create Volunteer</h3>
+        <label>Name</label><input id="vmVolName" type="text" />
         <label>Email</label><input id="vmVolEmail" type="email" />
         <label>Password</label><input id="vmVolPassword" type="password" />
         <label>Group</label>
@@ -450,8 +451,7 @@
         <input id="vmStart" type="datetime-local" />
         <label>End Time (optional)</label>
         <input id="vmEnd" type="datetime-local" />
-        <label>Date (optional)</label>
-        <input id="vmDate" type="date" />
+        
         <button id="vmAddBtn">Add Time Entry</button>
         <div id="vmErr" class="error"></div>
       </div>
@@ -584,7 +584,7 @@
     });
 
     // Admin tools: create specific roles
-    async function createUserWith(roleVal, emailId, passId, groupSelId, errId) {
+    async function createUserWith(roleVal, emailId, passId, groupSelId, errId, nameId) {
       const email = document.getElementById(emailId).value.trim();
       const password = document.getElementById(passId).value;
       const grpSel = document.getElementById(groupSelId);
@@ -592,31 +592,33 @@
       const errEl = document.getElementById(errId);
       errEl.textContent = '';
       try {
+        const name = nameId ? document.getElementById(nameId).value.trim() : undefined;
         if (!email || !password) { errEl.textContent = 'Email and password required'; return; }
         const res = await authed('/register', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password, role: roleVal, group_id: gid })
+          body: JSON.stringify({ email, password, role: roleVal, group_id: gid, name })
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) { errEl.textContent = data.message || 'Failed to create user'; return; }
         document.getElementById(emailId).value = '';
         document.getElementById(passId).value = '';
         if (grpSel) grpSel.value = '';
+        if (nameId) document.getElementById(nameId).value = '';
         alert('User created.');
       } catch { errEl.textContent = 'Error creating user'; }
     }
 
     // Removed ability for admins to create superadmins
     document.getElementById('createAdminBtn')?.addEventListener('click', async () => {
-      await createUserWith('admin', 'adminEmail', 'adminPassword', 'adminGroup', 'createAdminErr');
+      await createUserWith('admin', 'adminEmail', 'adminPassword', 'adminGroup', 'createAdminErr', 'adminName');
     });
     document.getElementById('createVolBtn')?.addEventListener('click', async () => {
-      await createUserWith('volunteer', 'volEmail', 'volPassword', 'volGroup', 'createVolErr');
+      await createUserWith('volunteer', 'volEmail', 'volPassword', 'volGroup', 'createVolErr', 'volName');
     });
     // Volunteer Management: Create Volunteer
     document.getElementById('vmCreateVolBtn')?.addEventListener('click', async () => {
-      await createUserWith('volunteer', 'vmVolEmail', 'vmVolPassword', 'vmVolGroup', 'vmCreateVolErr');
+      await createUserWith('volunteer', 'vmVolEmail', 'vmVolPassword', 'vmVolGroup', 'vmCreateVolErr', 'vmVolName');
       await populateVolunteerMgmt();
     });
 
@@ -1400,11 +1402,11 @@
             const q = (search?.value || '').trim().toLowerCase();
             const list = volSel._all || [];
             volSel.innerHTML = `<option value=\"\">${needsDuty ? '— Select duty —' : '— Select volunteer —'}</option>`;
-            list.filter(v => !q || (v.name && v.name.toLowerCase().includes(q)) || (v.email && v.email.toLowerCase().includes(q)))
+          list.filter(v => !q || (v.name && v.name.toLowerCase().includes(q)) || (v.email && v.email.toLowerCase().includes(q)))
                 .forEach(v => {
                   const opt = document.createElement('option');
                   opt.value = v.id;
-                  opt.textContent = v.name ? `${v.name} — ${v.email}` : v.email;
+              opt.textContent = v.name ? `${v.name}` : v.email;
                   volSel.appendChild(opt);
                 });
             if (current) volSel.value = current;
