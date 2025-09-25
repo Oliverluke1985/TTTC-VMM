@@ -1472,7 +1472,7 @@
           const dutySel = document.getElementById('vmDuty');
           const volSel = document.getElementById('vmVolunteer');
           if (dutySel) { dutySel.disabled = !orgVal; dutySel.innerHTML = orgVal ? '<option value="">— Select duty —</option>' : '<option value="">— Select organization first —</option>'; }
-          if (volSel) { volSel.disabled = true; volSel.innerHTML = '<option value="">— Select event —</option>'; }
+          if (volSel) { volSel.disabled = !vmOrgSel.value; volSel.innerHTML = vmOrgSel.value ? '<option value="">— Select volunteer —</option>' : '<option value="">— Select organization first —</option>'; }
         }
         let events = [];
         if (orgVal) {
@@ -1867,7 +1867,7 @@
         vmEventSel2.addEventListener('change', async () => {
           const volSel = document.getElementById('vmVolunteer');
           const dutySel = document.getElementById('vmDuty');
-          if (volSel) { volSel.disabled = true; volSel.innerHTML = '<option value="">— Select duty —</option>'; }
+          if (volSel) { volSel.disabled = false; volSel.innerHTML = '<option value="">— Select volunteer —</option>'; }
           if (dutySel) { dutySel.disabled = !vmEventSel2.value; }
           const vmEditRow = document.getElementById('vmEditSelectRow'); if (vmEditRow) vmEditRow.classList.add('hidden');
           const vmEditPanel = document.getElementById('vmEditPanel'); if (vmEditPanel) vmEditPanel.classList.add('hidden');
