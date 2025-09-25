@@ -1489,7 +1489,7 @@
             vmEventSel.appendChild(opt);
           });
           if (currentEvt) vmEventSel.value = currentEvt;
-          vmEventSel.disabled = !orgVal || events.length === 0;
+          vmEventSel.disabled = !orgVal;
         }
         // Duties list (current org, optionally filter by selected event)
         let duties = [];
