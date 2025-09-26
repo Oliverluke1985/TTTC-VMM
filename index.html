@@ -1033,6 +1033,52 @@
       } catch { /* silent */ }
     }
 
+    // Populate VM Event select strictly by organization
+    async function populateVmEventsByOrg(gid) {
+      try {
+        const sel = document.getElementById('vmEvent');
+        if (!sel) return;
+        sel.disabled = !gid;
+        const current = sel.value;
+        sel.innerHTML = '<option value="">— Select event —</option>';
+        if (!gid) return;
+        const res = await authed(`/events?group_id=${encodeURIComponent(gid)}`);
+        if (!res.ok) return;
+        const events = await res.json();
+        events.forEach(e => {
+          const opt = document.createElement('option');
+          opt.value = e.id;
+          const d = e.start_date ? (e.end_date ? `${e.start_date} – ${e.end_date}` : `${e.start_date}`) : (e.event_date || '');
+          opt.textContent = `${e.title}${d ? ' — ' + d : ''}`;
+          sel.appendChild(opt);
+        });
+        if (current) sel.value = current;
+      } catch { /* silent */ }
+    }
+
+    // Populate VM Duty select by organization and optional event filter
+    async function populateVmDutiesByOrgAndEvent(gid, eventId) {
+      try {
+        const sel = document.getElementById('vmDuty');
+        if (!sel) return;
+        const current = sel.value;
+        sel.innerHTML = '<option value="">— Select duty —</option>';
+        sel.disabled = !gid;
+        if (!gid) return;
+        const res = await authed(`/duties?group_id=${encodeURIComponent(gid)}`);
+        if (!res.ok) return;
+        let duties = await res.json();
+        if (eventId) duties = duties.filter(d => Number(d.event_id) === Number(eventId));
+        duties.forEach(d => {
+          const opt = document.createElement('option');
+          opt.value = d.id;
+          opt.textContent = `${d.id} — ${d.title}`;
+          sel.appendChild(opt);
+        });
+        if (current) sel.value = current;
+      } catch { /* silent */ }
+    }
+
     // Removed duplicate Admin Tools create-event handler; use Events page create form instead
 
     // Create Event (from Events page admin-only form)
@@ -1853,7 +1899,8 @@
           // Sync top superadmin pickers
           const dFilter = document.getElementById('superDutyGroupFilter'); if (dFilter) dFilter.value = vmOrgSel.value || '';
           const eFilter = document.getElementById('superEventGroupFilter'); if (eFilter) eFilter.value = vmOrgSel.value || '';
-          await fetchDuties();
+          await populateVmEventsByOrg(vmOrgSel.value);
+          await populateVmDutiesByOrgAndEvent(vmOrgSel.value, document.getElementById('vmEvent')?.value || null);
           await populateVolunteerMgmt();
           const vRow = document.getElementById('vmVolunteerRow'); if (vRow) vRow.classList.toggle('hidden', !vmOrgSel.value);
           const lRow = document.getElementById('vmLogsRow'); if (lRow) lRow.classList.add('hidden');
@@ -1869,6 +1916,7 @@
           const dutySel = document.getElementById('vmDuty');
           if (volSel) { volSel.disabled = false; volSel.innerHTML = '<option value="">— Select volunteer —</option>'; }
           if (dutySel) { dutySel.disabled = !vmEventSel2.value; }
+          await populateVmDutiesByOrgAndEvent(document.getElementById('vmOrgPicker')?.value || document.getElementById('superadminOrgPicker')?.value || null, vmEventSel2.value || null);
           const vmEditRow = document.getElementById('vmEditSelectRow'); if (vmEditRow) vmEditRow.classList.add('hidden');
           const vmEditPanel = document.getElementById('vmEditPanel'); if (vmEditPanel) vmEditPanel.classList.add('hidden');
           await populateVolunteerMgmt();
