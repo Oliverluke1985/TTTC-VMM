@@ -1070,7 +1070,7 @@
         let duties = await res.json();
         // Only filter by event if duties actually have an event_id column
         const hasEventId = duties.some(d => Object.prototype.hasOwnProperty.call(d, 'event_id'));
-        if (eventId && hasEventId) duties = duties.filter(d => Number(d.event_id) === Number(eventId));
+        if (eventId && hasEventId) duties = duties.filter(d => (d.event_id == null) || (Number(d.event_id) === Number(eventId)));
         duties.forEach(d => {
           const opt = document.createElement('option');
           opt.value = d.id;
