@@ -1065,12 +1065,24 @@
         sel.innerHTML = '<option value="">— Select duty —</option>';
         sel.disabled = !gid ? true : false;
         if (!gid) return;
-        const res = await authed(`/duties?group_id=${encodeURIComponent(gid)}`);
-        if (!res.ok) return;
-        let duties = await res.json();
+        // Try org-scoped fetch first; if none returned, fall back to all duties
+        let duties = [];
+        try {
+          const res = await authed(`/duties?group_id=${encodeURIComponent(gid)}`);
+          if (res.ok) duties = await res.json();
+        } catch { /* ignore, try fallback */ }
+        if (!duties || duties.length === 0) {
+          try {
+            const resAll = await authed('/duties');
+            if (resAll.ok) duties = await resAll.json();
+          } catch { /* silent */ }
+        }
         // Only filter by event if duties actually have an event_id column
         const hasEventId = duties.some(d => Object.prototype.hasOwnProperty.call(d, 'event_id'));
         if (eventId && hasEventId) duties = duties.filter(d => (d.event_id == null) || (Number(d.event_id) === Number(eventId)));
+        // Prefer matching org when group_id exists; otherwise include all
+        const hasGroupId = duties.some(d => Object.prototype.hasOwnProperty.call(d, 'group_id'));
+        if (hasGroupId) duties = duties.filter(d => (d.group_id == null) || (String(d.group_id) === String(gid)));
         duties.forEach(d => {
           const opt = document.createElement('option');
           opt.value = d.id;
