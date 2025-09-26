@@ -2063,7 +2063,7 @@
           if (vmOrgRow) vmOrgRow.classList.add('hidden');
         }
           await populateVolunteerMgmt();
-          const vRow = document.getElementById('vmVolunteerRow'); if (vRow) vRow.classList.toggle('hidden', !vmEventSel2.value);
+          const vRow = document.getElementById('vmVolunteerRow'); if (vRow) vRow.classList.toggle('hidden', !vmOrgSel.value);
           const lRow = document.getElementById('vmLogsRow'); if (lRow) lRow.classList.add('hidden');
         await refreshVolunteerLogs();
       };
