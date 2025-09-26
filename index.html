@@ -1557,7 +1557,9 @@
           duties = await res.json();
         }
         const eventFilterId = Number(document.getElementById('vmEvent')?.value || '') || null;
-        if (eventFilterId) duties = duties.filter(d => Number(d.event_id) === eventFilterId);
+        // Only filter by event when duties actually carry event_id; include duties with no event_id linkage
+        if (eventFilterId && duties.some(d => Object.prototype.hasOwnProperty.call(d, 'event_id')))
+          duties = duties.filter(d => (d.event_id == null) || (Number(d.event_id) === eventFilterId));
         const dutySel = document.getElementById('vmDuty');
         if (dutySel) {
           const current = dutySel.value;
@@ -1568,6 +1570,7 @@
             opt.textContent = `${d.id} — ${d.title}`;
             dutySel.appendChild(opt);
           });
+          dutySel.disabled = !orgVal ? true : false;
           if (current) dutySel.value = current;
         }
       } catch { /* silent */ }
