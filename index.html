@@ -1392,29 +1392,28 @@
         const volSel = document.getElementById('vmVolunteer');
         if (volSel) {
           const current = volSel.value;
-          // placeholder reflects gating
-          const needsDuty = (role === 'superadmin') && (!(document.getElementById('vmOrgPicker')?.value || document.getElementById('superadminOrgPicker')?.value) || !(document.getElementById('vmEvent')?.value) || !(document.getElementById('vmDuty')?.value));
-          volSel.innerHTML = `<option value="">${needsDuty ? '— Select duty —' : '— Select volunteer —'}</option>`;
+          // Always show volunteer placeholder (org gating handled earlier)
+          volSel.innerHTML = '<option value="">— Select volunteer —</option>';
           // cache list and apply search filter
           volSel._all = volunteers;
           const search = document.getElementById('vmVolunteerSearch');
           const applyFilter = () => {
             const q = (search?.value || '').trim().toLowerCase();
             const list = volSel._all || [];
-            volSel.innerHTML = `<option value=\"\">${needsDuty ? '— Select duty —' : '— Select volunteer —'}</option>`;
-          list.filter(v => !q || (v.name && v.name.toLowerCase().includes(q)) || (v.email && v.email.toLowerCase().includes(q)))
+            volSel.innerHTML = '<option value="">— Select volunteer —</option>';
+            list.filter(v => !q || (v.name && v.name.toLowerCase().includes(q)) || (v.email && v.email.toLowerCase().includes(q)))
                 .forEach(v => {
                   const opt = document.createElement('option');
                   opt.value = v.id;
-              opt.textContent = v.name ? `${v.name}` : v.email;
+                  opt.textContent = v.name ? `${v.name}` : v.email;
                   volSel.appendChild(opt);
                 });
             if (current) volSel.value = current;
           };
           applyFilter();
           if (search && !search._wired) { search.addEventListener('input', applyFilter); search._wired = true; }
-          // enable only when allowed: for superadmin requires duty selected
-          const enableVol = (role !== 'superadmin') || !!(document.getElementById('vmDuty')?.value);
+          // Enable volunteer selection for superadmin when org is chosen
+          const enableVol = (role !== 'superadmin') || !!orgVal;
           volSel.disabled = !enableVol;
           if (current) volSel.value = current;
         }
