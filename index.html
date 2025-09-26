@@ -1917,8 +1917,8 @@
           const dFilter = document.getElementById('superDutyGroupFilter'); if (dFilter) dFilter.value = vmOrgSel.value || '';
           const eFilter = document.getElementById('superEventGroupFilter'); if (eFilter) eFilter.value = vmOrgSel.value || '';
           await populateVmEventsByOrg(vmOrgSel.value);
-          await populateVmDutiesByOrgAndEvent(vmOrgSel.value, document.getElementById('vmEvent')?.value || null);
           await populateVolunteerMgmt();
+          await populateVmDutiesByOrgAndEvent(vmOrgSel.value, document.getElementById('vmEvent')?.value || null);
           const vRow = document.getElementById('vmVolunteerRow'); if (vRow) vRow.classList.toggle('hidden', !vmOrgSel.value);
           const lRow = document.getElementById('vmLogsRow'); if (lRow) lRow.classList.add('hidden');
           await refreshVolunteerLogs();
@@ -1933,10 +1933,10 @@
           const dutySel = document.getElementById('vmDuty');
           if (volSel) { volSel.disabled = false; volSel.innerHTML = '<option value="">— Select volunteer —</option>'; }
           if (dutySel) { dutySel.disabled = !vmEventSel2.value; }
+          await populateVolunteerMgmt();
           await populateVmDutiesByOrgAndEvent(document.getElementById('vmOrgPicker')?.value || document.getElementById('superadminOrgPicker')?.value || null, vmEventSel2.value || null);
           const vmEditRow = document.getElementById('vmEditSelectRow'); if (vmEditRow) vmEditRow.classList.add('hidden');
           const vmEditPanel = document.getElementById('vmEditPanel'); if (vmEditPanel) vmEditPanel.classList.add('hidden');
-          await populateVolunteerMgmt();
         });
         vmEventSel2._wired = true;
       }
