@@ -1063,12 +1063,14 @@
         if (!sel) return;
         const current = sel.value;
         sel.innerHTML = '<option value="">— Select duty —</option>';
-        sel.disabled = !gid;
+        sel.disabled = !gid ? true : false;
         if (!gid) return;
         const res = await authed(`/duties?group_id=${encodeURIComponent(gid)}`);
         if (!res.ok) return;
         let duties = await res.json();
-        if (eventId) duties = duties.filter(d => Number(d.event_id) === Number(eventId));
+        // Only filter by event if duties actually have an event_id column
+        const hasEventId = duties.some(d => Object.prototype.hasOwnProperty.call(d, 'event_id'));
+        if (eventId && hasEventId) duties = duties.filter(d => Number(d.event_id) === Number(eventId));
         duties.forEach(d => {
           const opt = document.createElement('option');
           opt.value = d.id;
