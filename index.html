@@ -305,7 +305,7 @@
     </div>
     <div id="superadminOrgInfo" class="row hidden">
       <div class="col">
-        <table>
+    <table>
           <thead><tr><th>ID</th><th>Name</th><th>Status</th><th>Save</th></tr></thead>
           <tbody id="superadminOrgInfoBody"></tbody>
         </table>
@@ -435,13 +435,13 @@
         <input id="vmVolunteerSearch" type="text" placeholder="Start typing..." />
       </div>
     </div>
-    <div id="vmEventRow" class="row hidden">
+    <div id="vmEventRow" class="row">
       <div class="col">
         <label>Event</label>
         <select id="vmEvent"><option value="">— Select event —</option></select>
       </div>
     </div>
-    <div class="row hidden" id="vmVolunteerRow">
+    <div class="row" id="vmVolunteerRow">
       <div class="col">
         <label>Volunteer</label>
         <select id="vmVolunteer"><option value="">— Select volunteer —</option></select>
@@ -474,7 +474,7 @@
         <div id="vmSaveUserErr" class="error"></div>
       </div>
     </div>
-    <div class="row hidden" id="vmLogsRow">
+    <div class="row" id="vmLogsRow">
       <div class="col">
         <h3>Selected Volunteer Logs</h3>
     <table>
@@ -483,7 +483,7 @@
     </table>
       </div>
     </div>
-    <div class="row hidden" id="vmEditSelectRow">
+    <div class="row" id="vmEditSelectRow">
       <div class="col">
         <label>Select Volunteer to Edit</label>
         <select id="vmEditSelect"><option value="">— Select volunteer —</option></select>
@@ -1391,8 +1391,8 @@
       try {
         const params = new URLSearchParams();
         params.set('role', 'volunteer');
-        // superadmin may filter by selected org
-        if (role === 'superadmin' && groupIdForFilter) params.set('group_id', String(groupIdForFilter));
+        // Filter by org when provided (admins and superadmins)
+        if (groupIdForFilter) params.set('group_id', String(groupIdForFilter));
         const res = await authed(`/users?${params.toString()}`);
         if (!res.ok) return [];
         return await res.json();
@@ -1435,6 +1435,11 @@
     async function populateVolunteerMgmt() {
       try {
         const orgVal = (role === 'superadmin') ? (document.getElementById('vmOrgPicker')?.value || document.getElementById('superadminOrgPicker')?.value || '') : (groupId != null ? String(groupId) : '');
+        // Admins don't pick org: ensure key rows are visible
+        if (role !== 'superadmin') {
+          const vRow0 = document.getElementById('vmVolunteerRow'); if (vRow0) vRow0.classList.remove('hidden');
+          const eRow0 = document.getElementById('vmEditSelectRow'); if (eRow0) eRow0.classList.remove('hidden');
+        }
         // Gate volunteer controls until org is selected for superadmin
         if (role === 'superadmin' && !orgVal) {
           const vSel = document.getElementById('vmVolunteer');
@@ -1506,6 +1511,9 @@
             editSel._wired = true;
           }
           editSel.disabled = false;
+          // Show volunteer edit selector: superadmin only after org selected; admins always
+          const vmEditRow = document.getElementById('vmEditSelectRow');
+          if (vmEditRow) vmEditRow.classList.toggle('hidden', role === 'superadmin' ? !orgVal : false);
         }
         // Groups for Create Volunteer
         const resG = await authed('/groups');
@@ -1532,6 +1540,14 @@
           const volSel = document.getElementById('vmVolunteer');
           if (dutySel) { dutySel.disabled = !orgVal; dutySel.innerHTML = orgVal ? '<option value="">— Select duty —</option>' : '<option value="">— Select organization first —</option>'; }
           if (volSel) { volSel.disabled = !vmOrgSel.value; volSel.innerHTML = vmOrgSel.value ? '<option value="">— Select volunteer —</option>' : '<option value="">— Select organization first —</option>'; }
+        } else {
+          // Admins: event row should be visible since org is implied; keep volunteers enabled
+          if (vmEventRow) vmEventRow.classList.remove('hidden');
+          const volSel = document.getElementById('vmVolunteer');
+          if (volSel) { volSel.disabled = false; volSel.innerHTML = '<option value="">— Select volunteer —</option>'; }
+          const vRow = document.getElementById('vmVolunteerRow'); if (vRow) vRow.classList.remove('hidden');
+          const vmEditRow = document.getElementById('vmEditSelectRow'); if (vmEditRow) vmEditRow.classList.remove('hidden');
+          const logsRow = document.getElementById('vmLogsRow'); if (logsRow) logsRow.classList.remove('hidden');
         }
         let events = [];
         if (orgVal) {
@@ -1817,10 +1833,10 @@
         const vmOrg = document.getElementById('vmOrgPicker'); if (vmOrg) vmOrg.value = '';
         const vmEvt = document.getElementById('vmEvent'); if (vmEvt) vmEvt.innerHTML = '<option value="">— Select event —</option>';
         const vmDuty = document.getElementById('vmDuty'); if (vmDuty) { vmDuty.innerHTML = '<option value="">— Select organization first —</option>'; vmDuty.disabled = true; }
-        const vmVol = document.getElementById('vmVolunteer'); if (vmVol) { vmVol.innerHTML = '<option value="">— Select organization first —</option>'; vmVol.disabled = true; }
+        const vmVol = document.getElementById('vmVolunteer'); if (vmVol) { vmVol.innerHTML = '<option value="">— Select volunteer —</option>'; vmVol.disabled = (currentRole === 'superadmin'); }
         const vmEditSel = document.getElementById('vmEditSelect'); if (vmEditSel) vmEditSel.innerHTML = '<option value="">— Select volunteer —</option>';
-        const vRow = document.getElementById('vmVolunteerRow'); if (vRow) vRow.classList.add('hidden');
-        const eRow = document.getElementById('vmEventRow'); if (eRow) eRow.classList.add('hidden');
+        const vRow = document.getElementById('vmVolunteerRow'); if (vRow) vRow.classList.toggle('hidden', currentRole === 'superadmin');
+        const eRow = document.getElementById('vmEventRow'); if (eRow) eRow.classList.toggle('hidden', currentRole === 'superadmin');
         const lRow = document.getElementById('vmLogsRow'); if (lRow) lRow.classList.add('hidden');
         const vmPanel = document.getElementById('vmEditPanel'); if (vmPanel) vmPanel.classList.add('hidden');
       }
@@ -1841,14 +1857,15 @@
         const editPanel = document.getElementById('vmEditPanel');
         if (orgRow) orgRow.classList.add('hidden');
         if (orgSel) orgSel.value = '';
-        if (evtRow) evtRow.classList.add('hidden');
+        if (evtRow) evtRow.classList.toggle('hidden', currentRole === 'superadmin');
         if (evtSel) { evtSel.innerHTML = '<option value="">— Select event —</option>'; evtSel.disabled = true; }
         if (dutySel) { dutySel.disabled = true; dutySel.innerHTML = '<option value="">— Select organization first —</option>'; }
-        if (volSel) { volSel.disabled = true; volSel.innerHTML = '<option value="">— Select organization first —</option>'; }
+        if (volSel) { volSel.disabled = (currentRole === 'superadmin'); volSel.innerHTML = '<option value="">— Select volunteer —</option>'; }
         if (search) search.value = '';
         if (logs) logs.innerHTML = '';
         if (editPanel) editPanel.classList.add('hidden');
-        const vRow = document.getElementById('vmVolunteerRow'); if (vRow) vRow.classList.add('hidden');
+        const vRow = document.getElementById('vmVolunteerRow'); if (vRow) vRow.classList.toggle('hidden', currentRole === 'superadmin');
+        const editRow = document.getElementById('vmEditSelectRow'); if (editRow) editRow.classList.toggle('hidden', currentRole === 'superadmin');
         const lRow = document.getElementById('vmLogsRow'); if (lRow) lRow.classList.add('hidden');
       }
       document.getElementById('navAdminBtn').onclick = () => {
@@ -1911,7 +1928,7 @@
           const evtRow = document.getElementById('vmEventRow');
           if (evtRow) evtRow.classList.toggle('hidden', !vmOrgSel.value);
           if (evtSel) { evtSel.disabled = !vmOrgSel.value; evtSel.innerHTML = '<option value="">— Select event —</option>'; }
-          const vmEditRow = document.getElementById('vmEditSelectRow'); if (vmEditRow) vmEditRow.classList.add('hidden');
+          const vmEditRow = document.getElementById('vmEditSelectRow'); if (vmEditRow) vmEditRow.classList.toggle('hidden', currentRole === 'superadmin');
           const vmEditPanel = document.getElementById('vmEditPanel'); if (vmEditPanel) vmEditPanel.classList.add('hidden');
           // Sync top superadmin pickers
           const dFilter = document.getElementById('superDutyGroupFilter'); if (dFilter) dFilter.value = vmOrgSel.value || '';
@@ -1935,7 +1952,7 @@
           if (dutySel) { dutySel.disabled = !vmEventSel2.value; }
           await populateVolunteerMgmt();
           await populateVmDutiesByOrgAndEvent(document.getElementById('vmOrgPicker')?.value || document.getElementById('superadminOrgPicker')?.value || null, vmEventSel2.value || null);
-          const vmEditRow = document.getElementById('vmEditSelectRow'); if (vmEditRow) vmEditRow.classList.add('hidden');
+          const vmEditRow = document.getElementById('vmEditSelectRow'); if (vmEditRow) vmEditRow.classList.toggle('hidden', currentRole === 'superadmin');
           const vmEditPanel = document.getElementById('vmEditPanel'); if (vmEditPanel) vmEditPanel.classList.add('hidden');
         });
         vmEventSel2._wired = true;
@@ -1947,7 +1964,7 @@
           const volSel = document.getElementById('vmVolunteer');
           if (volSel) volSel.disabled = !(vmDutySel.value);
           // Show edit select only once duty is chosen and org+event exist
-          const hasOrg = !!document.getElementById('vmOrgPicker')?.value || !!document.getElementById('superadminOrgPicker')?.value;
+          const hasOrg = (currentRole !== 'superadmin') || !!document.getElementById('vmOrgPicker')?.value || !!document.getElementById('superadminOrgPicker')?.value;
           const hasEvent = !!document.getElementById('vmEvent')?.value;
           const vmEditRow = document.getElementById('vmEditSelectRow');
           if (vmEditRow) vmEditRow.classList.toggle('hidden', !(hasOrg && hasEvent && vmDutySel.value));
@@ -2066,7 +2083,10 @@
           if (vmOrgRow) vmOrgRow.classList.add('hidden');
         }
           await populateVolunteerMgmt();
-          const vRow = document.getElementById('vmVolunteerRow'); if (vRow) vRow.classList.toggle('hidden', !vmOrgSel.value);
+          // Force-show key rows for admins (org implied by their group)
+          const eRow = document.getElementById('vmEventRow'); if (eRow) eRow.classList.remove('hidden');
+          const vRow = document.getElementById('vmVolunteerRow'); if (vRow) vRow.classList.remove('hidden');
+          const editRow = document.getElementById('vmEditSelectRow'); if (editRow) editRow.classList.remove('hidden');
           const lRow = document.getElementById('vmLogsRow'); if (lRow) lRow.classList.add('hidden');
         await refreshVolunteerLogs();
       };
@@ -2077,7 +2097,29 @@
         populateVolunteerMgmt();
         const volSel = document.getElementById('vmVolunteer');
         if (volSel && !volSel._wired) {
-          volSel.addEventListener('change', refreshVolunteerLogs);
+          volSel.addEventListener('change', () => {
+            // Always refresh logs when a volunteer is chosen
+            refreshVolunteerLogs();
+            // Also open the edit panel for the selected volunteer (admins mirror superadmin edit UX)
+            const id = Number(volSel.value);
+            const list = volSel._all || [];
+            const v = list.find(x => x.id === id);
+            if (!v) return;
+            const panel = document.getElementById('vmEditPanel');
+            if (panel) panel.classList.remove('hidden');
+            const row = document.getElementById('vmEditSelectRow');
+            if (row) row.classList.toggle('hidden', currentRole === 'superadmin' ? !((document.getElementById('vmOrgPicker')?.value) || (document.getElementById('superadminOrgPicker')?.value)) : false);
+            const logsRow = document.getElementById('vmLogsRow');
+            if (logsRow) logsRow.classList.remove('hidden');
+            const syncEditSel = document.getElementById('vmEditSelect');
+            if (syncEditSel) syncEditSel.value = String(id);
+            document.getElementById('vmEditId').value = String(v.id);
+            document.getElementById('vmEditName').value = v.name || '';
+            document.getElementById('vmEditEmail').value = v.email || '';
+            const pw = document.getElementById('vmEditPassword'); if (pw) pw.value = '';
+            document.getElementById('vmEditPhone').value = v.phone || '';
+            document.getElementById('vmEditAddress').value = v.address || '';
+          });
           volSel._wired = true;
         }
         const addBtn = document.getElementById('vmAddBtn');
