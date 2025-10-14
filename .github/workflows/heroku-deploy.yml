@@ -17,10 +17,17 @@ jobs:
         with:
           node-version: '20'
 
+      # Sanitize the Heroku API key in case the UI copy adds spaces/newlines
+      - name: Sanitize Heroku API key
+        shell: bash
+        run: |
+          CLEAN=$(printf "%s" "${{ secrets.HEROKU_API_KEY }}" | tr -d '\\r\\n[:space:]')
+          echo "HEROKU_API_KEY_CLEAN=$CLEAN" >> "$GITHUB_ENV"
+
       - name: Deploy to Heroku
         uses: akhileshns/heroku-deploy@v3.12.12
         with:
-          heroku_api_key: ${{ secrets.HEROKU_API_KEY }}
+          heroku_api_key: ${{ env.HEROKU_API_KEY_CLEAN }}
           heroku_app_name: ${{ secrets.HEROKU_APP_NAME }}
           heroku_email: ${{ secrets.HEROKU_EMAIL }}
           usedocker: false
