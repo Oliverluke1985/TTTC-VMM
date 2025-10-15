@@ -1398,6 +1398,30 @@
         return await res.json();
       } catch { return []; }
     }
+
+    // Explicitly populate the top Volunteer dropdown for admins using the same API as the edit list
+    async function populateTopVolunteerForAdmin() {
+      try {
+        if (role !== 'admin') return;
+        const volSel = document.getElementById('vmVolunteer');
+        if (!volSel) return;
+        const res = await authed('/users?role=volunteer');
+        if (!res.ok) return;
+        const list = await res.json();
+        const cur = volSel.value;
+        volSel.innerHTML = '<option value="">— Select volunteer —</option>';
+        list.forEach(v => {
+          const opt = document.createElement('option');
+          opt.value = v.id;
+          opt.textContent = v.name ? `${v.name}` : v.email;
+          volSel.appendChild(opt);
+        });
+        volSel.disabled = false;
+        if (cur) volSel.value = cur;
+        // cache for focus repopulation
+        volSel._all = list;
+      } catch { /* silent */ }
+    }
     async function fetchAdminsForSuperadmin() {
       try {
         // Filter by selected org if present; otherwise show all admins
@@ -1481,6 +1505,18 @@
           const enableVol = (role !== 'superadmin') || !!orgVal;
           volSel.disabled = !enableVol;
           if (current) volSel.value = current;
+          // Fallback: if nothing rendered, append all volunteers explicitly
+          if (volSel.options.length <= 1 && (volSel._all && volSel._all.length)) {
+            const cur2 = volSel.value;
+            volSel.innerHTML = '<option value="">— Select volunteer —</option>';
+            (volSel._all || []).forEach(v => {
+              const opt = document.createElement('option');
+              opt.value = v.id;
+              opt.textContent = v.name ? `${v.name}` : v.email;
+              volSel.appendChild(opt);
+            });
+            if (cur2) volSel.value = cur2;
+          }
         }
         // Populate volunteer edit dropdown
         const editSel = document.getElementById('vmEditSelect');
@@ -1507,13 +1543,52 @@
               const pw = document.getElementById('vmEditPassword'); if (pw) pw.value = '';
               document.getElementById('vmEditPhone').value = v.phone || '';
               document.getElementById('vmEditAddress').value = v.address || '';
+              // Mirror the edit selection into the top Volunteer dropdown so it always has options and selection
+              try {
+                const volTop = document.getElementById('vmVolunteer');
+                if (volTop) {
+                  volTop.innerHTML = '<option value="">— Select volunteer —</option>';
+                  (volunteers || []).forEach(u => {
+                    const opt = document.createElement('option');
+                    opt.value = u.id;
+                    opt.textContent = u.name ? `${u.name}` : u.email;
+                    volTop.appendChild(opt);
+                  });
+                  volTop.value = String(id);
+                  volTop.disabled = false;
+                }
+              } catch { /* silent */ }
             });
             editSel._wired = true;
           }
           editSel.disabled = false;
+          // Also seed the top Volunteer dropdown if it only has the placeholder
+          const volTop = document.getElementById('vmVolunteer');
+          if (volTop && volTop.options.length <= 1) {
+            const cur = volTop.value;
+            volTop.innerHTML = '<option value="">— Select volunteer —</option>';
+            volunteers.forEach(v => {
+              const opt = document.createElement('option');
+              opt.value = v.id;
+              opt.textContent = v.name ? `${v.name}` : v.email;
+              volTop.appendChild(opt);
+            });
+            if (cur) volTop.value = cur;
+          }
           // Show volunteer edit selector: superadmin only after org selected; admins always
           const vmEditRow = document.getElementById('vmEditSelectRow');
           if (vmEditRow) vmEditRow.classList.toggle('hidden', role === 'superadmin' ? !orgVal : false);
+          // Ensure top Volunteer is always fully synced to the same list as the edit dropdown
+          try {
+            const volTop2 = document.getElementById('vmVolunteer');
+            if (volTop2) {
+              const keep2 = volTop2.value;
+              // Copy the exact options from the edit dropdown so both show identical data
+              volTop2.innerHTML = editSel.innerHTML;
+              if (keep2) volTop2.value = keep2;
+              volTop2.disabled = (role === 'superadmin') ? !orgVal : false;
+            }
+          } catch { /* silent */ }
         }
         // Groups for Create Volunteer
         const resG = await authed('/groups');
@@ -1539,12 +1614,18 @@
           const dutySel = document.getElementById('vmDuty');
           const volSel = document.getElementById('vmVolunteer');
           if (dutySel) { dutySel.disabled = !orgVal; dutySel.innerHTML = orgVal ? '<option value="">— Select duty —</option>' : '<option value="">— Select organization first —</option>'; }
-          if (volSel) { volSel.disabled = !vmOrgSel.value; volSel.innerHTML = vmOrgSel.value ? '<option value="">— Select volunteer —</option>' : '<option value="">— Select organization first —</option>'; }
+          if (volSel) {
+            // Only disable/enable; don't wipe options that were already populated
+            volSel.disabled = !vmOrgSel.value;
+            if (!vmOrgSel.value && volSel.options.length <= 1) {
+              volSel.innerHTML = '<option value="">— Select organization first —</option>';
+            }
+          }
         } else {
           // Admins: event row should be visible since org is implied; keep volunteers enabled
           if (vmEventRow) vmEventRow.classList.remove('hidden');
           const volSel = document.getElementById('vmVolunteer');
-          if (volSel) { volSel.disabled = false; volSel.innerHTML = '<option value="">— Select volunteer —</option>'; }
+          if (volSel) { volSel.disabled = false; /* keep existing options */ }
           const vRow = document.getElementById('vmVolunteerRow'); if (vRow) vRow.classList.remove('hidden');
           const vmEditRow = document.getElementById('vmEditSelectRow'); if (vmEditRow) vmEditRow.classList.remove('hidden');
           const logsRow = document.getElementById('vmLogsRow'); if (logsRow) logsRow.classList.remove('hidden');
@@ -1589,6 +1670,22 @@
           dutySel.disabled = !orgVal ? true : false;
           if (current) dutySel.value = current;
         }
+        // Final safeguard: ensure the top Volunteer dropdown is fully populated for admins just like the edit list
+        try {
+          const volTopFinal = document.getElementById('vmVolunteer');
+          if (volTopFinal) {
+            const keep = volTopFinal.value;
+            volTopFinal.disabled = (role === 'superadmin') ? !orgVal : false;
+            volTopFinal.innerHTML = '<option value="">— Select volunteer —</option>';
+            (volunteers || []).forEach(v => {
+              const opt = document.createElement('option');
+              opt.value = v.id;
+              opt.textContent = v.name ? `${v.name}` : v.email;
+              volTopFinal.appendChild(opt);
+            });
+            if (keep) volTopFinal.value = keep;
+          }
+        } catch { /* silent */ }
       } catch { /* silent */ }
     }
     async function fetchVolunteerLogs(volunteerId) {
@@ -1948,7 +2045,7 @@
         vmEventSel2.addEventListener('change', async () => {
           const volSel = document.getElementById('vmVolunteer');
           const dutySel = document.getElementById('vmDuty');
-          if (volSel) { volSel.disabled = false; volSel.innerHTML = '<option value="">— Select volunteer —</option>'; }
+          if (volSel) { volSel.disabled = false; }
           if (dutySel) { dutySel.disabled = !vmEventSel2.value; }
           await populateVolunteerMgmt();
           await populateVmDutiesByOrgAndEvent(document.getElementById('vmOrgPicker')?.value || document.getElementById('superadminOrgPicker')?.value || null, vmEventSel2.value || null);
@@ -1962,7 +2059,11 @@
       if (vmDutySel && !vmDutySel._wired) {
         vmDutySel.addEventListener('change', () => {
           const volSel = document.getElementById('vmVolunteer');
-          if (volSel) volSel.disabled = !(vmDutySel.value);
+          if (volSel) {
+            // Keep volunteer selectable regardless of duty; only superadmin without org should be gated
+            const hasOrg = !!document.getElementById('vmOrgPicker')?.value || !!document.getElementById('superadminOrgPicker')?.value;
+            volSel.disabled = (currentRole === 'superadmin') ? !hasOrg : false;
+          }
           // Show edit select only once duty is chosen and org+event exist
           const hasOrg = (currentRole !== 'superadmin') || !!document.getElementById('vmOrgPicker')?.value || !!document.getElementById('superadminOrgPicker')?.value;
           const hasEvent = !!document.getElementById('vmEvent')?.value;
@@ -2095,8 +2196,54 @@
       // Populate Volunteer Management when entering Admin section
       if (isAdminish) {
         populateVolunteerMgmt();
+        populateTopVolunteerForAdmin();
         const volSel = document.getElementById('vmVolunteer');
         if (volSel && !volSel._wired) {
+          // Always sync the top list from the edit dropdown on focus/click so it cannot be empty
+          const syncFromEdit = () => {
+            const editSel = document.getElementById('vmEditSelect');
+            if (!editSel) return;
+            volSel.innerHTML = editSel.innerHTML || '<option value="">— Select volunteer —</option>';
+            volSel.disabled = false;
+          };
+          const refillFromCache = () => {
+            if (!volSel._all || volSel.options.length > 1) return;
+            const current = volSel.value;
+            volSel.innerHTML = '<option value="">— Select volunteer —</option>';
+            (volSel._all || []).forEach(v => {
+              const opt = document.createElement('option');
+              opt.value = v.id;
+              opt.textContent = v.name ? `${v.name}` : v.email;
+              volSel.appendChild(opt);
+            });
+            if (current) volSel.value = current;
+          };
+          const refillByFetch = async () => {
+            if (volSel.options.length > 1) return;
+            try {
+              const orgVal = (currentRole === 'superadmin') ? (document.getElementById('vmOrgPicker')?.value || document.getElementById('superadminOrgPicker')?.value || '') : (groupId != null ? String(groupId) : '');
+              const vols = await fetchVolunteers(orgVal);
+              volSel._all = vols || [];
+              const current = volSel.value;
+              volSel.innerHTML = '<option value="">— Select volunteer —</option>';
+              (volSel._all || []).forEach(v => {
+                const opt = document.createElement('option');
+                opt.value = v.id;
+                opt.textContent = v.name ? `${v.name}` : v.email;
+                volSel.appendChild(opt);
+              });
+              if (current) volSel.value = current;
+            } catch { /* silent */ }
+          };
+          volSel.addEventListener('focus', syncFromEdit);
+          volSel.addEventListener('mousedown', syncFromEdit);
+          volSel.addEventListener('click', syncFromEdit);
+          volSel.addEventListener('focus', refillFromCache);
+          volSel.addEventListener('mousedown', refillFromCache);
+          volSel.addEventListener('click', refillFromCache);
+          volSel.addEventListener('focus', refillByFetch);
+          volSel.addEventListener('mousedown', refillByFetch);
+          volSel.addEventListener('click', refillByFetch);
           volSel.addEventListener('change', () => {
             // Always refresh logs when a volunteer is chosen
             refreshVolunteerLogs();
