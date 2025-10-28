@@ -11,6 +11,29 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Trust Heroku's proxy so we can read X-Forwarded-* headers
+app.enable('trust proxy');
+
+// Enforce canonical host and HTTPS with HSTS
+const CANONICAL_HOST = process.env.CANONICAL_HOST || 'tttcvolunteermanagementapp.com';
+app.use((req, res, next) => {
+  const host = (req.headers.host || '').toLowerCase();
+  const proto = (req.headers['x-forwarded-proto'] || '').toLowerCase();
+  const isHttps = proto ? proto === 'https' : (req.secure === true);
+
+  // Redirect HTTP -> HTTPS
+  if (!isHttps) {
+    return res.redirect(301, `https://${CANONICAL_HOST}${req.originalUrl}`);
+  }
+  // Redirect non-canonical hosts (e.g., www or herokuapp) -> apex
+  if (host && host !== CANONICAL_HOST) {
+    return res.redirect(301, `https://${CANONICAL_HOST}${req.originalUrl}`);
+  }
+  // Send HSTS for future requests
+  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  return next();
+});
+
 // Use a sane default in development so login doesn't 500 if JWT_SECRET is unset
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-123';
 
