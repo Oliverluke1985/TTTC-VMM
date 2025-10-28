@@ -17,19 +17,19 @@ jobs:
         with:
           node-version: '20'
 
-      # Ensure Heroku CLI is available for the deploy step
-      - name: Setup Heroku CLI
-        uses: heroku/actions/setup@v2
-        with:
-          heroku_api_key: ${{ env.HEROKU_API_KEY_CLEAN }}
-          email: ${{ secrets.HEROKU_EMAIL }}
-
       # Sanitize the Heroku API key in case the UI copy adds spaces/newlines
       - name: Sanitize Heroku API key
         shell: bash
         run: |
           CLEAN=$(printf "%s" "${{ secrets.HEROKU_API_KEY }}" | tr -d '\\r\\n[:space:]')
           echo "HEROKU_API_KEY_CLEAN=$CLEAN" >> "$GITHUB_ENV"
+
+      # Ensure Heroku CLI is available for the deploy step (after key is sanitized)
+      - name: Setup Heroku CLI
+        uses: heroku/actions/setup@v2
+        with:
+          heroku_api_key: ${{ env.HEROKU_API_KEY_CLEAN }}
+          email: ${{ secrets.HEROKU_EMAIL }}
 
       - name: Debug Heroku auth and app
         shell: bash
