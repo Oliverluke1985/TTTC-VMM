@@ -15,23 +15,26 @@ app.use(express.json());
 app.enable('trust proxy');
 
 // Enforce canonical host and HTTPS with HSTS
-const CANONICAL_HOST = process.env.CANONICAL_HOST || 'tttcvolunteermanagementapp.com';
+const CANONICAL_HOST = (process.env.CANONICAL_HOST || 'tttcvolunteermanagementapp.com').toLowerCase();
 app.use((req, res, next) => {
-  const host = (req.headers.host || '').toLowerCase();
-  const proto = (req.headers['x-forwarded-proto'] || '').toLowerCase();
-  const isHttps = proto ? proto === 'https' : (req.secure === true);
+  const rawHost = req.headers.host || '';
+  const host = rawHost.split(':')[0].toLowerCase();
+  const xfProto = String(req.headers['x-forwarded-proto'] || '').toLowerCase();
+  const isHttps = req.secure === true || xfProto.includes('https');
 
-  // Redirect HTTP -> HTTPS
+  // 1) Force HTTPS on same host to avoid loops
   if (!isHttps) {
-    return res.redirect(301, `https://${CANONICAL_HOST}${req.originalUrl}`);
+    return res.redirect(301, `https://${host || CANONICAL_HOST}${req.originalUrl}`);
   }
-  // Redirect non-canonical hosts (e.g., www or herokuapp) -> apex
+
+  // 2) Normalize host to canonical once on HTTPS
   if (host && host !== CANONICAL_HOST) {
     return res.redirect(301, `https://${CANONICAL_HOST}${req.originalUrl}`);
   }
-  // Send HSTS for future requests
-  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
-  return next();
+
+  // 3) HSTS after we are on HTTPS and canonical host
+  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+  next();
 });
 
 // Use a sane default in development so login doesn't 500 if JWT_SECRET is unset
