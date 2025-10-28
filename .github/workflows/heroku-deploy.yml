@@ -31,6 +31,16 @@ jobs:
           CLEAN=$(printf "%s" "${{ secrets.HEROKU_API_KEY }}" | tr -d '\\r\\n[:space:]')
           echo "HEROKU_API_KEY_CLEAN=$CLEAN" >> "$GITHUB_ENV"
 
+      - name: Debug Heroku auth and app
+        shell: bash
+        env:
+          APP: ${{ secrets.HEROKU_APP_NAME }}
+        run: |
+          set -euo pipefail
+          echo "Key length:" $(printf "%s" "$HEROKU_API_KEY_CLEAN" | wc -c)
+          heroku auth:whoami || true
+          heroku apps:info -a "$APP" || true
+
       - name: Deploy to Heroku
         uses: akhileshns/heroku-deploy@v3.12.12
         with:
