@@ -413,6 +413,25 @@ app.patch('/users/:id', authRequired, async (req, res) => {
   }
 });
 
+// Delete user (superadmin only)
+app.delete('/users/:id', authRequired, superadminOnly, async (req, res) => {
+  try {
+    const targetId = Number(req.params.id);
+    if (!Number.isFinite(targetId)) return res.status(400).json({ message: 'Invalid id' });
+    // Avoid deleting yourself by accident
+    if (targetId === req.user.id) {
+      return res.status(400).json({ message: 'Cannot delete your own account' });
+    }
+    const result = await pool.query('DELETE FROM users WHERE id=$1 RETURNING id', [targetId]);
+    if (result.rowCount === 0) return res.status(404).json({ message: 'Not found' });
+    // Cascade cleanup for optional profile rows if table exists (ON DELETE CASCADE usually handles this)
+    try { await pool.query('DELETE FROM user_profile WHERE user_id=$1', [targetId]); } catch (_) {}
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
 // Per-user theme endpoints
 app.get('/theme', authRequired, async (req, res) => {
   try {

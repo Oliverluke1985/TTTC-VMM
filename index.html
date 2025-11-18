@@ -335,16 +335,27 @@
       </div>
     </div>
 
-    <h3>Admin Management</h3>
+    <h3>User Management</h3>
+    <div class="row" id="saUserRoleRow">
+      <div class="col">
+        <label>Role</label>
+        <select id="saUserRole">
+          <option value="admin">admin</option>
+          <option value="superadmin">superadmin</option>
+          <option value="volunteer">volunteer</option>
+          <option value="all">all</option>
+        </select>
+      </div>
+    </div>
     <div class="row hidden" id="saAdminRow">
       <div class="col">
-        <label>Select Admin to Edit</label>
-        <select id="saAdminSelect"><option value="">— Select admin —</option></select>
+        <label>Select User to Edit</label>
+        <select id="saAdminSelect"><option value="">— Select user —</option></select>
       </div>
     </div>
     <div id="saAdminEditPanel" class="row hidden">
       <div class="col">
-        <h3>Edit Admin</h3>
+        <h3>Edit User</h3>
         <label>User ID</label><input id="saAdminEditId" type="number" />
         <label>Name</label><input id="saAdminEditName" type="text" />
         <label>Email</label><input id="saAdminEditEmail" type="email" />
@@ -356,6 +367,7 @@
         <label>Phone</label><input id="saAdminEditPhone" type="text" />
         <label>Address</label><input id="saAdminEditAddress" type="text" />
         <button id="saSaveAdminBtn">Save User</button>
+        <button id="saDeleteUserBtn" style="margin-left:8px;color:#b00020">Delete User</button>
         <button id="saCloseAdminEditBtn" style="margin-left:8px">Close</button>
         <div id="saAdminSaveErr" class="error"></div>
       </div>
@@ -1422,38 +1434,48 @@
         volSel._all = list;
       } catch { /* silent */ }
     }
-    async function fetchAdminsForSuperadmin() {
+    async function fetchUsersForSuperadmin() {
       try {
-        // Filter by selected org if present; otherwise show all admins
-        const sel = document.getElementById('superadminOrgPicker');
+        const orgSel = document.getElementById('superadminOrgPicker');
+        const roleSel = document.getElementById('saUserRole');
+        const chosenRole = (roleSel && roleSel.value) ? roleSel.value : 'admin';
         const params = new URLSearchParams();
-        params.set('role', 'admin');
-        if (sel && sel.value) params.set('group_id', sel.value);
+        if (chosenRole && chosenRole !== 'all') params.set('role', chosenRole);
+        // Only apply org filter for admin/volunteer; superadmins are global
+        const applyOrg = (chosenRole === 'admin' || chosenRole === 'volunteer');
+        if (applyOrg && orgSel && orgSel.value) params.set('group_id', orgSel.value);
         const res = await authed(`/users?${params.toString()}`);
         if (!res.ok) return [];
         return await res.json();
       } catch { return []; }
     }
-    async function populateSuperadminAdmins() {
+    async function populateSuperadminUsers() {
       try {
-        const admins = await fetchAdminsForSuperadmin();
+        const users = await fetchUsersForSuperadmin();
         const sel = document.getElementById('saAdminSelect');
         const selRow = document.getElementById('saAdminRow');
-        if (selRow) selRow.classList.toggle('hidden', admins.length === 0);
+        if (selRow) {
+          const roleSel = document.getElementById('saUserRole');
+          const chosenRole = (roleSel && roleSel.value) ? roleSel.value : 'admin';
+          const orgPicker = document.getElementById('superadminOrgPicker');
+          const requireOrg = (chosenRole === 'admin' || chosenRole === 'volunteer');
+          selRow.classList.toggle('hidden', requireOrg ? !orgPicker?.value : false);
+        }
         if (!sel) return;
         const current = sel.value;
-        sel.innerHTML = '<option value="">— Select admin —</option>';
-        admins.forEach(u => {
+        sel.innerHTML = '<option value="">— Select user —</option>';
+        users.forEach(u => {
           const opt = document.createElement('option');
           opt.value = u.id;
-          opt.textContent = u.name ? `${u.name} — ${u.email}` : u.email;
+          const label = u.name ? `${u.name} — ${u.email}` : u.email;
+          opt.textContent = label;
           sel.appendChild(opt);
         });
-        sel._admins = admins;
+        sel._users = users;
         if (current) sel.value = current;
         // Hide edit panel if selection cleared or missing user
         const panel = document.getElementById('saAdminEditPanel');
-        if (panel && (!sel.value || !admins.find(a => String(a.id) === sel.value))) panel.classList.add('hidden');
+        if (panel && (!sel.value || !users.find(a => String(a.id) === sel.value))) panel.classList.add('hidden');
       } catch { /* silent */ }
     }
     async function populateVolunteerMgmt() {
@@ -2002,10 +2024,15 @@
           fetchEvents();
           fetchDuties();
           populateEventDropdownsForGroup(orgPicker.value);
-          // Refresh Admin Management list when org changes
-          populateSuperadminAdmins();
+          // Refresh User Management list when org changes
+          populateSuperadminUsers();
           const selRow = document.getElementById('saAdminRow');
-          if (selRow) selRow.classList.toggle('hidden', !orgPicker.value);
+          if (selRow) {
+            const roleSel2 = document.getElementById('saUserRole');
+            const chosenRole2 = (roleSel2 && roleSel2.value) ? roleSel2.value : 'admin';
+            const requireOrg2 = (chosenRole2 === 'admin' || chosenRole2 === 'volunteer');
+            selRow.classList.toggle('hidden', requireOrg2 ? !orgPicker.value : false);
+          }
           // Refresh Volunteer Mgmt scoped to org
           populateVolunteerMgmt();
           refreshVolunteerLogs();
@@ -2368,14 +2395,14 @@
       }
       // Superadmin admin-management wiring
       if (currentRole === 'superadmin') {
-        populateSuperadminAdmins();
+        populateSuperadminUsers();
         const selRow = document.getElementById('saAdminRow');
         if (selRow) selRow.classList.toggle('hidden', !orgPicker.value);
         const sel = document.getElementById('saAdminSelect');
         if (sel && !sel._wired) {
           sel.addEventListener('change', () => {
             const id = Number(sel.value);
-            const optionData = sel._admins || [];
+            const optionData = sel._users || [];
             const u = optionData.find(x => x.id === id);
             if (!u) return;
             const panel = document.getElementById('saAdminEditPanel');
@@ -2387,6 +2414,18 @@
             document.getElementById('saAdminEditAddress').value = u.address || '';
           });
           sel._wired = true;
+        }
+        const roleFilter = document.getElementById('saUserRole');
+        if (roleFilter && !roleFilter._wired) {
+          roleFilter.addEventListener('change', () => {
+            populateSuperadminUsers();
+            const selRow2 = document.getElementById('saAdminRow');
+            const orgPicker2 = document.getElementById('superadminOrgPicker');
+            const chosenRole3 = roleFilter.value || 'admin';
+            const requireOrg3 = (chosenRole3 === 'admin' || chosenRole3 === 'volunteer');
+            if (selRow2) selRow2.classList.toggle('hidden', requireOrg3 ? !orgPicker2?.value : false);
+          });
+          roleFilter._wired = true;
         }
         // Password helpers
         const pwInput = document.getElementById('saAdminEditPassword');
@@ -2444,12 +2483,31 @@
               // Clear password field after save
               const pw = document.getElementById('saAdminEditPassword');
               if (pw) pw.value = '';
-              await populateSuperadminAdmins();
+              await populateSuperadminUsers();
               const panel = document.getElementById('saAdminEditPanel');
               if (panel) panel.classList.add('hidden');
             } catch { if (err) err.textContent = 'Error saving user'; }
           });
           saveBtn._wired = true;
+        }
+        const delBtn = document.getElementById('saDeleteUserBtn');
+        if (delBtn && !delBtn._wired) {
+          delBtn.addEventListener('click', async () => {
+            const id = Number(document.getElementById('saAdminEditId').value);
+            const err = document.getElementById('saAdminSaveErr');
+            if (!id || !Number.isFinite(id)) return;
+            if (!confirm('Delete this user? This cannot be undone.')) return;
+            if (err) err.textContent = '';
+            try {
+              const res = await authed(`/users/${id}`, { method: 'DELETE' });
+              const data = await res.json().catch(() => ({}));
+              if (!res.ok) { if (err) err.textContent = data.message || 'Failed to delete user'; return; }
+              await populateSuperadminUsers();
+              const panel = document.getElementById('saAdminEditPanel');
+              if (panel) panel.classList.add('hidden');
+            } catch { if (err) err.textContent = 'Error deleting user'; }
+          });
+          delBtn._wired = true;
         }
         const closeBtn = document.getElementById('saCloseAdminEditBtn');
         if (closeBtn && !closeBtn._wired) {
