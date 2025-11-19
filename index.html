@@ -47,6 +47,7 @@
     .typeahead.hidden { display: none !important; }
     .typeahead div { padding: 6px 8px; cursor: pointer; }
     .typeahead div:hover { background: rgba(255,255,255,0.06); }
+    .typeahead-toggle { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: transparent; border: 1px solid var(--accent3); color: var(--accent1); padding: 2px 6px; border-radius: 6px; cursor: pointer; font-size: 12px; }
     /* */
 
     /* Home section tweaks */
@@ -252,6 +253,7 @@
       <label>Organization</label>
       <div id="signupGroupWrap" class="typeahead-wrap">
         <input id="signupGroupInput" type="text" autocomplete="off" spellcheck="false" placeholder="Type to search organizations" />
+        <button id="signupGroupToggle" type="button" class="typeahead-toggle">▼</button>
         <div id="signupGroupSuggestions" class="typeahead hidden"></div>
       </div>
       <label>Phone</label>
@@ -738,6 +740,13 @@
           };
           input.addEventListener('input', render);
           input.addEventListener('focus', render);
+          const toggle = document.getElementById('signupGroupToggle');
+          if (toggle) {
+            toggle.addEventListener('click', (e) => {
+              e.preventDefault();
+              if (sugg.classList.contains('hidden')) render(); else sugg.classList.add('hidden');
+            });
+          }
           document.addEventListener('click', (e) => {
             if (e.target === input || sugg.contains(e.target)) return;
             sugg.classList.add('hidden');
