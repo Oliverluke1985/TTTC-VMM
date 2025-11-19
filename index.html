@@ -706,7 +706,9 @@
     // SIGNUP
     async function fetchPublicGroups() {
       try {
-        const res = await fetch(`${apiUrl}/public/groups`);
+        // Use the same source as Admin Tools when authenticated; otherwise use the public list
+        const url = token ? '/groups' : '/public/groups';
+        const res = await fetch(`${apiUrl}${url}`, token ? { headers: { Authorization: `Bearer ${token}` } } : undefined);
         if (!res.ok) return;
         const groups = await res.json();
         window.signupGroups = groups || [];
