@@ -784,7 +784,10 @@
             const tr = document.createElement('tr');
             tr.innerHTML =
               `<td>${g.id}</td><td>${g.name}</td><td>${g.status ?? g.group_status ?? ''}</td>
-               <td><button onclick="deleteGroup(${g.id})">Delete</button></td>`;
+               <td>
+                 <button onclick="archiveGroup(${g.id})">Archive</button>
+                 <button onclick="deleteGroup(${g.id})" style="margin-left:6px;color:#b00020">Delete</button>
+               </td>`;
             tbody.appendChild(tr);
           });
         }
@@ -896,7 +899,19 @@
 
     async function deleteGroup(id) {
       try {
+        if (!confirm('Delete this organization? This will permanently remove it. You can also Archive instead. Continue?')) return;
         const res = await authed(`/groups/${id}`, { method: 'DELETE' });
+        if (res.ok) fetchGroups();
+      } catch (e) { /* silent */ }
+    }
+    async function archiveGroup(id) {
+      try {
+        if (!confirm('Archive this organization? It will be marked inactive and hidden from selection, but not deleted. Continue?')) return;
+        const res = await authed(`/groups/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'inactive' })
+        });
         if (res.ok) fetchGroups();
       } catch (e) { /* silent */ }
     }
@@ -1902,10 +1917,13 @@
         const infoBody = document.getElementById('superadminOrgInfoBody');
         if (!infoWrap || !infoBody) return;
         if (!selectedId) { infoBody.innerHTML=''; infoWrap.classList.add('hidden'); return; }
-        // Ensure header has Save col
+        // Ensure header has Save/Archive/Delete cols
         const table = infoWrap.querySelector('table thead tr');
-        if (table && table.children.length < 4) {
-          const th = document.createElement('th'); th.textContent = 'Save'; table.appendChild(th);
+        if (table) {
+          const headers = Array.from(table.children).map(th => th.textContent?.toLowerCase?.() || '');
+          if (!headers.includes('save')) { const th = document.createElement('th'); th.textContent = 'Save'; table.appendChild(th); }
+          if (!headers.includes('archive')) { const thA = document.createElement('th'); thA.textContent = 'Archive'; table.appendChild(thA); }
+          if (!headers.includes('delete')) { const thD = document.createElement('th'); thD.textContent = 'Delete'; table.appendChild(thD); }
         }
         // Load groups to get status
         let group = null;
@@ -1928,6 +1946,8 @@
               </select>
             </td>
             <td><button id="saOrgSaveBtn">Save</button></td>
+            <td><button id="saOrgArchiveBtn">Archive</button></td>
+            <td><button id="saOrgDeleteBtn" style="color:#b00020">Delete</button></td>
           </tr>`;
         infoWrap.classList.remove('hidden');
         const errEl = document.getElementById('superadminOrgInfoErr'); if (errEl) errEl.textContent='';
@@ -1948,6 +1968,32 @@
                 if (opt) opt.textContent = nameVal;
               }
             } catch { if (errEl) errEl.textContent = 'Error saving'; }
+          };
+        }
+        const archiveBtn = document.getElementById('saOrgArchiveBtn');
+        if (archiveBtn) {
+          archiveBtn.onclick = async () => {
+            if (!confirm('Archive this organization? It will be marked inactive and hidden from selection. Continue?')) return;
+            try {
+              const res = await authed(`/groups/${selectedId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'inactive' }) });
+              if (!res.ok) { const d = await res.json().catch(()=>({})); if (errEl) errEl.textContent = d.message || 'Failed to archive'; return; }
+              if (errEl) errEl.textContent = '';
+              fetchGroups();
+            } catch { if (errEl) errEl.textContent = 'Error archiving'; }
+          };
+        }
+        const deleteBtn = document.getElementById('saOrgDeleteBtn');
+        if (deleteBtn) {
+          deleteBtn.onclick = async () => {
+            if (!confirm('Delete this organization? This permanently removes it. You can archive instead. Continue to delete?')) return;
+            try {
+              const res = await authed(`/groups/${selectedId}`, { method: 'DELETE' });
+              if (!res.ok) { const d = await res.json().catch(()=>({})); if (errEl) errEl.textContent = d.message || 'Failed to delete'; return; }
+              if (errEl) errEl.textContent = '';
+              // Clear picker after delete
+              const picker = document.getElementById('superadminOrgPicker'); if (picker) picker.value = '';
+              fetchGroups();
+            } catch { if (errEl) errEl.textContent = 'Error deleting'; }
           };
         }
       }
