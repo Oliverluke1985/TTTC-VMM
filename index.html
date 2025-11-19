@@ -38,6 +38,13 @@
     *[popover]{display:none!important;visibility:hidden!important;opacity:0!important;}
     #top-layer{display:none!important}
 
+    /* Predictive org suggestions (no button) */
+    .org-suggest-wrap { position: relative; }
+    .org-suggest { position: absolute; left: 0; right: 0; top: 100%; z-index: 1000; border: 1px solid var(--accent3); background: rgba(0,0,0,0.95); border-radius: 8px; margin-top: 4px; max-height: 220px; overflow-y: auto; }
+    .org-suggest.hidden { display: none !important; }
+    .org-suggest div { padding: 6px 8px; cursor: pointer; }
+    .org-suggest div:hover { background: rgba(255,255,255,0.06); }
+
     /* Toolbar */
     nav#toolbar { display:flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 12px 0 16px; background: rgba(0,0,0,0.6); border: 1px solid var(--accent3); border-radius: 8px; padding: 8px; }
     nav#toolbar button { background: rgba(0,0,0,0.2); }
@@ -245,10 +252,12 @@
       <label>Password</label>
       <input id="signupPassword" type="password" autocomplete="new-password" />
       <label>Organization</label>
-      <div id="signupGroupWrap" class="typeahead-wrap">
-        <input id="signupGroupInput" type="text" list="signupGroupList" autocomplete="off" spellcheck="false" placeholder="Type to search organizations" />
+      <div id="signupGroupWrap" class="org-suggest-wrap">
+        <input id="signupGroupInput" type="text" list="signupGroupList" spellcheck="false" placeholder="Type to search organizations" />
         <datalist id="signupGroupList"></datalist>
+        <div id="signupGroupSuggestions" class="org-suggest hidden"></div>
       </div>
+      <div id="signupOrgError" class="error"></div>
       <label>Phone</label>
       <input id="signupPhone" type="text" autocomplete="tel" />
       <button id="signupBtn">Create Account</button>
@@ -724,6 +733,35 @@
             dataList.appendChild(opt);
           });
         }
+        // Lightweight predictive suggestions (no button) for consistent UX
+        if (input && sugg && !input._wiredPredict) {
+          const render = () => {
+            const q = (input.value || '').trim().toLowerCase();
+            const matches = (window.signupGroups || []).filter(g => !q || String(g.name).toLowerCase().includes(q)).slice(0, 8);
+            sugg.innerHTML = '';
+            if (matches.length === 0) { sugg.classList.add('hidden'); return; }
+            matches.forEach(g => {
+              const div = document.createElement('div');
+              div.textContent = g.name;
+              div.dataset.value = g.name;
+              sugg.appendChild(div);
+            });
+            sugg.classList.remove('hidden');
+          };
+          input.addEventListener('input', render);
+          input.addEventListener('focus', () => {
+            if (!window.signupGroups || window.signupGroups.length === 0) fetchPublicGroups().then(render);
+            else render();
+          });
+          input.addEventListener('blur', () => setTimeout(() => sugg.classList.add('hidden'), 120));
+          sugg.addEventListener('mousedown', (e) => {
+            const v = e.target && e.target.dataset && e.target.dataset.value;
+            if (!v) return;
+            input.value = v;
+            sugg.classList.add('hidden');
+          });
+          input._wiredPredict = true;
+        }
         // No custom dropdown; rely on native datalist with DB entries
       } catch {}
     }
@@ -749,6 +787,10 @@
         const nameToId = window.signupGroupMap || {};
         const typed = (orgInput?.value || '').trim().toLowerCase();
         const group_id = nameToId[typed] != null ? Number(nameToId[typed]) : null;
+        if (!group_id) {
+          document.getElementById('signupError').textContent = 'Please choose an existing organization from the list.';
+          return;
+        }
         const response = await fetch(`${apiUrl}/signup`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
