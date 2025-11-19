@@ -244,7 +244,8 @@
       <label>Password</label>
       <input id="signupPassword" type="password" autocomplete="new-password" />
       <label>Organization</label>
-      <select id="signupGroup"><option value="">— Select (optional) —</option></select>
+      <input id="signupGroupInput" type="text" list="signupGroupList" placeholder="Type to search organizations" />
+      <datalist id="signupGroupList"></datalist>
       <label>Phone</label>
       <input id="signupPhone" type="text" autocomplete="tel" />
       <button id="signupBtn">Create Account</button>
@@ -726,8 +727,10 @@
         const email = document.getElementById('signupEmail').value.trim();
         const password = document.getElementById('signupPassword').value;
         const phone = document.getElementById('signupPhone').value.trim();
-        const groupSel = document.getElementById('signupGroup');
-        const group_id = groupSel && groupSel.value ? Number(groupSel.value) : null;
+        const orgInput = document.getElementById('signupGroupInput');
+        const nameToId = window.signupGroupMap || {};
+        const typed = (orgInput?.value || '').trim().toLowerCase();
+        const group_id = nameToId[typed] != null ? Number(nameToId[typed]) : null;
         const response = await fetch(`${apiUrl}/signup`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -784,6 +787,23 @@
             tbody.appendChild(tr);
           });
         }
+
+        // Populate signup organization datalist (typeahead)
+        try {
+          const list = document.getElementById('signupGroupList');
+          if (list) {
+            list.innerHTML = '';
+            window.signupGroupMap = {};
+            groups
+              .sort((a,b) => String(a.name).localeCompare(String(b.name)))
+              .forEach(g => {
+                const opt = document.createElement('option');
+                opt.value = g.name;
+                list.appendChild(opt);
+                window.signupGroupMap[String(g.name).toLowerCase()] = g.id;
+              });
+          }
+        } catch { /* silent */ }
 
         // Populate superadmin org picker
         const orgPicker = document.getElementById('superadminOrgPicker');
