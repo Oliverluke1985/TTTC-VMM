@@ -246,21 +246,21 @@
     <div id="signupWrap" class="hidden">
       <h2 style="margin-top:16px">Sign Up</h2>
       <label>Name</label>
-      <input id="signupName" type="text" autocomplete="name" />
+      <input id="signupName" type="text" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" />
       <label>Email</label>
-      <input id="signupEmail" type="email" autocomplete="email" />
+      <input id="signupEmail" type="email" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" />
       <label>Password</label>
       <input id="signupPassword" type="password" autocomplete="new-password" />
       <label>Organization</label>
       <div id="signupGroupWrap" class="org-suggest-wrap">
-        <input id="signupGroupInput" type="text" list="signupGroupList" spellcheck="false" placeholder="Type to search organizations" />
+        <input id="signupGroupInput" type="text" list="signupGroupList" autocomplete="off" spellcheck="false" placeholder="Type to search organizations" />
         <datalist id="signupGroupList"></datalist>
         <div id="signupGroupSuggestions" class="org-suggest hidden"></div>
       </div>
       <div id="signupOrgError" class="error"></div>
       <label>Phone</label>
-      <input id="signupPhone" type="text" autocomplete="tel" />
-      <button id="signupBtn">Create Account</button>
+      <input id="signupPhone" type="text" autocomplete="off" inputmode="tel" />
+      <button id="signupBtn" type="button">Create Account</button>
       <div id="signupError" class="error"></div>
     </div>
   </section>
