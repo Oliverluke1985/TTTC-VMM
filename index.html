@@ -701,17 +701,18 @@
         const res = await fetch(`${apiUrl}/public/groups`);
         if (!res.ok) return;
         const groups = await res.json();
-        const sel = document.getElementById('signupGroup');
-        if (!sel) return;
-        const current = sel.value;
-        sel.innerHTML = '<option value="">— Select (optional) —</option>';
-        groups.forEach(g => {
-          const opt = document.createElement('option');
-          opt.value = g.id;
-          opt.textContent = `${g.name}`;
-          sel.appendChild(opt);
-        });
-        if (current) sel.value = current;
+        const list = document.getElementById('signupGroupList');
+        if (!list) return;
+        list.innerHTML = '';
+        window.signupGroupMap = {};
+        groups
+          .sort((a,b) => String(a.name).localeCompare(String(b.name)))
+          .forEach(g => {
+            const opt = document.createElement('option');
+            opt.value = g.name;
+            list.appendChild(opt);
+            window.signupGroupMap[String(g.name).toLowerCase()] = g.id;
+          });
       } catch {}
     }
     fetchPublicGroups();
