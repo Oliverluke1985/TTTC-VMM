@@ -15,7 +15,7 @@ app.use(express.json());
 app.enable('trust proxy');
 
 // Enforce canonical host and HTTPS with HSTS
-const CANONICAL_HOST = (process.env.CANONICAL_HOST || 'tttcvolunteermanagementapp.com').toLowerCase();
+const CANONICAL_HOST = String(process.env.CANONICAL_HOST || '').trim().toLowerCase();
 app.use((req, res, next) => {
   const rawHost = req.headers.host || '';
   const host = rawHost.split(':')[0].toLowerCase();
@@ -24,11 +24,11 @@ app.use((req, res, next) => {
 
   // 1) Force HTTPS on same host to avoid loops
   if (!isHttps) {
-    return res.redirect(301, `https://${host || CANONICAL_HOST}${req.originalUrl}`);
+    return res.redirect(301, `https://${host || CANONICAL_HOST || 'localhost'}${req.originalUrl}`);
   }
 
   // 2) Normalize host to canonical once on HTTPS
-  if (host && host !== CANONICAL_HOST) {
+  if (CANONICAL_HOST && host && host !== CANONICAL_HOST) {
     return res.redirect(301, `https://${CANONICAL_HOST}${req.originalUrl}`);
   }
 
@@ -1163,6 +1163,13 @@ app.get('/health', (req, res) => res.json({ ok: true }));
 
 // --- Serve frontend
 const path = require('path');
+// Serve index with no-store to avoid stale cached toolbar order
+app.get(['/', '/index.html'], (req, res) => {
+  try {
+    res.set('Cache-Control', 'no-store, max-age=0');
+  } catch (_) {}
+  return res.sendFile(path.join(__dirname, 'index.html'));
+});
 app.use(express.static(path.join(__dirname, '/')));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
