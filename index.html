@@ -42,7 +42,8 @@
     nav#toolbar { display:flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 12px 0 16px; background: rgba(0,0,0,0.6); border: 1px solid var(--accent3); border-radius: 8px; padding: 8px; }
     nav#toolbar button { background: rgba(0,0,0,0.2); }
     /* Lightweight suggestions list for typeahead fields */
-    .typeahead { border: 1px solid var(--accent3); background: rgba(0,0,0,0.85); border-radius: 8px; margin-top: 4px; max-height: 180px; overflow-y: auto; }
+    .typeahead-wrap { position: relative; }
+    .typeahead { position: absolute; left: 0; right: 0; top: 100%; z-index: 1000; border: 1px solid var(--accent3); background: rgba(0,0,0,0.95); border-radius: 8px; margin-top: 4px; max-height: 200px; overflow-y: auto; }
     .typeahead.hidden { display: none !important; }
     .typeahead div { padding: 6px 8px; cursor: pointer; }
     .typeahead div:hover { background: rgba(255,255,255,0.06); }
@@ -249,8 +250,10 @@
       <label>Password</label>
       <input id="signupPassword" type="password" autocomplete="new-password" />
       <label>Organization</label>
-      <input id="signupGroupInput" type="text" autocomplete="off" spellcheck="false" placeholder="Type to search organizations" />
-      <div id="signupGroupSuggestions" class="typeahead hidden"></div>
+      <div id="signupGroupWrap" class="typeahead-wrap">
+        <input id="signupGroupInput" type="text" autocomplete="off" spellcheck="false" placeholder="Type to search organizations" />
+        <div id="signupGroupSuggestions" class="typeahead hidden"></div>
+      </div>
       <label>Phone</label>
       <input id="signupPhone" type="text" autocomplete="tel" />
       <button id="signupBtn">Create Account</button>
