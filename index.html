@@ -249,8 +249,7 @@
       <label>Password</label>
       <input id="signupPassword" type="password" autocomplete="new-password" />
       <label>Organization</label>
-      <input id="signupGroupInput" type="text" list="signupGroupList" placeholder="Type to search organizations" />
-      <datalist id="signupGroupList"></datalist>
+      <input id="signupGroupInput" type="text" autocomplete="off" spellcheck="false" placeholder="Type to search organizations" />
       <div id="signupGroupSuggestions" class="typeahead hidden"></div>
       <label>Phone</label>
       <input id="signupPhone" type="text" autocomplete="tel" />
@@ -708,16 +707,10 @@
         if (!res.ok) return;
         const groups = await res.json();
         window.signupGroups = groups || [];
-        const list = document.getElementById('signupGroupList');
-        if (!list) return;
-        list.innerHTML = '';
         window.signupGroupMap = {};
         groups
           .sort((a,b) => String(a.name).localeCompare(String(b.name)))
           .forEach(g => {
-            const opt = document.createElement('option');
-            opt.value = g.name;
-            list.appendChild(opt);
             window.signupGroupMap[String(g.name).toLowerCase()] = g.id;
           });
         // Wire simple suggestions dropdown as a fallback for browsers with limited datalist UX
