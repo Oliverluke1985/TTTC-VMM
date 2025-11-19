@@ -167,15 +167,57 @@ app.post('/register', authRequired, adminOnly, async (req, res) => {
 app.post('/signup', async (req, res) => {
   try {
     const { name, email, password, phone, address, group_id } = req.body || {};
-    if (!name || !email || !password) return res.status(400).json({ message: 'Missing required fields' });
+    if (!email || !password) return res.status(400).json({ message: 'Email and password are required' });
     const exists = await pool.query('SELECT 1 FROM users WHERE email=$1', [email]);
     if (exists.rowCount > 0) return res.status(400).json({ message: 'Email already registered' });
     const hash = await bcrypt.hash(password, 10);
-    const result = await pool.query(
-      'INSERT INTO users (name,email,phone,address,password,role,group_id) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, role, group_id',
-      [name, email, phone || null, address || null, hash, 'volunteer', group_id ?? null]
-    );
-    const user = { id: result.rows[0].id, role: 'volunteer', group_id: result.rows[0].group_id };
+
+    // Detect available columns on the current users table
+    const colsRes = await pool.query("SELECT column_name FROM information_schema.columns WHERE table_name='users'");
+    const has = new Set(colsRes.rows.map(r => r.column_name));
+
+    const fields = [];
+    const params = [];
+    const values = [];
+    let idx = 1;
+
+    // Optional columns, only if present in schema
+    if (has.has('name') && name !== undefined) { fields.push('name'); params.push(`$${idx++}`); values.push(name); }
+    if (has.has('phone') && phone !== undefined) { fields.push('phone'); params.push(`$${idx++}`); values.push(phone); }
+    if (has.has('address') && address !== undefined) { fields.push('address'); params.push(`$${idx++}`); values.push(address); }
+
+    // Required columns
+    fields.push('email'); params.push(`$${idx++}`); values.push(email);
+    fields.push('password'); params.push(`$${idx++}`); values.push(hash);
+    fields.push('role'); params.push(`$${idx++}`); values.push('volunteer');
+
+    // Group if supported
+    if (has.has('group_id')) { fields.push('group_id'); params.push(`$${idx++}`); values.push(group_id ?? null); }
+
+    const insertSql = `INSERT INTO users (${fields.join(',')}) VALUES (${params.join(',')}) RETURNING id, role${has.has('group_id') ? ', group_id' : ''}`;
+    const result = await pool.query(insertSql, values);
+    const newUserId = result.rows[0].id;
+
+    // Persist missing profile fields into user_profile table when users table lacks them
+    const profile = {
+      name: (!has.has('name') && name !== undefined) ? name : undefined,
+      phone: (!has.has('phone') && phone !== undefined) ? phone : undefined,
+      address: (!has.has('address') && address !== undefined) ? address : undefined,
+    };
+    if (profile.name !== undefined || profile.phone !== undefined || profile.address !== undefined) {
+      await pool.query(
+        `INSERT INTO user_profile (user_id,name,phone,address,updated_at)
+         VALUES ($1,$2,$3,$4,NOW())
+         ON CONFLICT (user_id) DO UPDATE SET
+           name=COALESCE(EXCLUDED.name,user_profile.name),
+           phone=COALESCE(EXCLUDED.phone,user_profile.phone),
+           address=COALESCE(EXCLUDED.address,user_profile.address),
+           updated_at=NOW()`,
+        [newUserId, profile.name ?? null, profile.phone ?? null, profile.address ?? null]
+      );
+    }
+
+    const user = { id: newUserId, role: 'volunteer', group_id: (has.has('group_id') ? result.rows[0].group_id : null) };
     const token = jwt.sign(user, JWT_SECRET, { expiresIn: '1h' });
     res.json({ token, ...user });
   } catch (err) {

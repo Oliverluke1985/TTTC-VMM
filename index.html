@@ -247,8 +247,6 @@
       <select id="signupGroup"><option value="">— Select (optional) —</option></select>
       <label>Phone</label>
       <input id="signupPhone" type="text" autocomplete="tel" />
-      <label>Address</label>
-      <input id="signupAddress" type="text" autocomplete="street-address" />
       <button id="signupBtn">Create Account</button>
       <div id="signupError" class="error"></div>
     </div>
@@ -728,13 +726,12 @@
         const email = document.getElementById('signupEmail').value.trim();
         const password = document.getElementById('signupPassword').value;
         const phone = document.getElementById('signupPhone').value.trim();
-        const address = document.getElementById('signupAddress').value.trim();
         const groupSel = document.getElementById('signupGroup');
         const group_id = groupSel && groupSel.value ? Number(groupSel.value) : null;
         const response = await fetch(`${apiUrl}/signup`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, email, password, phone, address, group_id })
+          body: JSON.stringify({ name, email, password, phone, group_id })
         });
         const data = await response.json();
         if (!response.ok) {
