@@ -41,13 +41,7 @@
     /* Toolbar */
     nav#toolbar { display:flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 12px 0 16px; background: rgba(0,0,0,0.6); border: 1px solid var(--accent3); border-radius: 8px; padding: 8px; }
     nav#toolbar button { background: rgba(0,0,0,0.2); }
-    /* Lightweight suggestions list for typeahead fields */
-    .typeahead-wrap { position: relative; }
-    .typeahead { position: absolute; left: 0; right: 0; top: 100%; z-index: 1000; border: 1px solid var(--accent3); background: rgba(0,0,0,0.95); border-radius: 8px; margin-top: 4px; max-height: 200px; overflow-y: auto; }
-    .typeahead.hidden { display: none !important; }
-    .typeahead div { padding: 6px 8px; cursor: pointer; }
-    .typeahead div:hover { background: rgba(255,255,255,0.06); }
-    .typeahead-toggle { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: transparent; border: 1px solid var(--accent3); color: var(--accent1); padding: 2px 6px; border-radius: 6px; cursor: pointer; font-size: 12px; }
+    /* */
     /* */
 
     /* Home section tweaks */
@@ -254,8 +248,6 @@
       <div id="signupGroupWrap" class="typeahead-wrap">
         <input id="signupGroupInput" type="text" list="signupGroupList" autocomplete="off" spellcheck="false" placeholder="Type to search organizations" />
         <datalist id="signupGroupList"></datalist>
-        <button id="signupGroupToggle" type="button" class="typeahead-toggle">▼</button>
-        <div id="signupGroupSuggestions" class="typeahead hidden"></div>
       </div>
       <label>Phone</label>
       <input id="signupPhone" type="text" autocomplete="tel" />
@@ -732,44 +724,7 @@
             dataList.appendChild(opt);
           });
         }
-        if (input && sugg && !input._wiredTypeahead) {
-          const render = () => {
-            if (!window.signupGroups || window.signupGroups.length === 0) { fetchPublicGroups().then(() => render()); return; }
-            const q = (input.value || '').trim().toLowerCase();
-            const matches = (window.signupGroups || []).filter(g => !q || String(g.name).toLowerCase().includes(q)).slice(0, 8);
-            sugg.innerHTML = '';
-            if (matches.length === 0) { sugg.classList.add('hidden'); return; }
-            matches.forEach(g => {
-              const row = document.createElement('div');
-              row.textContent = g.name;
-              row.dataset.value = g.name;
-              sugg.appendChild(row);
-            });
-            sugg.classList.remove('hidden');
-          };
-          input.addEventListener('input', render);
-          input.addEventListener('focus', render);
-          const toggle = document.getElementById('signupGroupToggle');
-          if (toggle) {
-            toggle.addEventListener('click', (e) => {
-              e.preventDefault();
-              if (sugg.classList.contains('hidden')) render(); else sugg.classList.add('hidden');
-            });
-          }
-          document.addEventListener('click', (e) => {
-            if (e.target === input || sugg.contains(e.target)) return;
-            sugg.classList.add('hidden');
-          });
-          sugg.addEventListener('click', (e) => {
-            const v = e.target && e.target.dataset && e.target.dataset.value;
-            if (!v) return;
-            input.value = v;
-            sugg.classList.add('hidden');
-          });
-          input._wiredTypeahead = true;
-          // Initial render in case user already typed
-          render();
-        }
+        // No custom dropdown; rely on native datalist with DB entries
       } catch {}
     }
     fetchPublicGroups();
