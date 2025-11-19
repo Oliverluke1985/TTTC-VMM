@@ -728,6 +728,10 @@
       } catch {}
     }
     fetchPublicGroups();
+    // Also refresh list on focus so the browser's native datalist shows DB-backed options
+    document.getElementById('signupGroupInput')?.addEventListener('focus', () => {
+      if (!window.signupGroups || window.signupGroups.length === 0) fetchPublicGroups();
+    });
     document.getElementById('showSignupBtn').addEventListener('click', () => {
       const wrap = document.getElementById('signupWrap');
       wrap.classList.toggle('hidden');
