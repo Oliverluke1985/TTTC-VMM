@@ -718,6 +718,7 @@
         const sugg = document.getElementById('signupGroupSuggestions');
         if (input && sugg && !input._wiredTypeahead) {
           const render = () => {
+            if (!window.signupGroups || window.signupGroups.length === 0) { fetchPublicGroups().then(() => render()); return; }
             const q = (input.value || '').trim().toLowerCase();
             const matches = (window.signupGroups || []).filter(g => !q || String(g.name).toLowerCase().includes(q)).slice(0, 8);
             sugg.innerHTML = '';
@@ -743,6 +744,8 @@
             sugg.classList.add('hidden');
           });
           input._wiredTypeahead = true;
+          // Initial render in case user already typed
+          render();
         }
       } catch {}
     }
@@ -750,6 +753,7 @@
     document.getElementById('showSignupBtn').addEventListener('click', () => {
       const wrap = document.getElementById('signupWrap');
       wrap.classList.toggle('hidden');
+      if (!window.signupGroups || window.signupGroups.length === 0) fetchPublicGroups();
     });
 
     document.getElementById('signupBtn').addEventListener('click', async () => {
