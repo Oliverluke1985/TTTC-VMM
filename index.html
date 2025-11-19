@@ -709,9 +709,8 @@
     // SIGNUP
     async function fetchPublicGroups() {
       try {
-        // Use the same source as Admin Tools when authenticated; otherwise use the public list
-        const url = token ? '/groups' : '/public/groups';
-        const res = await fetch(`${apiUrl}${url}`, token ? { headers: { Authorization: `Bearer ${token}` } } : undefined);
+        // Front-page signup should always use the public list so volunteers can choose before login
+        const res = await fetch(`${apiUrl}/public/groups`);
         if (!res.ok) return;
         const groups = await res.json();
         window.signupGroups = groups || [];
