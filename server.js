@@ -166,11 +166,26 @@ app.post('/register', authRequired, adminOnly, async (req, res) => {
 // Public signup: create a volunteer under a selected group (or none)
 app.post('/signup', async (req, res) => {
   try {
-    const { name, email, password, phone, address, group_id } = req.body || {};
+    let { name, email, password, phone, address, group_id, group_name } = req.body || {};
     if (!email || !password) return res.status(400).json({ message: 'Email and password are required' });
     const exists = await pool.query('SELECT 1 FROM users WHERE email=$1', [email]);
     if (exists.rowCount > 0) return res.status(400).json({ message: 'Email already registered' });
     const hash = await bcrypt.hash(password, 10);
+
+    // If no group_id provided, try to resolve from group_name (case-insensitive) against DB
+    if ((group_id == null || Number.isNaN(Number(group_id))) && typeof group_name === 'string' && group_name.trim()) {
+      try {
+        const gn = group_name.trim();
+        let found = await pool.query('SELECT id FROM groups WHERE LOWER(name) = LOWER($1) LIMIT 1', [gn]);
+        if (found.rowCount === 0) {
+          // Fallback: try a LIKE match
+          found = await pool.query('SELECT id FROM groups WHERE LOWER(name) LIKE LOWER($1) ORDER BY id LIMIT 1', [gn]);
+        }
+        if (found.rowCount > 0) {
+          group_id = found.rows[0].id;
+        }
+      } catch (_) { /* ignore and continue with null */ }
+    }
 
     // Detect available columns on the current users table
     const colsRes = await pool.query("SELECT column_name FROM information_schema.columns WHERE table_name='users'");

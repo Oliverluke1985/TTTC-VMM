@@ -785,31 +785,16 @@
         const phone = document.getElementById('signupPhone').value.trim();
         const orgInput = document.getElementById('signupGroupInput');
         let nameToId = window.signupGroupMap || {};
-        const typed = (orgInput?.value || '').trim().toLowerCase();
-        let group_id = nameToId[typed] != null ? Number(nameToId[typed]) : null;
-        // Fallback: try to resolve from loaded groups, then force-refresh public list once
-        if (!group_id && Array.isArray(window.signupGroups)) {
-          const exact = window.signupGroups.find(g => String(g.name).toLowerCase() === typed);
-          if (exact) group_id = Number(exact.id);
-        }
-        if (!group_id) {
-          await fetchPublicGroups();
-          nameToId = window.signupGroupMap || {};
-          if (nameToId[typed] != null) {
-            group_id = Number(nameToId[typed]);
-          } else if (Array.isArray(window.signupGroups)) {
-            const exact2 = window.signupGroups.find(g => String(g.name).toLowerCase() === typed);
-            if (exact2) group_id = Number(exact2.id);
-          }
-        }
-        if (!group_id) {
-          document.getElementById('signupError').textContent = 'Please choose an existing organization from the list.';
-          return;
+        const typed = (orgInput?.value || '').trim();
+        let group_id = null;
+        if (typed) {
+          const key = typed.toLowerCase();
+          if (nameToId && nameToId[key] != null) group_id = Number(nameToId[key]);
         }
         const response = await fetch(`${apiUrl}/signup`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, email, password, phone, group_id })
+          body: JSON.stringify({ name, email, password, phone, group_id, group_name: typed })
         });
         const data = await response.json();
         if (!response.ok) {
