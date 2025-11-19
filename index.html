@@ -252,7 +252,8 @@
       <input id="signupPassword" type="password" autocomplete="new-password" />
       <label>Organization</label>
       <div id="signupGroupWrap" class="typeahead-wrap">
-        <input id="signupGroupInput" type="text" autocomplete="off" spellcheck="false" placeholder="Type to search organizations" />
+        <input id="signupGroupInput" type="text" list="signupGroupList" autocomplete="off" spellcheck="false" placeholder="Type to search organizations" />
+        <datalist id="signupGroupList"></datalist>
         <button id="signupGroupToggle" type="button" class="typeahead-toggle">▼</button>
         <div id="signupGroupSuggestions" class="typeahead hidden"></div>
       </div>
@@ -723,6 +724,15 @@
         // Wire simple suggestions dropdown as a fallback for browsers with limited datalist UX
         const input = document.getElementById('signupGroupInput');
         const sugg = document.getElementById('signupGroupSuggestions');
+        const dataList = document.getElementById('signupGroupList');
+        if (dataList) {
+          dataList.innerHTML = '';
+          (window.signupGroups || []).forEach(g => {
+            const opt = document.createElement('option');
+            opt.value = g.name;
+            dataList.appendChild(opt);
+          });
+        }
         if (input && sugg && !input._wiredTypeahead) {
           const render = () => {
             if (!window.signupGroups || window.signupGroups.length === 0) { fetchPublicGroups().then(() => render()); return; }
