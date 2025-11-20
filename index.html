@@ -96,6 +96,16 @@
   <!-- VOLUNTEER: TIME CLOCK PAGE -->
   <section id="clockSection" class="col hidden">
     <h2>Time Clock</h2>
+    <div id="clockSuperFilter" class="row hidden">
+      <div class="col">
+        <label>Organization</label>
+        <select id="clockOrgFilter"><option value="">— Select organization —</option></select>
+        <label style="margin-left:10px">Event</label>
+        <select id="clockEventFilter" disabled><option value="">— Select event —</option></select>
+        <label style="margin-left:10px">Duty</label>
+        <select id="clockDutyFilter" disabled><option value="">— Select duty —</option></select>
+      </div>
+    </div>
     <div id="clockSuperNote" class="hint"></div>
     <h3>My Duties</h3>
     <table>
@@ -1155,6 +1165,63 @@
       } catch { /* silent */ }
     }
 
+    // Populate Clock events by organization (superadmin filter)
+    async function populateClockEventsForGroup(gid) {
+      try {
+        const sel = document.getElementById('clockEventFilter');
+        if (!sel) return;
+        const current = sel.value;
+        sel.innerHTML = '<option value="">— Select event —</option>';
+        sel.disabled = !gid;
+        if (!gid) return;
+        const res = await authed(`/events?group_id=${encodeURIComponent(gid)}`);
+        if (!res.ok) return;
+        const events = await res.json();
+        events.forEach(e => {
+          const opt = document.createElement('option');
+          opt.value = e.id;
+          const d = e.start_date ? (e.end_date ? `${e.start_date} – ${e.end_date}` : `${e.start_date}`) : (e.event_date || '');
+          opt.textContent = `${e.title}${d ? ' — ' + d : ''}`;
+          sel.appendChild(opt);
+        });
+        if (current) sel.value = current;
+      } catch { /* silent */ }
+    }
+
+    // Populate Clock duties by organization and optional event (superadmin filter)
+    async function populateClockDutiesByOrgAndEvent(gid, eventId) {
+      try {
+        const sel = document.getElementById('clockDutyFilter');
+        if (!sel) return;
+        const current = sel.value;
+        sel.innerHTML = '<option value="">— Select duty —</option>';
+        sel.disabled = !gid ? true : false;
+        if (!gid) return;
+        let duties = [];
+        try {
+          const res = await authed(`/duties?group_id=${encodeURIComponent(gid)}`);
+          if (res.ok) duties = await res.json();
+        } catch { /* ignore */ }
+        if (!duties || duties.length === 0) {
+          try {
+            const resAll = await authed('/duties');
+            if (resAll.ok) duties = await resAll.json();
+          } catch { /* silent */ }
+        }
+        const hasEventId = duties.some(d => Object.prototype.hasOwnProperty.call(d, 'event_id'));
+        if (eventId && hasEventId) duties = duties.filter(d => (d.event_id == null) || (Number(d.event_id) === Number(eventId)));
+        const hasGroupId = duties.some(d => Object.prototype.hasOwnProperty.call(d, 'group_id'));
+        if (hasGroupId) duties = duties.filter(d => (d.group_id == null) || (String(d.group_id) === String(gid)));
+        duties.forEach(d => {
+          const opt = document.createElement('option');
+          opt.value = d.id;
+          opt.textContent = `${d.id} — ${d.title}`;
+          sel.appendChild(opt);
+        });
+        sel.disabled = false;
+        if (current) sel.value = current;
+      } catch { /* silent */ }
+    }
     // Populate VM Event select strictly by organization
     async function populateVmEventsByOrg(gid) {
       try {
@@ -1279,6 +1346,11 @@
         }
         const res = await authed(path); // backend should return duties user can see
         const duties = await res.json();
+        // Build a duty map for later event-based filtering in time-tracking
+        try {
+          window.dutyById = {};
+          (duties || []).forEach(d => { if (d && d.id != null) window.dutyById[d.id] = d; });
+        } catch { /* ignore */ }
         const tbody = document.getElementById('dutyList');
         if (role === 'superadmin') {
           const filterSel = document.getElementById('superDutyGroupFilter');
@@ -1491,23 +1563,41 @@
       try {
         const tbody = document.getElementById('timeList');
         if (!tbody) return;
-        const params = new URLSearchParams();
-        // Scope for admin and superadmin
+        let rows = [];
+        // Scope for admin and superadmin and enforce superadmin gating by org->event->duty
         if (role === 'superadmin') {
-          const gid = document.getElementById('superadminOrgPicker')?.value || '';
           const note = document.getElementById('clockSuperNote');
+          const gid = document.getElementById('clockOrgFilter')?.value || '';
+          const eid = document.getElementById('clockEventFilter')?.value || '';
+          const did = document.getElementById('clockDutyFilter')?.value || '';
           if (!gid) {
-            if (note) note.textContent = 'Select an organization in Superadmin Tools to view times.';
+            if (note) note.textContent = 'Select an organization to view times.';
+            tbody.innerHTML = '';
+            return;
+          }
+          if (!eid) {
+            if (note) note.textContent = 'Select an event to view times.';
+            tbody.innerHTML = '';
+            return;
+          }
+          if (!did) {
+            if (note) note.textContent = 'Select a duty to view times.';
             tbody.innerHTML = '';
             return;
           }
           if (note) note.textContent = '';
-          params.set('group_id', gid);
-        } else if (role === 'admin') {
-          if (groupId != null) params.set('group_id', String(groupId));
+          const res = await authed(`/time-tracking?group_id=${encodeURIComponent(gid)}`);
+          if (!res.ok) { tbody.innerHTML=''; return; }
+          rows = await res.json();
+          // Client-side filter by selected duty; if rows lack duty_id, nothing will show
+          rows = (rows || []).filter(r => String(r.duty_id || '') === String(did));
+        } else {
+          const params = new URLSearchParams();
+          if (role === 'admin' && groupId != null) params.set('group_id', String(groupId));
+          const res = await authed(`/time-tracking${params.toString() ? `?${params.toString()}` : ''}`);
+          if (!res.ok) { tbody.innerHTML=''; return; }
+          rows = await res.json();
         }
-        const res = await authed(`/time-tracking${params.toString() ? `?${params.toString()}` : ''}`);
-        const rows = await res.json();
         tbody.innerHTML = '';
         rows.forEach(r => {
           const tr = document.createElement('tr');
@@ -2317,11 +2407,51 @@
         resetGlobalFilters();
         resetVolunteerMgmtUI();
         navigateTo('clockSection');
-        // Show a hint for superadmin until an organization is chosen
-        const note = document.getElementById('clockSuperNote');
-        if (note) {
-          const gid = document.getElementById('superadminOrgPicker')?.value || '';
-          note.textContent = (currentRole === 'superadmin' && !gid) ? 'Select an organization in Superadmin Tools to view times.' : '';
+        // Superadmin: show filters to require org -> event -> duty chain
+        const filterRow = document.getElementById('clockSuperFilter');
+        if (filterRow) filterRow.classList.toggle('hidden', currentRole !== 'superadmin');
+        if (currentRole === 'superadmin') {
+          // Populate organizations
+          const orgSel = document.getElementById('clockOrgFilter');
+          const evtSel = document.getElementById('clockEventFilter');
+          const dutySel = document.getElementById('clockDutyFilter');
+          try {
+            const res = await authed('/groups');
+            if (res.ok && orgSel) {
+              const groups = await res.json();
+              const current = orgSel.value;
+              orgSel.innerHTML = '<option value=\"\">— Select organization —</option>';
+              groups.forEach(g => {
+                const opt = document.createElement('option');
+                opt.value = g.id;
+                opt.textContent = g.name;
+                orgSel.appendChild(opt);
+              });
+              if (current) orgSel.value = current;
+            }
+          } catch { /* silent */ }
+          if (evtSel) { evtSel.disabled = !orgSel?.value; evtSel.innerHTML = '<option value=\"\">— Select event —</option>'; }
+          if (dutySel) { dutySel.disabled = true; dutySel.innerHTML = '<option value=\"\">— Select duty —</option>'; }
+          if (orgSel && !orgSel._wired) {
+            orgSel.addEventListener('change', async () => {
+              await populateClockEventsForGroup(orgSel.value);
+              const dutySel2 = document.getElementById('clockDutyFilter');
+              if (dutySel2) { dutySel2.disabled = true; dutySel2.innerHTML = '<option value=\"\">— Select duty —</option>'; }
+              fetchTimeTracking();
+            });
+            orgSel._wired = true;
+          }
+          if (evtSel && !evtSel._wired) {
+            evtSel.addEventListener('change', async () => {
+              await populateClockDutiesByOrgAndEvent(document.getElementById('clockOrgFilter')?.value || '', evtSel.value || '');
+              fetchTimeTracking();
+            });
+            evtSel._wired = true;
+          }
+          if (dutySel && !dutySel._wired) {
+            dutySel.addEventListener('change', () => { fetchTimeTracking(); });
+            dutySel._wired = true;
+          }
         }
         await fetchDuties();
         await fetchTimeTracking();
