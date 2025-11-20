@@ -2091,6 +2091,7 @@
       }
       document.getElementById('navAdminBtn').classList.toggle('hidden', !isAdminish);
       document.getElementById('navVolunteerMgmtBtn').classList.toggle('hidden', !isAdminish);
+      document.getElementById('navCreateDutyBtn').classList.toggle('hidden', !isAdminish);
       document.getElementById('navClockBtn').classList.toggle('hidden', !isVolunteer);
       document.getElementById('navPhotosBtn').classList.toggle('hidden', !isVolunteer);
       document.getElementById('navHomeBtn').onclick = () => { resetGlobalFilters(); navigateTo('homeSection'); };
@@ -2231,9 +2232,11 @@
         vmDutySel._wired = true;
       }
       document.getElementById('navCreateDutyBtn').onclick = () => {
+        if (!isAdminish) { return; }
         navigateTo('createDutySection');
         document.getElementById('createDutyAdmin').classList.toggle('hidden', !isAdminish);
-        document.getElementById('createDutyVol').classList.toggle('hidden', isAdminish);
+        const volRow = document.getElementById('createDutyVol');
+        if (volRow) volRow.classList.add('hidden');
         document.getElementById('dutyEditSelectorWrap').classList.toggle('hidden', !isAdminish);
         // Keep Edit Duty hidden until a duty is selected to edit
         const dutyEdit = document.getElementById('dutyEditWrap');
