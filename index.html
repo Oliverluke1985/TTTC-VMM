@@ -269,8 +269,8 @@
       <input id="signupPassword" type="password" autocomplete="new-password" />
       <label>Organization</label>
       <div id="signupGroupWrap" class="org-suggest-wrap">
-        <input id="signupGroupInput" type="text" list="signupGroupList" autocomplete="on" spellcheck="false" placeholder="Type to search organizations" />
-        <datalist id="signupGroupList"></datalist>
+        <input id="signupGroupInput" type="text" autocomplete="off" spellcheck="false" placeholder="Type to search organizations" />
+        <!-- Removed native datalist to avoid grey browser dropdown -->
         <div id="signupGroupSuggestions" class="org-suggest hidden"></div>
       </div>
       <div id="signupOrgError" class="error"></div>
@@ -753,14 +753,13 @@
           .forEach(g => {
             window.signupGroupMap[String(g.name).toLowerCase()] = g.id;
           });
-        // Wire native datalist suggestions (remove custom grey overlay)
+        // Wire simple suggestions dropdown as a fallback for browsers with limited datalist UX
         const input = document.getElementById('signupGroupInput');
         const sugg = document.getElementById('signupGroupSuggestions');
-        if (sugg) sugg.classList.add('hidden'); // keep overlay hidden
         const dataList = document.getElementById('signupGroupList');
         if (dataList) { dataList.innerHTML = ''; } // keep empty until user types
-        // Predictive suggestions using the native datalist only
-        if (input && !input._wiredPredict) {
+        // Lightweight predictive suggestions (no button) for consistent UX
+        if (input && sugg && !input._wiredPredict) {
           const render = () => {
             const q = (input.value || '').trim().toLowerCase();
             const all = window.signupGroups || [];
@@ -773,6 +772,8 @@
               });
               matches = [...starts, ...contains].slice(0, 10);
             }
+            sugg.innerHTML = '';
+            if (matches.length === 0) { sugg.classList.add('hidden'); return; }
             // update native datalist with only matched options (prevents full list on focus)
             const dl = document.getElementById('signupGroupList');
             if (dl) {
@@ -783,6 +784,13 @@
                 dl.appendChild(opt);
               });
             }
+            matches.forEach(g => {
+              const div = document.createElement('div');
+              div.textContent = g.name;
+              div.dataset.value = g.name;
+              sugg.appendChild(div);
+            });
+            sugg.classList.remove('hidden');
           };
           input.addEventListener('input', render);
           input.addEventListener('focus', () => {
@@ -795,6 +803,13 @@
                 if ((input.value || '').trim()) render();
               });
             }
+          });
+          input.addEventListener('blur', () => setTimeout(() => sugg.classList.add('hidden'), 120));
+          sugg.addEventListener('mousedown', (e) => {
+            const v = e.target && e.target.dataset && e.target.dataset.value;
+            if (!v) return;
+            input.value = v;
+            sugg.classList.add('hidden');
           });
           input._wiredPredict = true;
         }
