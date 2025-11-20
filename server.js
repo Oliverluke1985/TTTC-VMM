@@ -53,6 +53,10 @@ const pool = new Pool({
     await pool.query(
       'ALTER TABLE IF EXISTS duties ADD COLUMN IF NOT EXISTS event_id INTEGER REFERENCES events(id) ON DELETE SET NULL'
     );
+    // Add soft-archive support for duties
+    await pool.query(
+      'ALTER TABLE IF EXISTS duties ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP NULL'
+    );
     // Soft-archive support for events
     await pool.query(
       'ALTER TABLE IF EXISTS events ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP NULL'
@@ -752,6 +756,8 @@ app.patch('/events/:id', authRequired, adminOnly, async (req, res) => {
       );
     }
     if (result.rowCount === 0) return res.status(404).json({ message: 'Not found' });
+    // Archive all duties linked to this event
+    try { await pool.query('UPDATE duties SET archived_at=NOW() WHERE event_id=$1 AND archived_at IS NULL', [id]); } catch (_) {}
     res.json({ id: result.rows[0].id });
   } catch (err) {
     res.status(400).json({ message: err.message });
@@ -788,6 +794,8 @@ app.delete('/events/:id', authRequired, adminOnly, async (req, res) => {
       result = await pool.query('DELETE FROM events WHERE id=$1 AND group_id=$2 RETURNING id', [id, req.user.group_id]);
     }
     if (result.rowCount === 0) return res.status(404).json({ message: 'Not found' });
+    // Hard delete duties linked to this event (event already verified by role checks)
+    try { await pool.query('DELETE FROM duties WHERE event_id=$1', [id]); } catch (_) {}
     res.json({ ok: true });
   } catch (err) {
     res.status(400).json({ message: err.message });
@@ -829,13 +837,13 @@ app.get('/duties', authRequired, async (req, res) => {
   if (req.user.role === 'superadmin') {
     const groupFilter = req.query.group_id ? Number(req.query.group_id) : null;
     if (Number.isFinite(groupFilter)) {
-      const duties = await pool.query('SELECT * FROM duties WHERE group_id=$1 ORDER BY id', [groupFilter]);
+      const duties = await pool.query('SELECT * FROM duties WHERE group_id=$1 AND archived_at IS NULL ORDER BY id', [groupFilter]);
       return res.json(duties.rows);
     }
-    const duties = await pool.query('SELECT * FROM duties ORDER BY id');
+    const duties = await pool.query('SELECT * FROM duties WHERE archived_at IS NULL ORDER BY id');
     return res.json(duties.rows);
   }
-  const duties = await pool.query('SELECT * FROM duties WHERE group_id=$1 ORDER BY id', [req.user.group_id]);
+  const duties = await pool.query('SELECT * FROM duties WHERE group_id=$1 AND archived_at IS NULL ORDER BY id', [req.user.group_id]);
   res.json(duties.rows);
 });
 
