@@ -68,6 +68,13 @@ const pool = new Pool({
     await pool.query(
       'ALTER TABLE IF EXISTS events ADD COLUMN IF NOT EXISTS end_date DATE NULL'
     );
+    // Event time of day support
+    await pool.query(
+      'ALTER TABLE IF EXISTS events ADD COLUMN IF NOT EXISTS start_time TIME NULL'
+    );
+    await pool.query(
+      'ALTER TABLE IF EXISTS events ADD COLUMN IF NOT EXISTS end_time TIME NULL'
+    );
     // Archive orphan duties that have no event
     try {
       await pool.query("UPDATE duties SET archived_at = COALESCE(archived_at, NOW()) WHERE event_id IS NULL");
@@ -717,13 +724,13 @@ app.get('/events', authRequired, async (req, res) => {
 
 app.post('/events', authRequired, adminOnly, async (req, res) => {
   try {
-    const { title, description, event_date, start_date, end_date } = req.body || {};
+    const { title, description, event_date, start_date, end_date, start_time, end_time } = req.body || {};
     let { group_id } = req.body || {};
     if (!group_id) group_id = req.user.group_id || null;
     if (!group_id) return res.status(400).json({ message: 'Group is required for events' });
     const result = await pool.query(
-      'INSERT INTO events (title,description,event_date,start_date,end_date,group_id) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id',
-      [title, description ?? null, event_date ?? null, start_date ?? null, end_date ?? null, group_id]
+      'INSERT INTO events (title,description,event_date,start_date,end_date,start_time,end_time,group_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id',
+      [title, description ?? null, event_date ?? null, start_date ?? null, end_date ?? null, start_time ?? null, end_time ?? null, group_id]
     );
     res.json({ id: result.rows[0].id });
   } catch (err) {
@@ -736,7 +743,7 @@ app.patch('/events/:id', authRequired, adminOnly, async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (!Number.isFinite(id)) return res.status(400).json({ message: 'Invalid id' });
-    const { title, description, event_date, start_date, end_date, group_id } = req.body || {};
+    const { title, description, event_date, start_date, end_date, start_time, end_time, group_id } = req.body || {};
     const setClauses = [];
     const params = [];
     let idx = 1;
@@ -745,6 +752,8 @@ app.patch('/events/:id', authRequired, adminOnly, async (req, res) => {
     if (event_date !== undefined) { setClauses.push(`event_date = $${idx++}`); params.push(event_date); }
     if (start_date !== undefined) { setClauses.push(`start_date = $${idx++}`); params.push(start_date); }
     if (end_date !== undefined) { setClauses.push(`end_date = $${idx++}`); params.push(end_date); }
+    if (start_time !== undefined) { setClauses.push(`start_time = $${idx++}`); params.push(start_time); }
+    if (end_time !== undefined) { setClauses.push(`end_time = $${idx++}`); params.push(end_time); }
     if (group_id !== undefined) { setClauses.push(`group_id = $${idx++}`); params.push(group_id); }
     if (setClauses.length === 0) return res.json({ id });
     let result;

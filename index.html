@@ -178,6 +178,8 @@
         <select id="eventGroup2"><option value="">— Select group —</option></select>
         <label>Start Date</label><input id="eventStart2" type="date" />
         <label>End Date</label><input id="eventEnd2" type="date" />
+        <label>Start Time</label><input id="eventStartTime2" type="time" />
+        <label>End Time</label><input id="eventEndTime2" type="time" />
         <button id="createEventBtn2">Create Event</button>
         <div id="createEventError2" class="error"></div>
       </div>
@@ -194,6 +196,8 @@
         <label>Description</label><input id="editEventDesc" type="text" />
         <label>Start Date</label><input id="editEventStart" type="date" />
         <label>End Date</label><input id="editEventEnd" type="date" />
+        <label>Start Time</label><input id="editEventStartTime" type="time" />
+        <label>End Time</label><input id="editEventEndTime" type="time" />
         <button id="saveEventBtn">Save Event</button>
         <div id="editEventError" class="error"></div>
       </div>
@@ -1187,11 +1191,13 @@
           if (!sel) return;
           const current = sel.value;
           sel.innerHTML = '<option value="">— None —</option>';
-          events.forEach(e => {
+        events.forEach(e => {
             const opt = document.createElement('option');
             opt.value = e.id;
-            const d = e.start_date ? (e.end_date ? `${e.start_date} – ${e.end_date}` : `${e.start_date}`) : (e.event_date || '');
-            opt.textContent = `${e.title} ${d ? '— ' + d : ''}`;
+          const t1 = (e.start_time || '').slice(0,5);
+          const t2 = (e.end_time || '').slice(0,5);
+          const d = e.start_date ? (e.end_date ? `${e.start_date} ${t1 || ''} – ${e.end_date} ${t2 || ''}` : `${e.start_date} ${t1 || ''}`) : (e.event_date || '');
+          opt.textContent = `${e.title} ${d ? '— ' + d.trim() : ''}`;
             sel.appendChild(opt);
           });
           if (current) sel.value = current;
@@ -1233,8 +1239,10 @@
           events.forEach(e => {
             const opt = document.createElement('option');
             opt.value = e.id;
-            const d = e.start_date ? (e.end_date ? `${e.start_date} – ${e.end_date}` : `${e.start_date}`) : (e.event_date || '');
-            opt.textContent = `${e.title} ${d ? '— ' + d : ''}`;
+            const t1 = (e.start_time || '').slice(0,5);
+            const t2 = (e.end_time || '').slice(0,5);
+            const d = e.start_date ? (e.end_date ? `${e.start_date} ${t1 || ''} – ${e.end_date} ${t2 || ''}` : `${e.start_date} ${t1 || ''}`) : (e.event_date || '');
+            opt.textContent = `${e.title} ${d ? '— ' + d.trim() : ''}`;
             sel.appendChild(opt);
           });
           if (current) sel.value = current;
@@ -1373,11 +1381,13 @@
       const gid2 = grpSel2 && grpSel2.value ? Number(grpSel2.value) : (groupId ?? null);
       const start_date = document.getElementById('eventStart2').value;
       const end_date = document.getElementById('eventEnd2').value;
+      const start_time = document.getElementById('eventStartTime2').value;
+      const end_time = document.getElementById('eventEndTime2').value;
       try {
         const res = await authed('/events', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title, description, start_date, end_date, group_id: gid2 })
+          body: JSON.stringify({ title, description, start_date, end_date, start_time, end_time, group_id: gid2 })
         });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
@@ -1389,6 +1399,8 @@
         document.getElementById('eventDesc2').value = '';
         document.getElementById('eventStart2').value = '';
         document.getElementById('eventEnd2').value = '';
+        document.getElementById('eventStartTime2').value = '';
+        document.getElementById('eventEndTime2').value = '';
         if (grpSel2) grpSel2.value = groupId != null ? String(groupId) : '';
         fetchEvents();
       } catch {
@@ -1403,11 +1415,13 @@
       const description = document.getElementById('editEventDesc').value.trim();
       const start_date = document.getElementById('editEventStart').value;
       const end_date = document.getElementById('editEventEnd').value;
+      const start_time = document.getElementById('editEventStartTime').value;
+      const end_time = document.getElementById('editEventEndTime').value;
       try {
         const res = await authed(`/events/${id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title, description, start_date, end_date })
+          body: JSON.stringify({ title, description, start_date, end_date, start_time, end_time })
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) { document.getElementById('editEventError').textContent = data.message || 'Failed to save event'; return; }
