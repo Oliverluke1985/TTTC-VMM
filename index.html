@@ -96,6 +96,7 @@
   <!-- VOLUNTEER: TIME CLOCK PAGE -->
   <section id="clockSection" class="col hidden">
     <h2>Time Clock</h2>
+    <div id="clockSuperNote" class="hint"></div>
     <h3>My Duties</h3>
     <table>
       <thead><tr><th>ID</th><th>Title</th><th>Description</th><th>Status</th><th>Track Time</th></tr></thead>
@@ -1488,10 +1489,25 @@
     // TIMESHEET
     async function fetchTimeTracking() {
       try {
-        const res = await authed('/time-tracking');
-        const rows = await res.json();
         const tbody = document.getElementById('timeList');
         if (!tbody) return;
+        const params = new URLSearchParams();
+        // Scope for admin and superadmin
+        if (role === 'superadmin') {
+          const gid = document.getElementById('superadminOrgPicker')?.value || '';
+          const note = document.getElementById('clockSuperNote');
+          if (!gid) {
+            if (note) note.textContent = 'Select an organization in Superadmin Tools to view times.';
+            tbody.innerHTML = '';
+            return;
+          }
+          if (note) note.textContent = '';
+          params.set('group_id', gid);
+        } else if (role === 'admin') {
+          if (groupId != null) params.set('group_id', String(groupId));
+        }
+        const res = await authed(`/time-tracking${params.toString() ? `?${params.toString()}` : ''}`);
+        const rows = await res.json();
         tbody.innerHTML = '';
         rows.forEach(r => {
           const tr = document.createElement('tr');
@@ -2297,7 +2313,19 @@
         if (eFilter) eFilter.classList.toggle('hidden', currentRole !== 'superadmin');
         await fetchEvents();
       };
-      document.getElementById('navClockBtn').onclick = async () => { resetGlobalFilters(); resetVolunteerMgmtUI(); navigateTo('clockSection'); await fetchDuties(); await fetchTimeTracking(); };
+      document.getElementById('navClockBtn').onclick = async () => {
+        resetGlobalFilters();
+        resetVolunteerMgmtUI();
+        navigateTo('clockSection');
+        // Show a hint for superadmin until an organization is chosen
+        const note = document.getElementById('clockSuperNote');
+        if (note) {
+          const gid = document.getElementById('superadminOrgPicker')?.value || '';
+          note.textContent = (currentRole === 'superadmin' && !gid) ? 'Select an organization in Superadmin Tools to view times.' : '';
+        }
+        await fetchDuties();
+        await fetchTimeTracking();
+      };
       document.getElementById('navPhotosBtn').onclick = async () => {
         resetGlobalFilters();
         resetVolunteerMgmtUI();
