@@ -84,6 +84,10 @@ const pool = new Pool({
          updated_at TIMESTAMP NOT NULL DEFAULT NOW()
        )`
     );
+    // Ensure users.name column exists for direct storage when schema allows
+    await pool.query(
+      `ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS name TEXT`
+    );
   } catch (e) {
     console.error('Schema ensure failed (duties.event_id):', e?.message || e);
   }
