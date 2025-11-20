@@ -38,12 +38,25 @@
     *[popover]{display:none!important;visibility:hidden!important;opacity:0!important;}
     #top-layer{display:none!important}
 
-    /* Predictive org suggestions (no button) */
+    /* Predictive org suggestions (site-styled blue panel) */
     .org-suggest-wrap { position: relative; }
-    .org-suggest { position: absolute; left: 0; right: 0; top: 100%; z-index: 1000; border: 1px solid var(--accent3); background: rgba(0,0,0,0.95); border-radius: 8px; margin-top: 4px; max-height: 220px; overflow-y: auto; }
+    .org-suggest {
+      position: absolute; left: 0; right: 0; top: 100%; z-index: 1000;
+      border: 1px solid var(--accent2);
+      background: linear-gradient(180deg, rgba(2,137,219,0.12), rgba(5,74,116,0.12)), rgba(0,8,20,0.98);
+      border-radius: 10px; margin-top: 6px; max-height: 260px; overflow-y: auto;
+      box-shadow: 0 10px 24px rgba(2,137,219,0.25), 0 2px 6px rgba(0,0,0,0.35);
+    }
+    .org-suggest::before {
+      content: ""; position: absolute; top: -8px; left: 16px; width: 0; height: 0;
+      border-left: 8px solid transparent; border-right: 8px solid transparent;
+      border-bottom: 8px solid var(--accent2);
+      filter: drop-shadow(0 2px 2px rgba(0,0,0,0.25));
+    }
     .org-suggest.hidden { display: none !important; }
-    .org-suggest div { padding: 6px 8px; cursor: pointer; }
-    .org-suggest div:hover { background: rgba(255,255,255,0.06); }
+    .org-suggest div { padding: 10px 12px; cursor: pointer; color: var(--text); }
+    .org-suggest div + div { border-top: 1px solid rgba(2,137,219,0.22); }
+    .org-suggest div:hover { background: rgba(2,137,219,0.22); }
 
     /* Toolbar */
     nav#toolbar { display:flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 12px 0 16px; background: rgba(0,0,0,0.6); border: 1px solid var(--accent3); border-radius: 8px; padding: 8px; }
