@@ -367,6 +367,17 @@
       </div>
     </div>
 
+    <h3>All Time Logs (By Organization)</h3>
+    <table>
+      <thead>
+        <tr><th>ID</th><th>Volunteer</th><th>Duty</th><th>Start</th><th>End</th><th>Hours</th><th>Date</th><th>Edit</th><th>Delete</th></tr>
+      </thead>
+      <tbody id="superAdminTimeList"></tbody>
+    </table>
+
+    <h3>Photo Approvals</h3>
+    <div id="superPhotoApprovals"></div>
+
     <h3>Create User (Superadmin)</h3>
     <div class="row">
       <div class="col">
@@ -1856,12 +1867,20 @@
     }
 
     // ADMIN TIMES TABLE
-    async function fetchAdminTimes() {
+   async function fetchAdminTimes() {
       if (role !== 'admin' && role !== 'superadmin') return;
       try {
-        const res = await authed('/time-tracking');
+        let path = '/time-tracking';
+        if (role === 'superadmin') {
+          const gid = document.getElementById('superadminOrgPicker')?.value;
+          const t1 = document.getElementById('adminTimeList');
+          const t2 = document.getElementById('superAdminTimeList');
+          if (!gid) { [t1, t2].forEach(t => { if (t) t.innerHTML = ''; }); return; }
+          path += `?group_id=${encodeURIComponent(gid)}`;
+        }
+        const res = await authed(path);
         const rows = await res.json();
-        const tbody = document.getElementById('adminTimeList');
+        const tbody = document.getElementById('superAdminTimeList') || document.getElementById('adminTimeList');
         if (!tbody) return;
         tbody.innerHTML = '';
         rows.forEach(r => {
@@ -2092,8 +2111,9 @@
       document.getElementById('navAdminBtn').classList.toggle('hidden', !isAdminish);
       document.getElementById('navVolunteerMgmtBtn').classList.toggle('hidden', !isAdminish);
       document.getElementById('navCreateDutyBtn').classList.toggle('hidden', !isAdminish);
-      document.getElementById('navClockBtn').classList.toggle('hidden', !isVolunteer);
-      document.getElementById('navPhotosBtn').classList.toggle('hidden', !isVolunteer);
+      // Show Time Clock and Photos for volunteers AND admins/superadmins
+      document.getElementById('navClockBtn').classList.toggle('hidden', !(isVolunteer || isAdminish));
+      document.getElementById('navPhotosBtn').classList.toggle('hidden', !(isVolunteer || isAdminish));
       document.getElementById('navHomeBtn').onclick = () => { resetGlobalFilters(); navigateTo('homeSection'); };
       function resetVolunteerMgmtUI() {
         const orgRow = document.getElementById('vmSuperOrgRow');
@@ -2285,25 +2305,40 @@
         await fetchDuties();
         const wrap = document.getElementById('photosFilterWrap');
         if (wrap) wrap.classList.toggle('hidden', !(currentRole === 'admin' || currentRole === 'superadmin'));
-        if (currentRole === 'admin' || currentRole === 'superadmin') {
-          try {
-            const res = await authed('/users?role=volunteer');
-            const vols = await res.json();
-            const sel = document.getElementById('photosVolunteerFilter');
-            if (sel) {
-              const current = sel.value;
-              sel.innerHTML = '<option value="">— All —</option>';
-              vols.forEach(v => {
-                const opt = document.createElement('option');
-                opt.value = v.id;
-                opt.textContent = v.name ? `${v.name} — ${v.email}` : v.email;
-                sel.appendChild(opt);
-              });
-              if (current) sel.value = current;
-              if (!sel._wired) { sel.addEventListener('change', fetchPhotos); sel._wired = true; }
+        // Populate volunteer filter scoped by organization
+        try {
+          const sel = document.getElementById('photosVolunteerFilter');
+          if (!sel) { await fetchPhotos(); return; }
+          let gid = '';
+          if (currentRole === 'superadmin') {
+            gid = document.getElementById('superadminOrgPicker')?.value || '';
+            if (!gid) {
+              sel.innerHTML = '<option value=\"\">— Select organization first —</option>';
+              sel.disabled = true;
+              await fetchPhotos(); // will no-op until org chosen
+              return;
             }
-          } catch { /* silent */ }
-        }
+          } else if (currentRole === 'admin') {
+            gid = (groupId != null ? String(groupId) : '');
+          }
+          const qp = new URLSearchParams({ role: 'volunteer' });
+          if (gid) qp.set('group_id', gid);
+          const res = await authed(`/users?${qp.toString()}`);
+          if (res.ok) {
+            const vols = await res.json();
+            const current = sel.value;
+            sel.disabled = false;
+            sel.innerHTML = '<option value=\"\">— All —</option>';
+            vols.forEach(v => {
+              const opt = document.createElement('option');
+              opt.value = v.id;
+              opt.textContent = v.name ? `${v.name} — ${v.email}` : v.email;
+              sel.appendChild(opt);
+            });
+            if (current) sel.value = current;
+            if (!sel._wired) { sel.addEventListener('change', fetchPhotos); sel._wired = true; }
+          }
+        } catch { /* silent */ }
         await fetchPhotos();
       };
       document.getElementById('navVolunteerMgmtBtn').onclick = async () => {
@@ -2680,12 +2715,23 @@
     // Photos
     async function fetchPhotos() {
       try {
-        let path = '/photos';
-        if (role === 'superadmin' || role === 'admin') {
-          const sel = document.getElementById('photosVolunteerFilter');
-          if (sel && sel.value) path = `/photos?volunteer_id=${encodeURIComponent(sel.value)}`;
+        const params = new URLSearchParams();
+        // Scope by org for admin/superadmin
+        if (role === 'superadmin') {
+          const gid = document.getElementById('superadminOrgPicker')?.value || '';
+          if (!gid) {
+            const gallery = document.getElementById('photoGallery');
+            if (gallery) gallery.innerHTML = '';
+            return;
+          }
+          params.set('group_id', gid);
+        } else if (role === 'admin') {
+          if (groupId != null) params.set('group_id', String(groupId));
         }
-        const res = await authed(path);
+        // Optional volunteer filter
+        const sel = document.getElementById('photosVolunteerFilter');
+        if (sel && sel.value) params.set('volunteer_id', sel.value);
+        const res = await authed(`/photos${params.toString() ? `?${params.toString()}` : ''}`);
         if (!res.ok) return;
         const rows = await res.json();
         const gallery = document.getElementById('photoGallery');
@@ -2710,13 +2756,21 @@
       } catch { /* silent */ }
     }
     // Admin photo approvals
-    async function fetchPhotoApprovals() {
+   async function fetchPhotoApprovals() {
       if (role !== 'admin' && role !== 'superadmin') return;
       try {
-        const res = await authed('/photos');
+        let path = '/photos';
+        if (role === 'superadmin') {
+          const gid = document.getElementById('superadminOrgPicker')?.value;
+          const w1 = document.getElementById('photoApprovals');
+          const w2 = document.getElementById('superPhotoApprovals');
+          if (!gid) { [w1, w2].forEach(w => { if (w) w.innerHTML = ''; }); return; }
+          path += `?group_id=${encodeURIComponent(gid)}`;
+        }
+        const res = await authed(path);
         if (!res.ok) return;
         const rows = await res.json();
-        const wrap = document.getElementById('photoApprovals');
+        const wrap = document.getElementById('superPhotoApprovals') || document.getElementById('photoApprovals');
         if (!wrap) return;
         wrap.innerHTML = '';
         rows.filter(p => !p.approved).forEach(p => {
