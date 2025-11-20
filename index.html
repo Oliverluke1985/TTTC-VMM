@@ -927,6 +927,8 @@
       try { window.signupGroups = window.signupGroups || []; } catch {}
       // Scroll to top
       try { window.scrollTo({ top: 0, behavior: 'auto' }); } catch {}
+      // Do a full reload to ensure a pristine login state
+      try { setTimeout(() => { window.location.replace('/'); }, 0); } catch { try { window.location.reload(); } catch {} }
     });
 
     // GROUPS (front-end shows name; backend uses id)
