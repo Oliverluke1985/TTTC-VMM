@@ -1359,8 +1359,6 @@
           (duties || []).forEach(d => { if (d && d.id != null) window.dutyById[d.id] = d; });
         } catch { /* ignore */ }
         const tbody = document.getElementById('dutyList');
-        // Do not render the My Duties table for superadmins
-        if (role === 'superadmin') { if (tbody) tbody.innerHTML = ''; return; }
         if (role === 'superadmin') {
           const filterSel = document.getElementById('superDutyGroupFilter');
           const filterWrap = document.getElementById('dutiesSuperFilter');
