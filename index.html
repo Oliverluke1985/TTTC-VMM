@@ -756,14 +756,7 @@
         const input = document.getElementById('signupGroupInput');
         const sugg = document.getElementById('signupGroupSuggestions');
         const dataList = document.getElementById('signupGroupList');
-        if (dataList) {
-          dataList.innerHTML = '';
-          (window.signupGroups || []).forEach(g => {
-            const opt = document.createElement('option');
-            opt.value = g.name;
-            dataList.appendChild(opt);
-          });
-        }
+        if (dataList) { dataList.innerHTML = ''; } // keep empty until user types
         // Lightweight predictive suggestions (no button) for consistent UX
         if (input && sugg && !input._wiredPredict) {
           const render = () => {
@@ -771,6 +764,16 @@
             const matches = (window.signupGroups || []).filter(g => !q || String(g.name).toLowerCase().includes(q)).slice(0, 8);
             sugg.innerHTML = '';
             if (matches.length === 0) { sugg.classList.add('hidden'); return; }
+            // update native datalist with only matched options (prevents full list on focus)
+            const dl = document.getElementById('signupGroupList');
+            if (dl) {
+              dl.innerHTML = '';
+              matches.forEach(g => {
+                const opt = document.createElement('option');
+                opt.value = g.name;
+                dl.appendChild(opt);
+              });
+            }
             matches.forEach(g => {
               const div = document.createElement('div');
               div.textContent = g.name;
@@ -781,8 +784,10 @@
           };
           input.addEventListener('input', render);
           input.addEventListener('focus', () => {
-            if (!window.signupGroups || window.signupGroups.length === 0) fetchPublicGroups().then(render);
-            else render();
+            // keep datalist empty on focus to avoid full list popup; fetch data silently
+            const dl = document.getElementById('signupGroupList');
+            if (dl) dl.innerHTML = '';
+            if (!window.signupGroups || window.signupGroups.length === 0) fetchPublicGroups();
           });
           input.addEventListener('blur', () => setTimeout(() => sugg.classList.add('hidden'), 120));
           sugg.addEventListener('mousedown', (e) => {
@@ -882,21 +887,16 @@
           });
         }
 
-        // Populate signup organization datalist (typeahead)
+        // Prepare signup organization predictive map only (do not prefill datalist to avoid full list popup)
         try {
+          window.signupGroupMap = {};
+          groups
+            .sort((a,b) => String(a.name).localeCompare(String(b.name)))
+            .forEach(g => {
+              window.signupGroupMap[String(g.name).toLowerCase()] = g.id;
+            });
           const list = document.getElementById('signupGroupList');
-          if (list) {
-            list.innerHTML = '';
-            window.signupGroupMap = {};
-            groups
-              .sort((a,b) => String(a.name).localeCompare(String(b.name)))
-              .forEach(g => {
-                const opt = document.createElement('option');
-                opt.value = g.name;
-                list.appendChild(opt);
-                window.signupGroupMap[String(g.name).toLowerCase()] = g.id;
-              });
-          }
+          if (list) list.innerHTML = ''; // keep empty until user types
         } catch { /* silent */ }
 
         // Populate superadmin org picker
