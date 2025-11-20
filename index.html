@@ -761,7 +761,16 @@
         if (input && sugg && !input._wiredPredict) {
           const render = () => {
             const q = (input.value || '').trim().toLowerCase();
-            const matches = (window.signupGroups || []).filter(g => !q || String(g.name).toLowerCase().includes(q)).slice(0, 8);
+            const all = window.signupGroups || [];
+            let matches = [];
+            if (q) {
+              const starts = all.filter(g => String(g.name).toLowerCase().startsWith(q));
+              const contains = all.filter(g => {
+                const n = String(g.name).toLowerCase();
+                return n.includes(q) && !n.startsWith(q);
+              });
+              matches = [...starts, ...contains].slice(0, 10);
+            }
             sugg.innerHTML = '';
             if (matches.length === 0) { sugg.classList.add('hidden'); return; }
             // update native datalist with only matched options (prevents full list on focus)
