@@ -538,6 +538,7 @@
         <label>Phone</label><input id="vmEditPhone" type="text" />
         <label>Address</label><input id="vmEditAddress" type="text" />
         <button id="vmSaveUserBtn">Save User</button>
+        <button id="vmDeleteUserBtn" style="margin-left:8px;color:#b00020">Delete</button>
         <button id="vmCloseEditBtn" style="margin-left:8px">Close</button>
         <div id="vmSaveUserErr" class="error"></div>
       </div>
@@ -1473,7 +1474,8 @@
           const tr = document.createElement('tr');
           let adminActions = '';
           if (role === 'admin' || role === 'superadmin') {
-            adminActions = `<button data-did="${d.id}" class="prefillDutyEditBtn">Edit</button>`;
+            adminActions = `<button data-did="${d.id}" class="prefillDutyEditBtn">Edit</button>` +
+                           ` <button data-did="${d.id}" class="deleteDutyBtn" style="margin-left:6px;color:#b00020">Delete</button>`;
           }
           tr.innerHTML =
             `<td>${d.id}</td><td>${d.title}</td><td>${d.description || ''}</td><td>${d.status}</td>
@@ -1507,6 +1509,15 @@
           document.getElementById('editDutyTitle').value = row[1].textContent || '';
           document.getElementById('editDutyDesc').value = row[2].textContent || '';
           document.getElementById('editDutyStatus').value = (row[3].textContent || 'pending');
+        }));
+        // wire delete duty
+        tbody.querySelectorAll('.deleteDutyBtn').forEach(btn => btn.addEventListener('click', async (ev) => {
+          const id = Number(ev.currentTarget.getAttribute('data-did'));
+          if (!confirm('Delete this duty?')) return;
+          try {
+            const res = await authed(`/duties/${id}`, { method: 'DELETE' });
+            if (res.ok) { await fetchDuties(); }
+          } catch { /* silent */ }
         }));
       } catch (e) { /* silent */ }
     }
@@ -2840,6 +2851,26 @@
             } catch { if (err) err.textContent = 'Error updating password'; }
           });
           vmUpdate._wired = true;
+        }
+        // Delete volunteer
+        const delUserBtn = document.getElementById('vmDeleteUserBtn');
+        if (delUserBtn && !delUserBtn._wired) {
+          delUserBtn.addEventListener('click', async () => {
+            const id = Number(document.getElementById('vmEditId').value);
+            const err = document.getElementById('vmSaveUserErr');
+            if (!id) return;
+            if (!confirm('Delete this user?')) return;
+            if (err) err.textContent = '';
+            try {
+              const res = await authed(`/users/${id}`, { method: 'DELETE' });
+              const data = await res.json().catch(() => ({}));
+              if (!res.ok) { if (err) err.textContent = data.message || 'Failed to delete user'; return; }
+              await populateVolunteerMgmt();
+              const panel = document.getElementById('vmEditPanel');
+              if (panel) panel.classList.add('hidden');
+            } catch { if (err) err.textContent = 'Error deleting user'; }
+          });
+          delUserBtn._wired = true;
         }
       }
       // Superadmin admin-management wiring

@@ -504,14 +504,43 @@ app.delete('/users/:id', authRequired, superadminOnly, async (req, res) => {
   try {
     const targetId = Number(req.params.id);
     if (!Number.isFinite(targetId)) return res.status(400).json({ message: 'Invalid id' });
-    // Avoid deleting yourself by accident
-    if (targetId === req.user.id) {
-      return res.status(400).json({ message: 'Cannot delete your own account' });
+    if (targetId === req.user.id) return res.status(400).json({ message: 'Cannot delete your own account' });
+    // Load target role and group
+    const existing = await pool.query('SELECT id, role, group_id FROM users WHERE id=$1', [targetId]);
+    if (existing.rowCount === 0) return res.status(404).json({ message: 'Not found' });
+    const target = existing.rows[0];
+    // Superadmin can delete anyone; admin only volunteers in their own group
+    if (req.user.role === 'admin') {
+      if (target.role !== 'volunteer' || target.group_id !== req.user.group_id) {
+        return res.status(403).json({ message: 'Admins can only delete volunteers in their organization' });
+      }
+    } else if (req.user.role !== 'superadmin') {
+      return res.status(403).json({ message: 'Admins or superadmins only' });
     }
     const result = await pool.query('DELETE FROM users WHERE id=$1 RETURNING id', [targetId]);
     if (result.rowCount === 0) return res.status(404).json({ message: 'Not found' });
-    // Cascade cleanup for optional profile rows if table exists (ON DELETE CASCADE usually handles this)
     try { await pool.query('DELETE FROM user_profile WHERE user_id=$1', [targetId]); } catch (_) {}
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+// Delete duty (admin/superadmin)
+app.delete('/duties/:id', authRequired, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) return res.status(400).json({ message: 'Invalid id' });
+    let result;
+    if (req.user.role === 'superadmin') {
+      result = await pool.query('DELETE FROM duties WHERE id=$1 RETURNING id', [id]);
+    } else if (req.user.role === 'admin') {
+      // Ensure admin can only delete within their organization
+      result = await pool.query('DELETE FROM duties WHERE id=$1 AND group_id=$2 RETURNING id', [id, req.user.group_id]);
+    } else {
+      return res.status(403).json({ message: 'Admins only' });
+    }
+    if (result.rowCount === 0) return res.status(404).json({ message: 'Not found' });
     res.json({ ok: true });
   } catch (err) {
     res.status(400).json({ message: err.message });
