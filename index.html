@@ -756,10 +756,11 @@
         // Wire simple suggestions dropdown as a fallback for browsers with limited datalist UX
         const input = document.getElementById('signupGroupInput');
         const sugg = document.getElementById('signupGroupSuggestions');
+        if (sugg) sugg.classList.add('hidden'); // hide overlay panel in favor of native list
         const dataList = document.getElementById('signupGroupList');
         if (dataList) { dataList.innerHTML = ''; } // keep empty until user types
-        // Lightweight predictive suggestions (no button) for consistent UX
-        if (input && sugg && !input._wiredPredict) {
+        // Predictive suggestions using native datalist only (no custom overlay)
+        if (input && !input._wiredPredict) {
           const render = () => {
             const q = (input.value || '').trim().toLowerCase();
             const all = window.signupGroups || [];
@@ -772,8 +773,6 @@
               });
               matches = [...starts, ...contains].slice(0, 10);
             }
-            sugg.innerHTML = '';
-            if (matches.length === 0) { sugg.classList.add('hidden'); return; }
             // update native datalist with only matched options (prevents full list on focus)
             const dl = document.getElementById('signupGroupList');
             if (dl) {
@@ -784,13 +783,6 @@
                 dl.appendChild(opt);
               });
             }
-            matches.forEach(g => {
-              const div = document.createElement('div');
-              div.textContent = g.name;
-              div.dataset.value = g.name;
-              sugg.appendChild(div);
-            });
-            sugg.classList.remove('hidden');
           };
           input.addEventListener('input', render);
           input.addEventListener('focus', () => {
@@ -803,13 +795,6 @@
                 if ((input.value || '').trim()) render();
               });
             }
-          });
-          input.addEventListener('blur', () => setTimeout(() => sugg.classList.add('hidden'), 120));
-          sugg.addEventListener('mousedown', (e) => {
-            const v = e.target && e.target.dataset && e.target.dataset.value;
-            if (!v) return;
-            input.value = v;
-            sugg.classList.add('hidden');
           });
           input._wiredPredict = true;
         }
