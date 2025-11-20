@@ -84,10 +84,6 @@ const pool = new Pool({
          updated_at TIMESTAMP NOT NULL DEFAULT NOW()
        )`
     );
-    // Ensure users.name column exists for direct storage when schema allows
-    await pool.query(
-      `ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS name TEXT`
-    );
   } catch (e) {
     console.error('Schema ensure failed (duties.event_id):', e?.message || e);
   }
@@ -162,13 +158,8 @@ app.post('/register', authRequired, adminOnly, async (req, res) => {
     const sql = `INSERT INTO users (${fields.join(',')}) VALUES (${params.join(',')}) RETURNING id`;
     const result = await pool.query(sql, values);
 
-    // Persist optional profile fields to user_profile if users table lacks them
-    const profile = {
-      name: (!has.has('name') && name !== undefined) ? name : undefined,
-      phone: (!has.has('phone') && phone !== undefined) ? phone : undefined,
-      address: (!has.has('address') && address !== undefined) ? address : undefined,
-    };
-    if (profile.name !== undefined || profile.phone !== undefined || profile.address !== undefined) {
+    // Also upsert optional profile fields so Name always persists even if users table lacks it
+    try {
       await pool.query(
         `INSERT INTO user_profile (user_id,name,phone,address,updated_at)
          VALUES ($1,$2,$3,$4,NOW())
@@ -177,9 +168,9 @@ app.post('/register', authRequired, adminOnly, async (req, res) => {
            phone=COALESCE(EXCLUDED.phone,user_profile.phone),
            address=COALESCE(EXCLUDED.address,user_profile.address),
            updated_at=NOW()`,
-        [result.rows[0].id, profile.name ?? null, profile.phone ?? null, profile.address ?? null]
+        [result.rows[0].id, (name ?? null), (phone ?? null), (address ?? null)]
       );
-    }
+    } catch (_) { /* profile table may not exist; ignore */ }
 
     res.json({ id: result.rows[0].id });
   } catch (err) {
