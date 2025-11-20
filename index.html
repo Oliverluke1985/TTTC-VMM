@@ -906,9 +906,27 @@
     document.getElementById('logoutBtn').addEventListener('click', () => {
       token = null; role = null; groupId = null; userId = null;
       try { localStorage.removeItem('auth'); } catch {}
+      // Hide app UI and show clean login/signup
+      const tb = document.getElementById('toolbar'); if (tb) tb.classList.add('hidden');
       show('authSection');
       ['infoSection','superadminSection','adminSection','homeSection','createDutySection','clockSection','eventsSection','photosSection']
         .forEach(id => { const el = document.getElementById(id); if (el) el.classList.add('hidden'); });
+      // Clear login fields
+      const le = document.getElementById('email'); if (le) le.value = '';
+      const lp = document.getElementById('password'); if (lp) lp.value = '';
+      // Reset signup UI
+      const sw = document.getElementById('signupWrap'); if (sw) sw.classList.remove('hidden'); // keep visible state unchanged
+      const sn = document.getElementById('signupName'); if (sn) sn.value = '';
+      const se = document.getElementById('signupEmail'); if (se) se.value = '';
+      const sp = document.getElementById('signupPassword'); if (sp) sp.value = '';
+      const sg = document.getElementById('signupGroupInput'); if (sg) sg.value = '';
+      const sphone = document.getElementById('signupPhone'); if (sphone) sphone.value = '';
+      const sErr = document.getElementById('signupError'); if (sErr) sErr.textContent = '';
+      const sOrgErr = document.getElementById('signupOrgError'); if (sOrgErr) sOrgErr.textContent = '';
+      const sugg = document.getElementById('signupGroupSuggestions'); if (sugg) { sugg.classList.add('hidden'); sugg.innerHTML = ''; }
+      try { window.signupGroups = window.signupGroups || []; } catch {}
+      // Scroll to top
+      try { window.scrollTo({ top: 0, behavior: 'auto' }); } catch {}
     });
 
     // GROUPS (front-end shows name; backend uses id)
