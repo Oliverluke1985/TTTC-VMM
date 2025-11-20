@@ -329,25 +329,6 @@
       <tbody id="groupList"></tbody>
     </table>
 
-    <h3>Create User (Superadmin)</h3>
-    <div class="row">
-      <div class="col">
-        <label>Role</label>
-        <select id="newUserRole">
-          <option value="superadmin">superadmin</option>
-          <option value="admin">admin</option>
-          <option value="volunteer">volunteer</option>
-        </select>
-        <label>Name</label><input id="newUserName" type="text" />
-        <label>Email</label><input id="newUserEmail" type="email" />
-        <label>Password</label><input id="newUserPassword" type="password" />
-        <label>Group (optional for superadmin/global)</label>
-        <select id="newUserGroup"><option value="">— None —</option></select>
-        <button id="createUserBtn">Create User</button>
-        <div id="createUserError" class="error"></div>
-      </div>
-    </div>
-
     <h3>User Management</h3>
     <div class="row" id="saUserRoleRow">
       <div class="col">
@@ -385,6 +366,27 @@
         <div id="saAdminSaveErr" class="error"></div>
       </div>
     </div>
+
+    <h3>Create User (Superadmin)</h3>
+    <div class="row">
+      <div class="col">
+        <label>Role</label>
+        <select id="newUserRole">
+          <option value="superadmin">superadmin</option>
+          <option value="admin">admin</option>
+          <option value="volunteer">volunteer</option>
+        </select>
+        <label>Name</label><input id="newUserName" type="text" />
+        <label>Email</label><input id="newUserEmail" type="email" />
+        <label>Password</label><input id="newUserPassword" type="password" />
+        <label>Group (optional for superadmin/global)</label>
+        <select id="newUserGroup"><option value="">— None —</option></select>
+        <button id="createUserBtn">Create User</button>
+        <div id="createUserError" class="error"></div>
+      </div>
+    </div>
+
+    
   </section>
 
   <!-- ADMIN -->
