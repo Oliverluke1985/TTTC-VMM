@@ -338,6 +338,7 @@
           <option value="admin">admin</option>
           <option value="volunteer">volunteer</option>
         </select>
+        <label>Name</label><input id="newUserName" type="text" />
         <label>Email</label><input id="newUserEmail" type="email" />
         <label>Password</label><input id="newUserPassword" type="password" />
         <label>Group (optional for superadmin/global)</label>
@@ -580,6 +581,7 @@
     // (Per-user theming removed)
     // SUPERADMIN: Create User
     document.getElementById('createUserBtn')?.addEventListener('click', async () => {
+      const name = document.getElementById('newUserName')?.value?.trim() || undefined;
       const email = document.getElementById('newUserEmail').value.trim();
       const password = document.getElementById('newUserPassword').value;
       const roleSel = document.getElementById('newUserRole');
@@ -593,10 +595,11 @@
         const res = await authed('/register', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password, role: roleVal, group_id: gid })
+          body: JSON.stringify({ name, email, password, role: roleVal, group_id: gid })
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) { errEl.textContent = data.message || 'Failed to create user'; return; }
+        if (document.getElementById('newUserName')) document.getElementById('newUserName').value = '';
         document.getElementById('newUserEmail').value = '';
         document.getElementById('newUserPassword').value = '';
         if (grpSel) grpSel.value = '';
