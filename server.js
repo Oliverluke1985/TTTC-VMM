@@ -157,6 +157,26 @@ app.post('/register', authRequired, adminOnly, async (req, res) => {
 
     const sql = `INSERT INTO users (${fields.join(',')}) VALUES (${params.join(',')}) RETURNING id`;
     const result = await pool.query(sql, values);
+
+    // Persist optional profile fields to user_profile if users table lacks them
+    const profile = {
+      name: (!has.has('name') && name !== undefined) ? name : undefined,
+      phone: (!has.has('phone') && phone !== undefined) ? phone : undefined,
+      address: (!has.has('address') && address !== undefined) ? address : undefined,
+    };
+    if (profile.name !== undefined || profile.phone !== undefined || profile.address !== undefined) {
+      await pool.query(
+        `INSERT INTO user_profile (user_id,name,phone,address,updated_at)
+         VALUES ($1,$2,$3,$4,NOW())
+         ON CONFLICT (user_id) DO UPDATE SET
+           name=COALESCE(EXCLUDED.name,user_profile.name),
+           phone=COALESCE(EXCLUDED.phone,user_profile.phone),
+           address=COALESCE(EXCLUDED.address,user_profile.address),
+           updated_at=NOW()`,
+        [result.rows[0].id, profile.name ?? null, profile.phone ?? null, profile.address ?? null]
+      );
+    }
+
     res.json({ id: result.rows[0].id });
   } catch (err) {
     res.status(400).json({ message: err.message });
