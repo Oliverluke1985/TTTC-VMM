@@ -753,13 +753,13 @@
           .forEach(g => {
             window.signupGroupMap[String(g.name).toLowerCase()] = g.id;
           });
-        // Wire simple suggestions dropdown as a fallback for browsers with limited datalist UX
+        // Wire native datalist suggestions (remove custom grey overlay)
         const input = document.getElementById('signupGroupInput');
         const sugg = document.getElementById('signupGroupSuggestions');
-        if (sugg) sugg.classList.add('hidden'); // hide overlay panel in favor of native list
+        if (sugg) sugg.classList.add('hidden'); // keep overlay hidden
         const dataList = document.getElementById('signupGroupList');
         if (dataList) { dataList.innerHTML = ''; } // keep empty until user types
-        // Predictive suggestions using native datalist only (no custom overlay)
+        // Predictive suggestions using the native datalist only
         if (input && !input._wiredPredict) {
           const render = () => {
             const q = (input.value || '').trim().toLowerCase();
