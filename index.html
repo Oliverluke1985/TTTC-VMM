@@ -107,17 +107,21 @@
       </div>
     </div>
     <div id="clockSuperNote" class="hint"></div>
-    <h3>My Duties</h3>
-    <table>
-      <thead><tr><th>ID</th><th>Title</th><th>Description</th><th>Status</th><th>Track Time</th></tr></thead>
-      <tbody id="dutyList"></tbody>
-    </table>
+    <div id="clockDutiesWrap">
+      <h3>My Duties</h3>
+      <table>
+        <thead><tr><th>ID</th><th>Title</th><th>Description</th><th>Status</th><th>Track Time</th></tr></thead>
+        <tbody id="dutyList"></tbody>
+      </table>
+    </div>
 
-    <h3>My Timesheet</h3>
-    <table>
-      <thead><tr><th>ID</th><th>Duty</th><th>Start</th><th>End</th><th>Hours</th><th>Date</th></tr></thead>
-      <tbody id="timeList"></tbody>
-    </table>
+    <div id="clockTimesWrap">
+      <h3>My Timesheet</h3>
+      <table>
+        <thead><tr><th>ID</th><th>Duty</th><th>Start</th><th>End</th><th>Hours</th><th>Date</th></tr></thead>
+        <tbody id="timeList"></tbody>
+      </table>
+    </div>
   </section>
 
   <!-- VOLUNTEER: PHOTOS PAGE -->
@@ -1572,20 +1576,28 @@
           const did = document.getElementById('clockDutyFilter')?.value || '';
           if (!gid) {
             if (note) note.textContent = 'Select an organization to view times.';
+            const timesWrap = document.getElementById('clockTimesWrap');
+            if (timesWrap) timesWrap.classList.add('hidden');
             tbody.innerHTML = '';
             return;
           }
           if (!eid) {
             if (note) note.textContent = 'Select an event to view times.';
+            const timesWrap = document.getElementById('clockTimesWrap');
+            if (timesWrap) timesWrap.classList.add('hidden');
             tbody.innerHTML = '';
             return;
           }
           if (!did) {
             if (note) note.textContent = 'Select a duty to view times.';
+            const timesWrap = document.getElementById('clockTimesWrap');
+            if (timesWrap) timesWrap.classList.add('hidden');
             tbody.innerHTML = '';
             return;
           }
           if (note) note.textContent = '';
+          const timesWrap = document.getElementById('clockTimesWrap');
+          if (timesWrap) timesWrap.classList.remove('hidden');
           const res = await authed(`/time-tracking?group_id=${encodeURIComponent(gid)}`);
           if (!res.ok) { tbody.innerHTML=''; return; }
           rows = await res.json();
@@ -2437,6 +2449,9 @@
               await populateClockEventsForGroup(orgSel.value);
               const dutySel2 = document.getElementById('clockDutyFilter');
               if (dutySel2) { dutySel2.disabled = true; dutySel2.innerHTML = '<option value=\"\">— Select duty —</option>'; }
+              // hide data until fully selected
+              const timesWrap = document.getElementById('clockTimesWrap');
+              if (timesWrap) timesWrap.classList.add('hidden');
               fetchTimeTracking();
             });
             orgSel._wired = true;
@@ -2444,16 +2459,32 @@
           if (evtSel && !evtSel._wired) {
             evtSel.addEventListener('change', async () => {
               await populateClockDutiesByOrgAndEvent(document.getElementById('clockOrgFilter')?.value || '', evtSel.value || '');
+              const timesWrap = document.getElementById('clockTimesWrap');
+              if (timesWrap) timesWrap.classList.add('hidden');
               fetchTimeTracking();
             });
             evtSel._wired = true;
           }
           if (dutySel && !dutySel._wired) {
-            dutySel.addEventListener('change', () => { fetchTimeTracking(); });
+            dutySel.addEventListener('change', () => {
+              // show data only when all selected
+              const orgVal = document.getElementById('clockOrgFilter')?.value || '';
+              const evtVal = document.getElementById('clockEventFilter')?.value || '';
+              const dVal = document.getElementById('clockDutyFilter')?.value || '';
+              const timesWrap = document.getElementById('clockTimesWrap');
+              if (timesWrap) timesWrap.classList.toggle('hidden', !(orgVal && evtVal && dVal));
+              fetchTimeTracking();
+            });
             dutySel._wired = true;
           }
+          // Initial visibility on open
+          const showData = !!orgSel?.value && !!evtSel?.value && !!dutySel?.value;
+          const dutiesWrap = document.getElementById('clockDutiesWrap');
+          if (dutiesWrap) dutiesWrap.classList.add('hidden'); // superadmin never sees My Duties table
+          const timesWrap = document.getElementById('clockTimesWrap');
+          if (timesWrap) timesWrap.classList.toggle('hidden', !showData);
         }
-        await fetchDuties();
+        if (currentRole !== 'superadmin') { await fetchDuties(); }
         await fetchTimeTracking();
       };
       document.getElementById('navPhotosBtn').onclick = async () => {
