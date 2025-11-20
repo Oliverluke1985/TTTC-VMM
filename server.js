@@ -270,6 +270,16 @@ app.get('/public/groups', async (req, res) => {
   }
 });
 
+// Alias for public org list to match alternate frontend expectations
+app.get('/api/groups', async (req, res) => {
+  try {
+    const rows = await pool.query("SELECT id, name FROM groups WHERE LOWER(COALESCE(status, group_status, 'active')) = 'active' ORDER BY LOWER(name) ASC");
+    res.json(rows.rows);
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to load groups' });
+  }
+});
+
 app.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -925,9 +935,21 @@ app.post('/duties/:id/time/end', authRequired, async (req, res) => {
 
 app.get('/time-tracking', authRequired, async (req, res) => {
   const volunteerFilter = req.query.volunteer_id ? Number(req.query.volunteer_id) : null;
+  const groupFilter = req.query.group_id ? Number(req.query.group_id) : null;
   if (req.user.role === 'superadmin') {
     if (Number.isFinite(volunteerFilter)) {
       const rows = await pool.query('SELECT * FROM time_tracking WHERE volunteer_id=$1 ORDER BY start_time DESC', [volunteerFilter]);
+      return res.json(rows.rows);
+    }
+    if (Number.isFinite(groupFilter)) {
+      const rows = await pool.query(
+        `SELECT t.*
+         FROM time_tracking t
+         JOIN users u ON u.id = t.volunteer_id
+         WHERE u.group_id = $1
+         ORDER BY t.start_time DESC`,
+        [groupFilter]
+      );
       return res.json(rows.rows);
     }
     const rows = await pool.query('SELECT * FROM time_tracking ORDER BY start_time DESC');
@@ -1164,9 +1186,21 @@ app.post('/duties/:id/photos', authRequired, upload.single('photo'), async (req,
 // List photos (scoped)
 app.get('/photos', authRequired, async (req, res) => {
   const volunteerFilter = req.query.volunteer_id ? Number(req.query.volunteer_id) : null;
+  const groupFilter = req.query.group_id ? Number(req.query.group_id) : null;
   if (req.user.role === 'superadmin') {
     if (Number.isFinite(volunteerFilter)) {
       const rows = await pool.query('SELECT * FROM work_photos WHERE volunteer_id=$1 ORDER BY created_at DESC', [volunteerFilter]);
+      return res.json(rows.rows);
+    }
+    if (Number.isFinite(groupFilter)) {
+      const rows = await pool.query(
+        `SELECT p.*
+         FROM work_photos p
+         JOIN users u ON u.id = p.volunteer_id
+         WHERE u.group_id = $1
+         ORDER BY p.created_at DESC`,
+        [groupFilter]
+      );
       return res.json(rows.rows);
     }
     const all = await pool.query('SELECT * FROM work_photos ORDER BY created_at DESC');
