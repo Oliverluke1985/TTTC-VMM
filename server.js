@@ -68,6 +68,10 @@ const pool = new Pool({
     await pool.query(
       'ALTER TABLE IF EXISTS events ADD COLUMN IF NOT EXISTS end_date DATE NULL'
     );
+    // Archive orphan duties that have no event
+    try {
+      await pool.query("UPDATE duties SET archived_at = COALESCE(archived_at, NOW()) WHERE event_id IS NULL");
+    } catch (_) {}
     // RSVP table
     await pool.query(
       `CREATE TABLE IF NOT EXISTS event_attendees (
@@ -860,6 +864,8 @@ app.post('/duties', authRequired, async (req, res) => {
     } else {
       return res.status(403).json({ message: 'Forbidden' });
     }
+    // Require event for all duties
+    if (event_id == null) return res.status(400).json({ message: 'Event is required for duties' });
 
     // Build insert compatible with varying schemas
     const colsRes = await pool.query("SELECT column_name FROM information_schema.columns WHERE table_name='duties'");
@@ -910,7 +916,10 @@ app.patch('/duties/:id', authRequired, async (req, res) => {
       if (!['pending','in_progress','completed'].includes(s)) s = 'pending';
       setClauses.push(`status=$${idx++}`); params.push(s);
     }
-    if (event_id !== undefined && has.has('event_id')) { setClauses.push(`event_id=$${idx++}`); params.push(event_id); }
+    if (event_id !== undefined && has.has('event_id')) {
+      if (event_id == null) return res.status(400).json({ message: 'Event cannot be cleared from a duty' });
+      setClauses.push(`event_id=$${idx++}`); params.push(event_id);
+    }
     if (group_id !== undefined && has.has('group_id')) { setClauses.push(`group_id=$${idx++}`); params.push(group_id); }
     if (setClauses.length === 0) return res.json({ id });
 

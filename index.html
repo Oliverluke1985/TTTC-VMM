@@ -216,8 +216,8 @@
         <label>Description</label><input id="dutyDesc" type="text" />
         <label>Group</label>
         <select id="dutyGroup"><option value="">— Select group —</option></select>
-        <label>Event (optional)</label>
-        <select id="dutyEvent"><option value="">— None —</option></select>
+        <label>Event</label>
+        <select id="dutyEvent"><option value="">— Select event —</option></select>
         <label>Status</label>
         <select id="dutyStatus">
           <option value="open">open</option>
@@ -1221,7 +1221,7 @@
       try {
         const dutySel = document.getElementById('dutyEvent');
         const volSel = document.getElementById('volDutyEvent');
-        const clear = (sel) => { if (sel) sel.innerHTML = '<option value="">— None —</option>'; };
+        const clear = (sel) => { if (sel) sel.innerHTML = '<option value="">— Select event —</option>'; };
         if (!gid) { clear(dutySel); clear(volSel); return; }
         const res = await authed(`/events?group_id=${encodeURIComponent(gid)}`);
         if (!res.ok) { clear(dutySel); clear(volSel); return; }
@@ -1229,7 +1229,7 @@
         [dutySel, volSel].forEach(sel => {
           if (!sel) return;
           const current = sel.value;
-          sel.innerHTML = '<option value="">— None —</option>';
+          sel.innerHTML = '<option value="">— Select event —</option>';
           events.forEach(e => {
             const opt = document.createElement('option');
             opt.value = e.id;
@@ -1537,10 +1537,11 @@
       const description = document.getElementById('dutyDesc').value.trim();
       const groupSel = document.getElementById('dutyGroup');
       const group_id = groupSel && groupSel.value ? Number(groupSel.value) : (groupId ?? null);
-      const eventSel = document.getElementById('dutyEvent');
-      const event_id = eventSel && eventSel.value ? Number(eventSel.value) : null;
+        const eventSel = document.getElementById('dutyEvent');
+        const event_id = eventSel && eventSel.value ? Number(eventSel.value) : null;
       const status = document.getElementById('dutyStatus').value;
       try {
+        if (!event_id) { document.getElementById('createDutyError').textContent = 'Event is required'; return; }
         const res = await authed('/duties', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
