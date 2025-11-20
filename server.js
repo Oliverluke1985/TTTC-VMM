@@ -84,6 +84,10 @@ const pool = new Pool({
          updated_at TIMESTAMP NOT NULL DEFAULT NOW()
        )`
     );
+    // Ensure a permanent users.name column exists
+    await pool.query(
+      `ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS name TEXT`
+    );
   } catch (e) {
     console.error('Schema ensure failed (duties.event_id):', e?.message || e);
   }
