@@ -262,8 +262,8 @@ app.post('/signup', async (req, res) => {
 // Public groups listing for signup dropdown
 app.get('/public/groups', async (req, res) => {
   try {
-    // Support schemas with either 'status' or 'group_status'
-    const rows = await pool.query("SELECT id, name FROM groups WHERE LOWER(COALESCE(status, group_status, 'active')) = 'active' ORDER BY LOWER(name) ASC");
+    // Return all organizations for signup typeahead (no status filter)
+    const rows = await pool.query("SELECT id, name FROM groups ORDER BY LOWER(name) ASC");
     res.json(rows.rows);
   } catch (err) {
     res.status(500).json({ message: 'Failed to load groups' });
@@ -273,7 +273,7 @@ app.get('/public/groups', async (req, res) => {
 // Alias for public org list to match alternate frontend expectations
 app.get('/api/groups', async (req, res) => {
   try {
-    const rows = await pool.query("SELECT id, name FROM groups WHERE LOWER(COALESCE(status, group_status, 'active')) = 'active' ORDER BY LOWER(name) ASC");
+    const rows = await pool.query("SELECT id, name FROM groups ORDER BY LOWER(name) ASC");
     res.json(rows.rows);
   } catch (err) {
     res.status(500).json({ message: 'Failed to load groups' });
