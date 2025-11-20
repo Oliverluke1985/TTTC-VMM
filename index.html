@@ -797,7 +797,12 @@
             // keep datalist empty on focus to avoid full list popup; fetch data silently
             const dl = document.getElementById('signupGroupList');
             if (dl) dl.innerHTML = '';
-            if (!window.signupGroups || window.signupGroups.length === 0) fetchPublicGroups();
+            if (!window.signupGroups || window.signupGroups.length === 0) {
+              // fetch, then render if user already typed something
+              fetchPublicGroups().then(() => {
+                if ((input.value || '').trim()) render();
+              });
+            }
           });
           input.addEventListener('blur', () => setTimeout(() => sugg.classList.add('hidden'), 120));
           sugg.addEventListener('mousedown', (e) => {
@@ -807,6 +812,11 @@
             sugg.classList.add('hidden');
           });
           input._wiredPredict = true;
+        }
+        // If the field is focused and has text when the groups finish loading, render immediately
+        if (input === document.activeElement && (input.value || '').trim()) {
+          const evt = new Event('input');
+          input.dispatchEvent(evt);
         }
         // No custom dropdown; rely on native datalist with DB entries
       } catch {}
