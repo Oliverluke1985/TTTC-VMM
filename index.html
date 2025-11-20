@@ -1347,6 +1347,9 @@
         if (role === 'superadmin') {
           const sel = document.getElementById('superDutyGroupFilter');
           if (sel && sel.value) path = `/duties?group_id=${encodeURIComponent(sel.value)}`;
+          // Superadmin should not see the "My Duties" table
+          const dutiesWrap = document.getElementById('clockDutiesWrap');
+          if (dutiesWrap) dutiesWrap.classList.add('hidden');
         }
         const res = await authed(path); // backend should return duties user can see
         const duties = await res.json();
@@ -1356,6 +1359,8 @@
           (duties || []).forEach(d => { if (d && d.id != null) window.dutyById[d.id] = d; });
         } catch { /* ignore */ }
         const tbody = document.getElementById('dutyList');
+        // Do not render the My Duties table for superadmins
+        if (role === 'superadmin') { if (tbody) tbody.innerHTML = ''; return; }
         if (role === 'superadmin') {
           const filterSel = document.getElementById('superDutyGroupFilter');
           const filterWrap = document.getElementById('dutiesSuperFilter');
