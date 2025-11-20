@@ -2425,7 +2425,14 @@
           if (volSel) { volSel.disabled = false; }
           if (dutySel) { dutySel.disabled = !vmEventSel2.value; }
           await populateVolunteerMgmt();
-          await populateVmDutiesByOrgAndEvent(document.getElementById('vmOrgPicker')?.value || document.getElementById('superadminOrgPicker')?.value || null, vmEventSel2.value || null);
+          // Determine org id for admins and superadmins
+          const gidForDuties =
+            (currentRole === 'superadmin')
+              ? (document.getElementById('vmOrgPicker')?.value || document.getElementById('superadminOrgPicker')?.value || null)
+              : (groupId != null ? String(groupId) : null);
+          await populateVmDutiesByOrgAndEvent(gidForDuties, vmEventSel2.value || null);
+          // Explicitly enable duty select when we have an event and org context
+          if (dutySel) { dutySel.disabled = !(gidForDuties && vmEventSel2.value); }
           const vmEditRow = document.getElementById('vmEditSelectRow'); if (vmEditRow) vmEditRow.classList.toggle('hidden', currentRole === 'superadmin');
           const vmEditPanel = document.getElementById('vmEditPanel'); if (vmEditPanel) vmEditPanel.classList.add('hidden');
         });
