@@ -56,7 +56,8 @@
     .org-suggest.hidden { display: none !important; }
     .org-suggest div { padding: 10px 12px; cursor: pointer; color: var(--text); }
     .org-suggest div + div { border-top: 1px solid rgba(2,137,219,0.22); }
-    .org-suggest div:hover { background: rgba(2,137,219,0.22); }
+    .org-suggest div:hover, .org-suggest div.active { background: rgba(2,137,219,0.28); }
+    .org-suggest div mark { background: transparent; color: var(--accent1); font-weight: 600; }
 
     /* Toolbar */
     nav#toolbar { display:flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 12px 0 16px; background: rgba(0,0,0,0.6); border: 1px solid var(--accent3); border-radius: 8px; padding: 8px; }
@@ -766,13 +767,24 @@
           .forEach(g => {
             window.signupGroupMap[String(g.name).toLowerCase()] = g.id;
           });
-        // Wire simple suggestions dropdown as a fallback for browsers with limited datalist UX
+        // Wire site-styled suggestions dropdown (keyboard + highlight)
         const input = document.getElementById('signupGroupInput');
         const sugg = document.getElementById('signupGroupSuggestions');
-        const dataList = document.getElementById('signupGroupList');
-        if (dataList) { dataList.innerHTML = ''; } // keep empty until user types
-        // Lightweight predictive suggestions (no button) for consistent UX
+        // Lightweight predictive suggestions (no native datalist)
         if (input && sugg && !input._wiredPredict) {
+          function highlight(name, q) {
+            if (!q) return name;
+            const idx = name.toLowerCase().indexOf(q);
+            if (idx === -1) return name;
+            return name.slice(0, idx) + '<mark>' + name.slice(idx, idx + q.length) + '</mark>' + name.slice(idx + q.length);
+          }
+          function selectByIndex(i) {
+            const items = Array.from(sugg.children);
+            if (i < 0 || i >= items.length) return;
+            const val = items[i].getAttribute('data-value') || items[i].textContent;
+            input.value = val;
+            sugg.classList.add('hidden');
+          }
           const render = () => {
             const q = (input.value || '').trim().toLowerCase();
             const all = window.signupGroups || [];
@@ -783,33 +795,46 @@
                 const n = String(g.name).toLowerCase();
                 return n.includes(q) && !n.startsWith(q);
               });
-              matches = [...starts, ...contains].slice(0, 10);
+              matches = [...starts, ...contains].slice(0, 5);
             }
             sugg.innerHTML = '';
             if (matches.length === 0) { sugg.classList.add('hidden'); return; }
-            // update native datalist with only matched options (prevents full list on focus)
-            const dl = document.getElementById('signupGroupList');
-            if (dl) {
-              dl.innerHTML = '';
-              matches.forEach(g => {
-                const opt = document.createElement('option');
-                opt.value = g.name;
-                dl.appendChild(opt);
-              });
-            }
-            matches.forEach(g => {
+            input._selIndex = -1;
+            matches.forEach((g, idx) => {
               const div = document.createElement('div');
-              div.textContent = g.name;
-              div.dataset.value = g.name;
+              div.innerHTML = highlight(g.name, q);
+              div.setAttribute('data-value', g.name);
+              if (idx === input._selIndex) div.classList.add('active');
               sugg.appendChild(div);
             });
             sugg.classList.remove('hidden');
           };
           input.addEventListener('input', render);
+          input.addEventListener('keydown', (ev) => {
+            if (sugg.classList.contains('hidden')) return;
+            const items = Array.from(sugg.children);
+            if (ev.key === 'ArrowDown') {
+              ev.preventDefault();
+              input._selIndex = (typeof input._selIndex === 'number' ? input._selIndex : -1) + 1;
+              if (input._selIndex >= items.length) input._selIndex = 0;
+              items.forEach((el, i) => el.classList.toggle('active', i === input._selIndex));
+              items[input._selIndex]?.scrollIntoView({ block: 'nearest' });
+            } else if (ev.key === 'ArrowUp') {
+              ev.preventDefault();
+              input._selIndex = (typeof input._selIndex === 'number' ? input._selIndex : items.length) - 1;
+              if (input._selIndex < 0) input._selIndex = items.length - 1;
+              items.forEach((el, i) => el.classList.toggle('active', i === input._selIndex));
+              items[input._selIndex]?.scrollIntoView({ block: 'nearest' });
+            } else if (ev.key === 'Enter') {
+              if (input._selIndex != null && input._selIndex >= 0 && input._selIndex < items.length) {
+                ev.preventDefault();
+                selectByIndex(input._selIndex);
+              }
+            } else if (ev.key === 'Escape') {
+              sugg.classList.add('hidden');
+            }
+          });
           input.addEventListener('focus', () => {
-            // keep datalist empty on focus to avoid full list popup; fetch data silently
-            const dl = document.getElementById('signupGroupList');
-            if (dl) dl.innerHTML = '';
             if (!window.signupGroups || window.signupGroups.length === 0) {
               // fetch, then render if user already typed something
               fetchPublicGroups().then(() => {
