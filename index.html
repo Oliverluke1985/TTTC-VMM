@@ -2738,7 +2738,9 @@
           const syncFromEdit = () => {
             const editSel = document.getElementById('vmEditSelect');
             if (!editSel) return;
+            const keep = volSel.value;
             volSel.innerHTML = editSel.innerHTML || '<option value="">— Select volunteer —</option>';
+            if (keep) volSel.value = keep;
             volSel.disabled = false;
           };
           const refillFromCache = () => {
