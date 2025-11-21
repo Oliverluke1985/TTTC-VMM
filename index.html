@@ -1854,7 +1854,7 @@
           };
           applyFilter();
           if (search && !search._wired) { search.addEventListener('input', applyFilter); search._wired = true; }
-          // Always allow selection; list is scoped by org when provided
+          // Always allow volunteer selection; the list is scoped by org when provided
           volSel.disabled = false;
           if (current) volSel.value = current;
           // Fallback: if nothing rendered, append all volunteers explicitly
@@ -2397,6 +2397,8 @@
         resetGlobalFilters();
         resetVolunteerMgmtUI();
         navigateTo(currentRole === 'superadmin' ? 'superadminSection' : 'adminSection');
+        // Immediately populate volunteer management so the dropdown is ready
+        populateVolunteerMgmt();
         const table = document.getElementById('groupTable');
         if (table) table.classList.add('hidden');
         const infoWrap = document.getElementById('superadminOrgInfo');
@@ -2472,6 +2474,7 @@
         });
         vmOrgSel._wired = true;
       }
+
       // When an event is chosen, reload duties filtered by event and enable volunteer once duty chosen later
       const vmEventSel2 = document.getElementById('vmEvent');
       if (vmEventSel2 && !vmEventSel2._wired) {
@@ -2500,8 +2503,9 @@
         vmDutySel.addEventListener('change', () => {
           const volSel = document.getElementById('vmVolunteer');
           if (volSel) {
-            // Keep volunteer selectable regardless of duty/org; dropdown is always enabled
-            volSel.disabled = false;
+            // Keep volunteer selectable regardless of duty; only superadmin without org should be gated
+            const hasOrg = !!document.getElementById('vmOrgPicker')?.value || !!document.getElementById('superadminOrgPicker')?.value;
+            volSel.disabled = (currentRole === 'superadmin') ? !hasOrg : false;
           }
           // Show edit select only once duty is chosen and org+event exist
           const hasOrg = (currentRole !== 'superadmin') || !!document.getElementById('vmOrgPicker')?.value || !!document.getElementById('superadminOrgPicker')?.value;
@@ -3042,7 +3046,8 @@
     // password generation removed per request
 
     // CSV download (role-scoped)
-    document.getElementById('downloadCsvBtn')?.addEventListener('click', async () => {
+    const dlBtn = document.getElementById('downloadCsvBtn');
+    if (dlBtn) dlBtn.addEventListener('click', async () => {
       document.getElementById('downloadCsvError').textContent = '';
       try {
         const res = await authed('/time-tracking.csv');
@@ -3151,7 +3156,8 @@
       } catch { /* silent */ }
     }
 
-    document.getElementById('uploadPhotoBtn')?.addEventListener('click', async () => {
+    const upBtn = document.getElementById('uploadPhotoBtn');
+    if (upBtn) upBtn.addEventListener('click', async () => {
       document.getElementById('photoError').textContent = '';
       try {
         const dutyId = document.getElementById('photoDuty').value;
