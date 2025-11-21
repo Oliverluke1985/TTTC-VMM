@@ -1736,23 +1736,9 @@
         const params = new URLSearchParams();
         if (groupIdForFilter) params.set('group_id', String(groupIdForFilter));
         // Use dedicated endpoint to list volunteers from DB
-        let url = `/volunteers${params.toString() ? `?${params.toString()}` : ''}`;
-        let res = await authed(url);
-        if (!res.ok) {
-          // Surface the error to help diagnose backend issues
-          const errText = await res.text().catch(() => '');
-          console.warn('Failed to load volunteers:', res.status, errText);
-          return [];
-        }
-        let list = await res.json();
-        // Fallback for superadmin: if an org filter returns empty, try global list
-        if ((!list || list.length === 0) && role === 'superadmin' && groupIdForFilter) {
-          try {
-            const resAll = await authed('/volunteers');
-            if (resAll.ok) list = await resAll.json();
-          } catch { /* ignore */ }
-        }
-        return Array.isArray(list) ? list : [];
+        const res = await authed(`/volunteers${params.toString() ? `?${params.toString()}` : ''}`);
+        if (!res.ok) return [];
+        return await res.json();
       } catch { return []; }
     }
 
@@ -1868,8 +1854,9 @@
           };
           applyFilter();
           if (search && !search._wired) { search.addEventListener('input', applyFilter); search._wired = true; }
-          // Always enable; list visibility is controlled by filtering above
-          volSel.disabled = false;
+          // Enable volunteer selection for superadmin when org is chosen
+          const enableVol = (role !== 'superadmin') || !!orgVal;
+          volSel.disabled = !enableVol;
           if (current) volSel.value = current;
           // Fallback: if nothing rendered, append all volunteers explicitly
           if (volSel.options.length <= 1 && (volSel._all && volSel._all.length)) {
@@ -1883,21 +1870,39 @@
             });
             if (cur2) volSel.value = cur2;
           }
-          // If still nothing, show explicit empty-state so UX isn’t blocked silently
+          // If still empty, surface an explicit empty-state so selection isn't silently blocked
           if (volSel.options.length <= 1) {
-            const opt = document.createElement('option');
-            opt.value = '';
-            opt.textContent = '— No volunteers found —';
-            volSel.appendChild(opt);
+            const emptyOpt = document.createElement('option');
+            emptyOpt.value = '';
+            emptyOpt.textContent = '— No volunteers found —';
+            volSel.appendChild(emptyOpt);
           }
-          // Ensure selecting a volunteer triggers log refresh / UI enablement
-          if (!volSel._wired) {
+          // Ensure we react when the user selects a volunteer
+          if (!volSel._wiredChange) {
             volSel.addEventListener('change', () => {
+              const selId = Number(volSel.value || 0);
+              // Mirror into edit dropdown if present
+              const editSel = document.getElementById('vmEditSelect');
+              if (editSel) {
+                // If the selected id is not in edit list yet, inject a temporary option so value sets
+                if (selId && !Array.from(editSel.options).some(o => Number(o.value) === selId)) {
+                  const v = (volSel._all || []).find(x => Number(x.id) === selId);
+                  const opt = document.createElement('option');
+                  opt.value = String(selId);
+                  opt.text = v ? (v.name || v.email || String(selId)) : String(selId);
+                  editSel.appendChild(opt);
+                }
+                editSel.value = selId ? String(selId) : '';
+              }
+              // Show edit row/panel if we have a selection
+              const vmEditRow = document.getElementById('vmEditSelectRow');
+              if (vmEditRow) vmEditRow.classList.toggle('hidden', !selId);
+              const vmPanel = document.getElementById('vmEditPanel');
+              if (vmPanel && selId) vmPanel.classList.remove('hidden');
+              // Refresh logs for visibility
               refreshVolunteerLogs();
-              const editRow = document.getElementById('vmEditSelectRow');
-              if (editRow) editRow.classList.remove('hidden');
             });
-            volSel._wired = true;
+            volSel._wiredChange = true;
           }
         }
         // Populate volunteer edit dropdown
