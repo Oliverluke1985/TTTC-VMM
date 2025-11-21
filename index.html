@@ -1736,9 +1736,23 @@
         const params = new URLSearchParams();
         if (groupIdForFilter) params.set('group_id', String(groupIdForFilter));
         // Use dedicated endpoint to list volunteers from DB
-        const res = await authed(`/volunteers${params.toString() ? `?${params.toString()}` : ''}`);
-        if (!res.ok) return [];
-        return await res.json();
+        let url = `/volunteers${params.toString() ? `?${params.toString()}` : ''}`;
+        let res = await authed(url);
+        if (!res.ok) {
+          // Surface the error to help diagnose backend issues
+          const errText = await res.text().catch(() => '');
+          console.warn('Failed to load volunteers:', res.status, errText);
+          return [];
+        }
+        let list = await res.json();
+        // Fallback for superadmin: if an org filter returns empty, try global list
+        if ((!list || list.length === 0) && role === 'superadmin' && groupIdForFilter) {
+          try {
+            const resAll = await authed('/volunteers');
+            if (resAll.ok) list = await resAll.json();
+          } catch { /* ignore */ }
+        }
+        return Array.isArray(list) ? list : [];
       } catch { return []; }
     }
 
@@ -1854,9 +1868,8 @@
           };
           applyFilter();
           if (search && !search._wired) { search.addEventListener('input', applyFilter); search._wired = true; }
-          // Enable volunteer selection for superadmin when org is chosen
-          const enableVol = (role !== 'superadmin') || !!orgVal;
-          volSel.disabled = !enableVol;
+          // Always enable; list visibility is controlled by filtering above
+          volSel.disabled = false;
           if (current) volSel.value = current;
           // Fallback: if nothing rendered, append all volunteers explicitly
           if (volSel.options.length <= 1 && (volSel._all && volSel._all.length)) {
@@ -1869,6 +1882,22 @@
               volSel.appendChild(opt);
             });
             if (cur2) volSel.value = cur2;
+          }
+          // If still nothing, show explicit empty-state so UX isn’t blocked silently
+          if (volSel.options.length <= 1) {
+            const opt = document.createElement('option');
+            opt.value = '';
+            opt.textContent = '— No volunteers found —';
+            volSel.appendChild(opt);
+          }
+          // Ensure selecting a volunteer triggers log refresh / UI enablement
+          if (!volSel._wired) {
+            volSel.addEventListener('change', () => {
+              refreshVolunteerLogs();
+              const editRow = document.getElementById('vmEditSelectRow');
+              if (editRow) editRow.classList.remove('hidden');
+            });
+            volSel._wired = true;
           }
         }
         // Populate volunteer edit dropdown
