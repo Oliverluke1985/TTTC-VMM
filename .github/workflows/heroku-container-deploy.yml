@@ -1,0 +1,74 @@
+name: Deploy to Heroku (Container)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    name: Deploy (Container)
+    runs-on: ubuntu-latest
+    concurrency:
+      group: heroku-container-deploy-${{ github.ref }}
+      cancel-in-progress: true
+    steps:
+      - name: Checkout (retry)
+        uses: Wandalen/wretry.action@v1.3.0
+        with:
+          action: actions/checkout@v4
+          attempt_limit: 5
+          attempt_delay: 15000
+
+      - name: Use Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Validate Heroku secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=0
+          if [ -z "${{ secrets.HEROKU_API_KEY }}" ]; then echo "ERROR: Missing HEROKU_API_KEY"; missing=1; fi
+          if [ -z "${{ secrets.HEROKU_APP_NAME }}" ]; then echo "ERROR: Missing HEROKU_APP_NAME"; missing=1; fi
+          if [ -z "${{ secrets.HEROKU_EMAIL }}" ]; then echo "ERROR: Missing HEROKU_EMAIL"; missing=1; fi
+          echo "Heroku app name length: $(printf "%s" "${{ secrets.HEROKU_APP_NAME }}" | wc -c)"
+          echo "Heroku email length: $(printf "%s" "${{ secrets.HEROKU_EMAIL }}" | wc -c)"
+          echo "Heroku API key length: $(printf "%s" "${{ secrets.HEROKU_API_KEY }}" | wc -c)"
+          if [ "$missing" -ne 0 ]; then
+            echo "Please set the missing secrets in GitHub → Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+
+      - name: Log in to Heroku Container Registry
+        env:
+          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+        run: |
+          echo "$HEROKU_API_KEY" | docker login --username=_ --password-stdin registry.heroku.com
+
+      - name: Build Docker image
+        env:
+          APP: ${{ secrets.HEROKU_APP_NAME }}
+        run: |
+          docker build -t registry.heroku.com/$APP/web .
+
+      - name: Push Docker image (retry)
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 10
+          max_attempts: 4
+          command: docker push registry.heroku.com/${{ secrets.HEROKU_APP_NAME }}/web
+
+      - name: Install Heroku CLI
+        run: curl https://cli-assets.heroku.com/install.sh | sh
+
+      - name: Release container on Heroku (retry)
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 10
+          max_attempts: 4
+          command: heroku container:release web -a "${{ secrets.HEROKU_APP_NAME }}"
+
+

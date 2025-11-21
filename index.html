@@ -1999,11 +1999,15 @@
           // Gate Duty/Volunteer placeholders firmly based on current cascade state
           const dutySel = document.getElementById('vmDuty');
           const volSel = document.getElementById('vmVolunteer');
-          if (dutySel) { dutySel.disabled = !orgVal; dutySel.innerHTML = orgVal ? '<option value="">— Select duty —</option>' : '<option value="">— Select organization first —</option>'; }
+          const hasOrgSelection = Boolean(orgVal);
+          if (dutySel) {
+            dutySel.disabled = !hasOrgSelection;
+            dutySel.innerHTML = hasOrgSelection ? '<option value="">— Select duty —</option>' : '<option value="">— Select organization first —</option>';
+          }
           if (volSel) {
             // Only disable/enable; don't wipe options that were already populated
-            volSel.disabled = !vmOrgSel.value;
-            if (!vmOrgSel.value && volSel.options.length <= 1) {
+            volSel.disabled = !hasOrgSelection;
+            if (!hasOrgSelection && volSel.options.length <= 1) {
               volSel.innerHTML = '<option value="">— Select organization first —</option>';
             }
           }
