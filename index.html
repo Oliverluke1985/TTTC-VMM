@@ -1854,9 +1854,8 @@
           };
           applyFilter();
           if (search && !search._wired) { search.addEventListener('input', applyFilter); search._wired = true; }
-          // Enable volunteer selection for superadmin when org is chosen
-          const enableVol = (role !== 'superadmin') || !!orgVal;
-          volSel.disabled = !enableVol;
+          // Always allow selection; list is scoped by org when provided
+          volSel.disabled = false;
           if (current) volSel.value = current;
           // Fallback: if nothing rendered, append all volunteers explicitly
           if (volSel.options.length <= 1 && (volSel._all && volSel._all.length)) {
@@ -2357,7 +2356,7 @@
         const vmOrg = document.getElementById('vmOrgPicker'); if (vmOrg) vmOrg.value = '';
         const vmEvt = document.getElementById('vmEvent'); if (vmEvt) vmEvt.innerHTML = '<option value="">— Select event —</option>';
         const vmDuty = document.getElementById('vmDuty'); if (vmDuty) { vmDuty.innerHTML = '<option value="">— Select organization first —</option>'; vmDuty.disabled = true; }
-        const vmVol = document.getElementById('vmVolunteer'); if (vmVol) { vmVol.innerHTML = '<option value="">— Select volunteer —</option>'; vmVol.disabled = (currentRole === 'superadmin'); }
+        const vmVol = document.getElementById('vmVolunteer'); if (vmVol) { vmVol.innerHTML = '<option value="">— Select volunteer —</option>'; vmVol.disabled = false; }
         const vmEditSel = document.getElementById('vmEditSelect'); if (vmEditSel) vmEditSel.innerHTML = '<option value="">— Select volunteer —</option>';
         const vRow = document.getElementById('vmVolunteerRow'); if (vRow) vRow.classList.toggle('hidden', currentRole === 'superadmin');
         const eRow = document.getElementById('vmEventRow'); if (eRow) eRow.classList.toggle('hidden', currentRole === 'superadmin');
@@ -2454,7 +2453,7 @@
           const dutySel = document.getElementById('vmDuty');
           const volSel = document.getElementById('vmVolunteer');
           if (dutySel) { dutySel.disabled = true; dutySel.innerHTML = '<option value="">— Select event —</option>'; }
-          if (volSel) { volSel.disabled = !vmOrgSel.value; volSel.innerHTML = vmOrgSel.value ? '<option value="">— Select volunteer —</option>' : '<option value="">— Select organization first —</option>'; }
+          if (volSel) { volSel.disabled = false; volSel.innerHTML = '<option value="">— Select volunteer —</option>'; }
           const evtSel = document.getElementById('vmEvent');
           const evtRow = document.getElementById('vmEventRow');
           if (evtRow) evtRow.classList.toggle('hidden', !vmOrgSel.value);
@@ -2501,9 +2500,8 @@
         vmDutySel.addEventListener('change', () => {
           const volSel = document.getElementById('vmVolunteer');
           if (volSel) {
-            // Keep volunteer selectable regardless of duty; only superadmin without org should be gated
-            const hasOrg = !!document.getElementById('vmOrgPicker')?.value || !!document.getElementById('superadminOrgPicker')?.value;
-            volSel.disabled = (currentRole === 'superadmin') ? !hasOrg : false;
+            // Keep volunteer selectable regardless of duty/org; dropdown is always enabled
+            volSel.disabled = false;
           }
           // Show edit select only once duty is chosen and org+event exist
           const hasOrg = (currentRole !== 'superadmin') || !!document.getElementById('vmOrgPicker')?.value || !!document.getElementById('superadminOrgPicker')?.value;
