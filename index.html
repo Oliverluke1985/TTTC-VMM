@@ -483,18 +483,6 @@
   <!-- VOLUNTEER MANAGEMENT (Admin/Superadmin) -->
   <section id="volMgmtSection" class="col hidden">
     <h2>Volunteer Management</h2>
-    <div class="row">
-      <div class="col">
-        <h3>Create Volunteer</h3>
-        <label>Name</label><input id="vmVolName" type="text" />
-        <label>Email</label><input id="vmVolEmail" type="email" />
-        <label>Password</label><input id="vmVolPassword" type="password" />
-        <label>Group</label>
-        <select id="vmVolGroup"><option value="">— None —</option></select>
-        <button id="vmCreateVolBtn">Create Volunteer</button>
-        <div id="vmCreateVolErr" class="error"></div>
-      </div>
-    </div>
     <div id="vmSuperOrgRow" class="row hidden">
       <div class="col">
         <label>Organization</label>
@@ -554,6 +542,18 @@
       <div class="col">
         <label>Select Volunteer to Edit</label>
         <select id="vmEditSelect"><option value="">— Select volunteer —</option></select>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col">
+        <h3>Create Volunteer</h3>
+        <label>Name</label><input id="vmVolName" type="text" />
+        <label>Email</label><input id="vmVolEmail" type="email" />
+        <label>Password</label><input id="vmVolPassword" type="password" />
+        <label>Group</label>
+        <select id="vmVolGroup"><option value="">— None —</option></select>
+        <button id="vmCreateVolBtn">Create Volunteer</button>
+        <div id="vmCreateVolErr" class="error"></div>
       </div>
     </div>
   </section>
