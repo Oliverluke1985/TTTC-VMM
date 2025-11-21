@@ -1734,10 +1734,9 @@
     async function fetchVolunteers(groupIdForFilter) {
       try {
         const params = new URLSearchParams();
-        params.set('role', 'volunteer');
-        // Filter by org when provided (admins and superadmins)
         if (groupIdForFilter) params.set('group_id', String(groupIdForFilter));
-        const res = await authed(`/users?${params.toString()}`);
+        // Use dedicated endpoint to list volunteers from DB
+        const res = await authed(`/volunteers${params.toString() ? `?${params.toString()}` : ''}`);
         if (!res.ok) return [];
         return await res.json();
       } catch { return []; }
@@ -1855,8 +1854,9 @@
           };
           applyFilter();
           if (search && !search._wired) { search.addEventListener('input', applyFilter); search._wired = true; }
-          // Keep volunteer selection enabled; superadmin still must choose org to see list
-          volSel.disabled = false;
+          // Enable volunteer selection for superadmin when org is chosen
+          const enableVol = (role !== 'superadmin') || !!orgVal;
+          volSel.disabled = !enableVol;
           if (current) volSel.value = current;
           // Fallback: if nothing rendered, append all volunteers explicitly
           if (volSel.options.length <= 1 && (volSel._all && volSel._all.length)) {
@@ -1869,10 +1869,6 @@
               volSel.appendChild(opt);
             });
             if (cur2) volSel.value = cur2;
-          }
-          // If still empty, show a helpful placeholder
-          if (volSel.options.length <= 1) {
-            volSel.innerHTML = '<option value="">— No volunteers found —</option>';
           }
         }
         // Populate volunteer edit dropdown
@@ -2327,7 +2323,7 @@
         const vmOrg = document.getElementById('vmOrgPicker'); if (vmOrg) vmOrg.value = '';
         const vmEvt = document.getElementById('vmEvent'); if (vmEvt) vmEvt.innerHTML = '<option value="">— Select event —</option>';
         const vmDuty = document.getElementById('vmDuty'); if (vmDuty) { vmDuty.innerHTML = '<option value="">— Select organization first —</option>'; vmDuty.disabled = true; }
-        const vmVol = document.getElementById('vmVolunteer'); if (vmVol) { vmVol.innerHTML = '<option value="">— Select volunteer —</option>'; vmVol.disabled = false; }
+        const vmVol = document.getElementById('vmVolunteer'); if (vmVol) { vmVol.innerHTML = '<option value="">— Select volunteer —</option>'; vmVol.disabled = (currentRole === 'superadmin'); }
         const vmEditSel = document.getElementById('vmEditSelect'); if (vmEditSel) vmEditSel.innerHTML = '<option value="">— Select volunteer —</option>';
         const vRow = document.getElementById('vmVolunteerRow'); if (vRow) vRow.classList.toggle('hidden', currentRole === 'superadmin');
         const eRow = document.getElementById('vmEventRow'); if (eRow) eRow.classList.toggle('hidden', currentRole === 'superadmin');
@@ -2368,8 +2364,6 @@
         resetGlobalFilters();
         resetVolunteerMgmtUI();
         navigateTo(currentRole === 'superadmin' ? 'superadminSection' : 'adminSection');
-        // Immediately populate lists so volunteers are selectable
-        populateVolunteerMgmt();
         const table = document.getElementById('groupTable');
         if (table) table.classList.add('hidden');
         const infoWrap = document.getElementById('superadminOrgInfo');

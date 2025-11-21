@@ -438,6 +438,32 @@ app.get('/users', authRequired, async (req, res) => {
   }
 });
 
+// Simple volunteers list endpoint (scoped)
+app.get('/volunteers', authRequired, async (req, res) => {
+  try {
+    const groupFilter = req.query.group_id ? Number(req.query.group_id) : null;
+    const where = ['u.role = $1'];
+    const params = ['volunteer'];
+    let idx = 2;
+    if (req.user.role === 'superadmin') {
+      if (Number.isFinite(groupFilter)) { where.push(`u.group_id = $${idx++}`); params.push(groupFilter); }
+    } else if (req.user.role === 'admin') {
+      where.push(`u.group_id = $${idx++}`); params.push(req.user.group_id);
+    } else {
+      return res.status(403).json({ message: 'Admins only' });
+    }
+    const colsRes = await pool.query("SELECT column_name FROM information_schema.columns WHERE table_name='users'");
+    const has = new Set(colsRes.rows.map(r => r.column_name));
+    const selectCols = ['u.id','u.email','u.group_id'];
+    const joins = [];
+    if (has.has('name')) selectCols.push('u.name'); else { joins.push('LEFT JOIN user_profile p ON p.user_id = u.id'); selectCols.push('p.name AS name'); }
+    const sql = `SELECT ${selectCols.join(', ')} FROM users u ${joins.join(' ')} WHERE ${where.join(' AND ')} ORDER BY LOWER(COALESCE(${has.has('name') ? 'u.name' : 'p.name'}, u.email)) ASC`;
+    const rows = await pool.query(sql, params);
+    res.json(rows.rows);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
 // Edit user (admin/superadmin)
 app.patch('/users/:id', authRequired, async (req, res) => {
   try {
