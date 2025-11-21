@@ -2364,6 +2364,8 @@
         resetGlobalFilters();
         resetVolunteerMgmtUI();
         navigateTo(currentRole === 'superadmin' ? 'superadminSection' : 'adminSection');
+        // Always populate volunteer management lists immediately
+        populateVolunteerMgmt();
         const table = document.getElementById('groupTable');
         if (table) table.classList.add('hidden');
         const infoWrap = document.getElementById('superadminOrgInfo');
