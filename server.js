@@ -75,6 +75,10 @@ const pool = new Pool({
     await pool.query(
       'ALTER TABLE IF EXISTS events ADD COLUMN IF NOT EXISTS end_time TIME NULL'
     );
+    // Time tracking duty_date ensure
+    await pool.query(
+      'ALTER TABLE IF EXISTS time_tracking ADD COLUMN IF NOT EXISTS duty_date DATE NULL'
+    );
     // Archive orphan duties that have no event
     try {
       await pool.query("UPDATE duties SET archived_at = COALESCE(archived_at, NOW()) WHERE event_id IS NULL");

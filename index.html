@@ -2774,7 +2774,7 @@
             const duty_id = Number(document.getElementById('vmDuty').value);
             const start_time = document.getElementById('vmStart').value;
             const end_time = document.getElementById('vmEnd').value || null;
-            const duty_date = document.getElementById('vmDate').value || null;
+            const duty_date = start_time ? String(start_time).split('T')[0] : null;
             try {
               const res = await authed('/admin/time-tracking', {
                 method: 'POST',
