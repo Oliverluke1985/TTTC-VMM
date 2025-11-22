@@ -7,6 +7,14 @@ const { Pool } = require('pg');
 const fs = require('fs');
 const multer = require('multer');
 
+// Global diagnostic hook to capture top-level crashes
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled Promise Rejection:', reason);
+});
+
 const app = express();
 app.use(cors());
 app.use(express.json());
