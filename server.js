@@ -1197,9 +1197,16 @@ app.post('/admin/time-tracking', authRequired, async (req, res) => {
     if (volunteerRes.rowCount === 0 || volunteerRes.rows[0].role !== 'volunteer') {
       return res.status(404).json({ message: 'Volunteer not found. Refresh the volunteer list and try again.' });
     }
+    const dutyRes = await pool.query('SELECT id, group_id FROM duties WHERE id=$1', [duty_id]);
+    if (dutyRes.rowCount === 0) {
+      return res.status(404).json({ message: 'Duty not found. Refresh the duty list and try again.' });
+    }
     if (req.user.role === 'admin') {
       if (volunteerRes.rows[0].group_id !== req.user.group_id) {
         return res.status(403).json({ message: 'Admins can only add time for volunteers in their organization.' });
+      }
+      if (dutyRes.rows[0].group_id != null && dutyRes.rows[0].group_id !== req.user.group_id) {
+        return res.status(403).json({ message: 'Admins can only add time for duties in their organization.' });
       }
     }
     const result = await pool.query(
