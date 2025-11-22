@@ -73,12 +73,12 @@ async function ensureTimeTrackingConstraints() {
   try {
     await client.query('BEGIN');
     await client.query(`
-      CREATE TABLE IF NOT EXISTS volunteers (
+      CREATE TABLE IF NOT EXISTS volunteer_lookup (
         id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE
       )
     `);
     await client.query(`
-      INSERT INTO volunteers (id)
+      INSERT INTO volunteer_lookup (id)
       SELECT id FROM users WHERE LOWER(role) = 'volunteer'
       ON CONFLICT (id) DO NOTHING
     `);
@@ -90,7 +90,7 @@ async function ensureTimeTrackingConstraints() {
     await client.query(`
       ALTER TABLE time_tracking
       ADD CONSTRAINT time_tracking_volunteer_id_fkey
-      FOREIGN KEY (volunteer_id) REFERENCES volunteers(id) ON DELETE CASCADE
+      FOREIGN KEY (volunteer_id) REFERENCES volunteer_lookup(id) ON DELETE CASCADE
     `);
     await client.query('ALTER TABLE time_tracking DROP CONSTRAINT IF EXISTS time_tracking_duty_id_fkey');
     await client.query(`
@@ -1282,10 +1282,10 @@ app.post('/admin/time-tracking', authRequired, async (req, res) => {
     if (err?.code === '23503') {
       const detail = String(err.detail || '');
       if (detail.includes('(volunteer_id)')) {
-        return res.status(404).json({ message: `Volunteer #${volunteer_id} no longer exists in the database.` });
+        return res.status(404).json({ message: `Volunteer #${volunteerIdNum ?? volunteer_id} no longer exists in the database.` });
       }
       if (detail.includes('(duty_id)')) {
-        return res.status(404).json({ message: `Duty #${duty_id} no longer exists in the database.` });
+        return res.status(404).json({ message: `Duty #${dutyIdNum ?? duty_id} no longer exists in the database.` });
       }
       return res.status(400).json({ message: 'Volunteer or duty missing in the database.' });
     }
