@@ -47,6 +47,17 @@ const pool = new Pool({
   ssl: process.env.PGSSLMODE === 'require' ? { rejectUnauthorized: false } : false,
 });
 
+let ensuredDutyDate = false;
+async function ensureDutyDateColumn() {
+  if (ensuredDutyDate) return;
+  try {
+    await pool.query('ALTER TABLE IF EXISTS time_tracking ADD COLUMN IF NOT EXISTS duty_date DATE NULL');
+    ensuredDutyDate = true;
+  } catch (err) {
+    console.error('Failed ensuring time_tracking.duty_date column:', err?.message || err);
+  }
+}
+
 // Ensure optional event link on duties exists
 (async () => {
   try {
@@ -989,6 +1000,7 @@ app.patch('/duties/:id', authRequired, async (req, res) => {
 // --- Time tracking
 app.post('/duties/:id/time/start', authRequired, async (req, res) => {
   try {
+    await ensureDutyDateColumn();
     const { duty_date } = req.body;
     const result = await pool.query(
       'INSERT INTO time_tracking (volunteer_id,duty_id,start_time,duty_date) VALUES ($1,$2,NOW(),$3) RETURNING id',
@@ -1097,6 +1109,7 @@ app.patch('/time-tracking/:id', authRequired, async (req, res) => {
   if (!Number.isFinite(id)) return res.status(400).json({ message: 'Invalid id' });
   const { start_time, end_time, duty_date, duration_hours } = req.body || {};
   try {
+    await ensureDutyDateColumn();
     // Build update pieces
     const setClauses = [];
     const params = [];
@@ -1175,6 +1188,7 @@ app.delete('/time-tracking/:id', authRequired, async (req, res) => {
 app.post('/admin/time-tracking', authRequired, async (req, res) => {
   if (!isAdmin(req.user)) return res.status(403).json({ message: 'Admins only' });
   try {
+    await ensureDutyDateColumn();
     const { volunteer_id, duty_id, start_time, end_time, duty_date } = req.body || {};
     if (!volunteer_id || !duty_id || !start_time) return res.status(400).json({ message: 'volunteer_id, duty_id, start_time required' });
     if (req.user.role === 'admin') {
