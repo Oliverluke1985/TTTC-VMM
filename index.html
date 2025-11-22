@@ -122,6 +122,30 @@
       </div>
     </div>
     <div id="clockSuperNote" class="hint"></div>
+    <div id="clockAdminAdjustWrap" class="hidden">
+      <div id="clockAdminOrgRow" class="row hidden">
+        <div class="col">
+          <label>Organization</label>
+          <select id="clockAdminOrgPicker"><option value="">— Select organization —</option></select>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col">
+          <label>Volunteer</label>
+          <select id="clockAdminVolunteer"><option value="">— Select volunteer —</option></select>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col">
+          <h3>Volunteer Timesheet</h3>
+          <table>
+            <thead><tr><th>ID</th><th>Duty</th><th>Start</th><th>End</th><th>Hours</th><th>Date</th><th>Save</th><th>Delete</th></tr></thead>
+            <tbody id="clockAdminTimeList"></tbody>
+          </table>
+          <div id="clockAdminEmpty" class="hint"></div>
+        </div>
+      </div>
+    </div>
     <div id="clockDutiesWrap">
       <h3>My Duties</h3>
       <table>
@@ -1307,6 +1331,133 @@
         if (current) sel.value = current;
       } catch { /* silent */ }
     }
+    async function populateClockAdminOrgPicker() {
+      try {
+        const row = document.getElementById('clockAdminOrgRow');
+        if (row) row.classList.remove('hidden');
+        const sel = document.getElementById('clockAdminOrgPicker');
+        if (!sel) return;
+        const res = await authed('/groups');
+        if (!res.ok) return;
+        const groups = await res.json();
+        const current = sel.value;
+        sel.innerHTML = '<option value="">— Select organization —</option>';
+        groups.forEach(g => {
+          const opt = document.createElement('option');
+          opt.value = g.id;
+          opt.textContent = g.name;
+          sel.appendChild(opt);
+        });
+        if (current) sel.value = current;
+        sel.disabled = false;
+        if (!sel._wired) {
+          sel.addEventListener('change', async () => {
+            await populateClockAdminVolunteersByOrg(sel.value || '');
+          });
+          sel._wired = true;
+        }
+        if (sel.value) {
+          await populateClockAdminVolunteersByOrg(sel.value);
+        } else {
+          const volunteerSel = document.getElementById('clockAdminVolunteer');
+          if (volunteerSel) {
+            volunteerSel.innerHTML = '<option value="">— Select organization first —</option>';
+            volunteerSel.disabled = true;
+          }
+          const tbody = document.getElementById('clockAdminTimeList');
+          if (tbody) tbody.innerHTML = '';
+          const empty = document.getElementById('clockAdminEmpty');
+          if (empty) empty.textContent = 'Select an organization to manage volunteer time logs.';
+        }
+      } catch { /* silent */ }
+    }
+    async function populateClockAdminVolunteersByOrg(orgId) {
+      try {
+        const sel = document.getElementById('clockAdminVolunteer');
+        const tbody = document.getElementById('clockAdminTimeList');
+        const empty = document.getElementById('clockAdminEmpty');
+        if (!sel || !tbody) return;
+        if (role === 'superadmin' && !orgId) {
+          sel.innerHTML = '<option value="">— Select organization first —</option>';
+          sel.disabled = true;
+          tbody.innerHTML = '';
+          if (empty) empty.textContent = 'Select an organization to manage volunteer time logs.';
+          return;
+        }
+        const volunteers = await fetchVolunteers(orgId || (groupId != null ? String(groupId) : ''));
+        const current = sel.value;
+        sel.innerHTML = '<option value="">— Select volunteer —</option>';
+        (volunteers || []).forEach(v => {
+          const opt = document.createElement('option');
+          opt.value = v.id;
+          opt.textContent = v.name ? `${v.name}` : v.email;
+          sel.appendChild(opt);
+        });
+        sel.disabled = false;
+        if (current) sel.value = current;
+        if (!sel._wired) {
+          sel.addEventListener('change', () => { refreshClockAdminTimes(); });
+          sel._wired = true;
+        }
+        if (sel.value) {
+          await refreshClockAdminTimes();
+        } else {
+          tbody.innerHTML = '';
+          if (empty) empty.textContent = 'Select a volunteer to view or adjust time entries.';
+        }
+      } catch { /* silent */ }
+    }
+    async function refreshClockAdminTimes() {
+      try {
+        const sel = document.getElementById('clockAdminVolunteer');
+        const tbody = document.getElementById('clockAdminTimeList');
+        const empty = document.getElementById('clockAdminEmpty');
+        if (!sel || !tbody) return;
+        if (!sel.value) {
+          tbody.innerHTML = '';
+          if (empty) empty.textContent = 'Select a volunteer to view or adjust time entries.';
+          return;
+        }
+        const res = await authed(`/time-tracking?volunteer_id=${encodeURIComponent(sel.value)}`);
+        if (!res.ok) {
+          tbody.innerHTML = '';
+          if (empty) empty.textContent = 'Failed to load time entries.';
+          return;
+        }
+        const rows = await res.json();
+        tbody.innerHTML = '';
+        if (!rows.length) {
+          if (empty) empty.textContent = 'No time entries found for this volunteer.';
+          return;
+        }
+        if (empty) empty.textContent = '';
+        rows.forEach(r => {
+          const tr = document.createElement('tr');
+          const hours = (r.duration_hours != null ? Number(r.duration_hours).toFixed(2) : '');
+          tr.innerHTML =
+            `<td>${r.id}</td><td>${r.duty_id || ''}</td>
+             <td><input type="datetime-local" id="clock-start-${r.id}" value="${formatDateTimeLocal(r.start_time)}"></td>
+             <td><input type="datetime-local" id="clock-end-${r.id}" value="${formatDateTimeLocal(r.end_time)}"></td>
+             <td>${hours}</td>
+             <td><input type="date" id="clock-date-${r.id}" value="${formatDateLocal(r.duty_date)}"></td>
+             <td><button data-tid="${r.id}" class="clockSaveBtn">Save</button></td>
+             <td><button data-tid="${r.id}" class="clockDeleteBtn" style="color:#b00020">Delete</button></td>`;
+          tbody.appendChild(tr);
+        });
+        tbody.querySelectorAll('.clockSaveBtn').forEach(btn => {
+          btn.addEventListener('click', async (ev) => {
+            const id = Number(ev.currentTarget.getAttribute('data-tid'));
+            if (Number.isFinite(id)) await saveClockAdjustTime(id);
+          });
+        });
+        tbody.querySelectorAll('.clockDeleteBtn').forEach(btn => {
+          btn.addEventListener('click', async (ev) => {
+            const id = Number(ev.currentTarget.getAttribute('data-tid'));
+            if (Number.isFinite(id)) await deleteClockAdjustTime(id);
+          });
+        });
+      } catch { /* silent */ }
+    }
     // Populate VM Event select strictly by organization
     async function populateVmEventsByOrg(gid) {
       try {
@@ -1672,49 +1823,15 @@
       try {
         const tbody = document.getElementById('timeList');
         if (!tbody) return;
-        let rows = [];
-        // Scope for admin and superadmin and enforce superadmin gating by org->event->duty
-        if (role === 'superadmin') {
-          const note = document.getElementById('clockSuperNote');
-          const gid = document.getElementById('clockOrgFilter')?.value || '';
-          const eid = document.getElementById('clockEventFilter')?.value || '';
-          const did = document.getElementById('clockDutyFilter')?.value || '';
-          if (!gid) {
-            if (note) note.textContent = 'Select an organization to view times.';
-            const timesWrap = document.getElementById('clockTimesWrap');
-            if (timesWrap) timesWrap.classList.add('hidden');
-            tbody.innerHTML = '';
-            return;
-          }
-          if (!eid) {
-            if (note) note.textContent = 'Select an event to view times.';
-            const timesWrap = document.getElementById('clockTimesWrap');
-            if (timesWrap) timesWrap.classList.add('hidden');
-            tbody.innerHTML = '';
-            return;
-          }
-          if (!did) {
-            if (note) note.textContent = 'Select a duty to view times.';
-            const timesWrap = document.getElementById('clockTimesWrap');
-            if (timesWrap) timesWrap.classList.add('hidden');
-            tbody.innerHTML = '';
-            return;
-          }
-          if (note) note.textContent = '';
-          const timesWrap = document.getElementById('clockTimesWrap');
-          if (timesWrap) timesWrap.classList.remove('hidden');
-          const res = await authed(`/time-tracking?group_id=${encodeURIComponent(gid)}`);
-          if (!res.ok) { tbody.innerHTML=''; return; }
-          rows = await res.json();
-          // Client-side filter by selected duty; if rows lack duty_id, nothing will show
-          rows = (rows || []).filter(r => String(r.duty_id || '') === String(did));
-        } else {
-          const params = new URLSearchParams();
-          if (role === 'admin' && groupId != null) params.set('group_id', String(groupId));
-          const res = await authed(`/time-tracking${params.toString() ? `?${params.toString()}` : ''}`);
-          if (!res.ok) { tbody.innerHTML=''; return; }
-          rows = await res.json();
+        if (role === 'admin' || role === 'superadmin') {
+          tbody.innerHTML = '';
+          return;
         }
+        let rows = [];
+        const params = new URLSearchParams();
+        const res = await authed(`/time-tracking${params.toString() ? `?${params.toString()}` : ''}`);
+        if (!res.ok) { tbody.innerHTML=''; return; }
+        rows = await res.json();
         tbody.innerHTML = '';
         rows.forEach(r => {
           const tr = document.createElement('tr');
@@ -2201,6 +2318,40 @@
         }
       } catch { alert('Error deleting'); }
     }
+    async function saveClockAdjustTime(id) {
+      try {
+        const payload = {
+          start_time: document.getElementById(`clock-start-${id}`)?.value || null,
+          end_time: document.getElementById(`clock-end-${id}`)?.value || null,
+          duty_date: document.getElementById(`clock-date-${id}`)?.value || null,
+        };
+        const res = await authed(`/time-tracking/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+          await refreshClockAdminTimes();
+          await fetchApprovals();
+        } else {
+          const data = await res.json().catch(() => ({}));
+          alert(data.message || 'Failed to save');
+        }
+      } catch { alert('Error saving'); }
+    }
+    async function deleteClockAdjustTime(id) {
+      if (!confirm('Delete this time log?')) return;
+      try {
+        const res = await authed(`/time-tracking/${id}`, { method: 'DELETE' });
+        if (res.ok) {
+          await refreshClockAdminTimes();
+          await fetchApprovals();
+        } else {
+          const data = await res.json().catch(() => ({}));
+          alert(data.message || 'Failed to delete');
+        }
+      } catch { alert('Error deleting'); }
+    }
     
 
     // Profile
@@ -2570,72 +2721,28 @@
         resetGlobalFilters();
         resetVolunteerMgmtUI();
         navigateTo('clockSection');
-        // Superadmin: show filters to require org -> event -> duty chain
+        const isAdminishClock = currentRole === 'admin' || currentRole === 'superadmin';
         const filterRow = document.getElementById('clockSuperFilter');
-        if (filterRow) filterRow.classList.toggle('hidden', currentRole !== 'superadmin');
-        if (currentRole === 'superadmin') {
-          // Populate organizations
-          const orgSel = document.getElementById('clockOrgFilter');
-          const evtSel = document.getElementById('clockEventFilter');
-          const dutySel = document.getElementById('clockDutyFilter');
-          try {
-            const res = await authed('/groups');
-            if (res.ok && orgSel) {
-              const groups = await res.json();
-              const current = orgSel.value;
-              orgSel.innerHTML = '<option value=\"\">— Select organization —</option>';
-              groups.forEach(g => {
-                const opt = document.createElement('option');
-                opt.value = g.id;
-                opt.textContent = g.name;
-                orgSel.appendChild(opt);
-              });
-              if (current) orgSel.value = current;
-            }
-          } catch { /* silent */ }
-          if (evtSel) { evtSel.disabled = !orgSel?.value; evtSel.innerHTML = '<option value=\"\">— Select event —</option>'; }
-          if (dutySel) { dutySel.disabled = true; dutySel.innerHTML = '<option value=\"\">— Select duty —</option>'; }
-          if (orgSel && !orgSel._wired) {
-            orgSel.addEventListener('change', async () => {
-              await populateClockEventsForGroup(orgSel.value);
-              const dutySel2 = document.getElementById('clockDutyFilter');
-              if (dutySel2) { dutySel2.disabled = true; dutySel2.innerHTML = '<option value=\"\">— Select duty —</option>'; }
-              // hide data until fully selected
-              const timesWrap = document.getElementById('clockTimesWrap');
-              if (timesWrap) timesWrap.classList.add('hidden');
-              fetchTimeTracking();
-            });
-            orgSel._wired = true;
+        if (filterRow) filterRow.classList.add('hidden');
+        const dutiesWrap = document.getElementById('clockDutiesWrap');
+        const timesWrap = document.getElementById('clockTimesWrap');
+        const adjustWrap = document.getElementById('clockAdminAdjustWrap');
+        if (dutiesWrap) dutiesWrap.classList.toggle('hidden', isAdminishClock);
+        if (timesWrap) timesWrap.classList.toggle('hidden', isAdminishClock);
+        if (adjustWrap) adjustWrap.classList.toggle('hidden', !isAdminishClock);
+        const note = document.getElementById('clockSuperNote');
+        if (note) note.textContent = '';
+        if (isAdminishClock) {
+          const orgRow = document.getElementById('clockAdminOrgRow');
+          if (orgRow) orgRow.classList.toggle('hidden', currentRole !== 'superadmin');
+          if (currentRole === 'superadmin') {
+            await populateClockAdminOrgPicker();
+          } else {
+            await populateClockAdminVolunteersByOrg(groupId != null ? String(groupId) : '');
           }
-          if (evtSel && !evtSel._wired) {
-            evtSel.addEventListener('change', async () => {
-              await populateClockDutiesByOrgAndEvent(document.getElementById('clockOrgFilter')?.value || '', evtSel.value || '');
-              const timesWrap = document.getElementById('clockTimesWrap');
-              if (timesWrap) timesWrap.classList.add('hidden');
-              fetchTimeTracking();
-            });
-            evtSel._wired = true;
-          }
-          if (dutySel && !dutySel._wired) {
-            dutySel.addEventListener('change', () => {
-              // show data only when all selected
-              const orgVal = document.getElementById('clockOrgFilter')?.value || '';
-              const evtVal = document.getElementById('clockEventFilter')?.value || '';
-              const dVal = document.getElementById('clockDutyFilter')?.value || '';
-              const timesWrap = document.getElementById('clockTimesWrap');
-              if (timesWrap) timesWrap.classList.toggle('hidden', !(orgVal && evtVal && dVal));
-              fetchTimeTracking();
-            });
-            dutySel._wired = true;
-          }
-          // Initial visibility on open
-          const showData = !!orgSel?.value && !!evtSel?.value && !!dutySel?.value;
-          const dutiesWrap = document.getElementById('clockDutiesWrap');
-          if (dutiesWrap) dutiesWrap.classList.add('hidden'); // superadmin never sees My Duties table
-          const timesWrap = document.getElementById('clockTimesWrap');
-          if (timesWrap) timesWrap.classList.toggle('hidden', !showData);
+          return;
         }
-        if (currentRole !== 'superadmin') { await fetchDuties(); }
+        await fetchDuties();
         await fetchTimeTracking();
       };
       document.getElementById('navPhotosBtn').onclick = async () => {
