@@ -1235,16 +1235,23 @@ app.post('/admin/time-tracking', authRequired, async (req, res) => {
     await ensureDutyDateColumn();
     await ensureTimeTrackingConstraints();
     const { volunteer_id, duty_id, start_time, end_time, duty_date } = req.body || {};
+    const volunteerIdNum = volunteer_id == null ? null : Number(volunteer_id);
+    const dutyIdNum = duty_id == null ? null : Number(duty_id);
+
     if (!volunteer_id || !duty_id || !start_time) {
       return res.status(400).json({ message: 'volunteer_id, duty_id, start_time required' });
     }
-    const volunteerRes = await pool.query('SELECT id, role, group_id FROM users WHERE id=$1', [volunteer_id]);
+    if (!Number.isFinite(volunteerIdNum) || !Number.isFinite(dutyIdNum)) {
+      return res.status(400).json({ message: 'Invalid volunteer_id or duty_id' });
+    }
+
+    const volunteerRes = await pool.query('SELECT id, role, group_id FROM users WHERE id=$1', [volunteerIdNum]);
     const volunteerRow = volunteerRes.rows[0];
     const volunteerRole = volunteerRow ? String(volunteerRow.role || '').toLowerCase() : null;
     if (volunteerRes.rowCount === 0 || volunteerRole !== 'volunteer') {
       return res.status(404).json({ message: 'Volunteer not found. Refresh the volunteer list and try again.' });
     }
-    const dutyRes = await pool.query('SELECT id, group_id FROM duties WHERE id=$1', [duty_id]);
+    const dutyRes = await pool.query('SELECT id, group_id FROM duties WHERE id=$1', [dutyIdNum]);
     if (dutyRes.rowCount === 0) {
       return res.status(404).json({ message: 'Duty not found. Refresh the duty list and try again.' });
     }
@@ -1259,7 +1266,7 @@ app.post('/admin/time-tracking', authRequired, async (req, res) => {
     const result = await pool.query(
       `INSERT INTO time_tracking (volunteer_id,duty_id,start_time,end_time,duty_date)
        VALUES ($1,$2,$3::timestamp,$4::timestamp,$5::date) RETURNING id`,
-      [volunteer_id, duty_id, start_time, end_time || null, duty_date || null]
+      [volunteerIdNum, dutyIdNum, start_time, end_time || null, duty_date || null]
     );
     res.json({ id: result.rows[0].id });
   } catch (err) {
