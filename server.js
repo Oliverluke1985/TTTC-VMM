@@ -57,6 +57,40 @@ async function ensureDutyDateColumn() {
     console.error('Failed ensuring time_tracking.duty_date column:', err?.message || err);
   }
 }
+async function ensureTimeTrackingConstraints() {
+  try {
+    await pool.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conname = 'time_tracking_volunteer_id_fkey'
+            AND conrelid = 'time_tracking'::regclass
+        ) THEN
+          ALTER TABLE time_tracking
+            ADD CONSTRAINT time_tracking_volunteer_id_fkey
+            FOREIGN KEY (volunteer_id)
+            REFERENCES users(id) ON DELETE CASCADE;
+        END IF;
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conname = 'time_tracking_duty_id_fkey'
+            AND conrelid = 'time_tracking'::regclass
+        ) THEN
+          ALTER TABLE time_tracking
+            ADD CONSTRAINT time_tracking_duty_id_fkey
+            FOREIGN KEY (duty_id)
+            REFERENCES duties(id) ON DELETE SET NULL;
+        END IF;
+      END;
+      $$;
+    `);
+  } catch (err) {
+    console.error('Failed ensuring time_tracking constraints:', err?.message || err);
+  }
+}
 
 // Ensure optional event link on duties exists
 (async () => {
@@ -1001,6 +1035,7 @@ app.patch('/duties/:id', authRequired, async (req, res) => {
 app.post('/duties/:id/time/start', authRequired, async (req, res) => {
   try {
     await ensureDutyDateColumn();
+    await ensureTimeTrackingConstraints();
     const { duty_date } = req.body;
     const result = await pool.query(
       'INSERT INTO time_tracking (volunteer_id,duty_id,start_time,duty_date) VALUES ($1,$2,NOW(),$3) RETURNING id',
@@ -1110,6 +1145,7 @@ app.patch('/time-tracking/:id', authRequired, async (req, res) => {
   const { start_time, end_time, duty_date, duration_hours } = req.body || {};
   try {
     await ensureDutyDateColumn();
+    await ensureTimeTrackingConstraints();
     // Build update pieces
     const setClauses = [];
     const params = [];
@@ -1189,6 +1225,7 @@ app.post('/admin/time-tracking', authRequired, async (req, res) => {
   if (!isAdmin(req.user)) return res.status(403).json({ message: 'Admins only' });
   try {
     await ensureDutyDateColumn();
+    await ensureTimeTrackingConstraints();
     const { volunteer_id, duty_id, start_time, end_time, duty_date } = req.body || {};
     if (!volunteer_id || !duty_id || !start_time) {
       return res.status(400).json({ message: 'volunteer_id, duty_id, start_time required' });
