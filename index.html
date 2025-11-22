@@ -362,6 +362,8 @@
           <option value="active">active</option>
           <option value="inactive">inactive</option>
         </select>
+        <label>Time Zone</label>
+        <select id="groupTimeZone"></select>
         <button id="createGroupBtn">Create Group</button>
         <div id="createGroupError" class="error"></div>
       </div>
@@ -376,15 +378,15 @@
     </div>
     <div id="superadminOrgInfo" class="row hidden">
       <div class="col">
-    <table>
-          <thead><tr><th>ID</th><th>Name</th><th>Status</th><th>Save</th></tr></thead>
+        <table>
+          <thead><tr><th>ID</th><th>Name</th><th>Status</th><th>Time Zone</th><th>Save</th></tr></thead>
           <tbody id="superadminOrgInfoBody"></tbody>
         </table>
         <div id="superadminOrgInfoErr" class="error"></div>
       </div>
     </div>
     <table id="groupTable" class="hidden">
-      <thead><tr><th>ID</th><th>Name</th><th>Status</th><th>Actions</th></tr></thead>
+      <thead><tr><th>ID</th><th>Name</th><th>Status</th><th>Time Zone</th><th>Actions</th></tr></thead>
       <tbody id="groupList"></tbody>
     </table>
 
@@ -594,6 +596,14 @@
     let role = null;
     let groupId = null;
     let userId = null;
+    const supportedTimeZones = (typeof Intl.supportedValuesOf === 'function')
+      ? Intl.supportedValuesOf('timeZone')
+      : ['UTC','America/New_York','America/Chicago','America/Denver','America/Los_Angeles'];
+    const DEFAULT_TIME_ZONE = supportedTimeZones.includes('UTC') ? 'UTC' : supportedTimeZones[0];
+    let groupTimeZoneById = {};
+    let volunteerTimeZoneById = {};
+    let timeEntryTimeZoneById = {};
+    let activeTimeZone = DEFAULT_TIME_ZONE;
 
     function show(id) { document.getElementById(id).classList.remove('hidden'); }
     function hide(id) { document.getElementById(id).classList.add('hidden'); }
@@ -605,6 +615,66 @@
       if (!message) { el.classList.add('hidden'); return; }
       el.classList.add(isError ? 'error' : 'ok');
     }
+    function populateTimeZoneSelect(select, selected) {
+      if (!select) return;
+      select.innerHTML = '';
+      supportedTimeZones.forEach(tz => {
+        const opt = document.createElement('option');
+        opt.value = tz;
+        opt.textContent = tz;
+        if (tz === (selected || DEFAULT_TIME_ZONE)) opt.selected = true;
+        select.appendChild(opt);
+      });
+      if (!select.value) select.value = DEFAULT_TIME_ZONE;
+    }
+    const pad2 = n => String(n).padStart(2, '0');
+    function getGroupTimeZone(id) {
+      return (id != null && groupTimeZoneById[id]) ? groupTimeZoneById[id] : DEFAULT_TIME_ZONE;
+    }
+    function setActiveTimeZoneForGroup(id) {
+      activeTimeZone = getGroupTimeZone(id);
+    }
+    function getVolunteerTimeZone(volId) {
+      return volunteerTimeZoneById[volId] || activeTimeZone;
+    }
+    function convertUtcToLocalInput(iso, tz) {
+      if (!iso) return '';
+      try {
+        const date = new Date(iso);
+        const tzDate = new Date(date.toLocaleString('en-US', { timeZone: tz || activeTimeZone }));
+        return `${tzDate.getFullYear()}-${pad2(tzDate.getMonth()+1)}-${pad2(tzDate.getDate())}T${pad2(tzDate.getHours())}:${pad2(tzDate.getMinutes())}`;
+      } catch {
+        return iso;
+      }
+    }
+    function convertLocalInputToUtc(value, tz) {
+      if (!value) return null;
+      const [datePart, timePart] = value.split('T');
+      if (!datePart || !timePart) return null;
+      const [year, month, day] = datePart.split('-').map(Number);
+      const [hour, minute] = timePart.split(':').map(Number);
+      const utcGuess = new Date(Date.UTC(year, month - 1, day, hour, minute));
+      try {
+        const tzDate = new Date(utcGuess.toLocaleString('en-US', { timeZone: tz || activeTimeZone }));
+        const diff = utcGuess.getTime() - tzDate.getTime();
+        return new Date(utcGuess.getTime() + diff).toISOString();
+      } catch {
+        return utcGuess.toISOString();
+      }
+    }
+    function formatDisplayDateTime(iso, tz) {
+      if (!iso) return '';
+      try {
+        return new Intl.DateTimeFormat(undefined, {
+          timeZone: tz || activeTimeZone,
+          month: '2-digit', day: '2-digit', year: 'numeric',
+          hour: '2-digit', minute: '2-digit', hour12: true
+        }).format(new Date(iso));
+      } catch {
+        return iso;
+      }
+    }
+    populateTimeZoneSelect(document.getElementById('groupTimeZone'), DEFAULT_TIME_ZONE);
 
     // CONFIG/BRANDING
     async function fetchConfig() {
@@ -972,7 +1042,14 @@
 
         // map id->name for display
         const nameById = {};
-        groups.forEach(g => nameById[g.id] = g.name);
+        groupTimeZoneById = {};
+        groups.forEach(g => {
+          nameById[g.id] = g.name;
+          groupTimeZoneById[g.id] = g.time_zone || DEFAULT_TIME_ZONE;
+        });
+        if (groupId != null) {
+          setActiveTimeZoneForGroup(groupId);
+        }
 
         // show user-facing group name if we know their groupId
         const groupNameEl = document.getElementById('groupName');
@@ -989,7 +1066,7 @@
           groups.forEach(g => {
             const tr = document.createElement('tr');
             tr.innerHTML =
-              `<td>${g.id}</td><td>${g.name}</td><td>${g.status ?? g.group_status ?? ''}</td>
+              `<td>${g.id}</td><td>${g.name}</td><td>${g.status ?? g.group_status ?? ''}</td><td>${g.time_zone || DEFAULT_TIME_ZONE}</td>
                <td>
                  <button onclick="archiveGroup(${g.id})">Archive</button>
                  <button onclick="deleteGroup(${g.id})" style="margin-left:6px;color:#b00020">Delete</button>
@@ -1120,11 +1197,12 @@
     document.getElementById('createGroupBtn')?.addEventListener('click', async () => {
       const name = document.getElementById('groupNameInput').value.trim();
       const status = document.getElementById('groupStatus').value;
+      const time_zone = document.getElementById('groupTimeZone')?.value || DEFAULT_TIME_ZONE;
       try {
         const res = await authed('/groups', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, status })
+          body: JSON.stringify({ name, status, time_zone })
         });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
@@ -1133,6 +1211,7 @@
         }
         document.getElementById('createGroupError').textContent = '';
         document.getElementById('groupNameInput').value = '';
+        populateTimeZoneSelect(document.getElementById('groupTimeZone'), DEFAULT_TIME_ZONE);
         fetchGroups();
       } catch {
         document.getElementById('createGroupError').textContent = 'Error creating group';
@@ -1397,7 +1476,8 @@
         const volunteers = await fetchVolunteers(orgId || (groupId != null ? String(groupId) : ''));
         const current = sel.value;
         sel.innerHTML = '<option value="">— Select volunteer —</option>';
-        (volunteers || []).forEach(v => {
+        sel._vols = volunteers || [];
+        sel._vols.forEach(v => {
           const opt = document.createElement('option');
           opt.value = v.id;
           opt.textContent = v.name ? `${v.name}` : v.email;
@@ -1406,10 +1486,17 @@
         sel.disabled = false;
         if (current) sel.value = current;
         if (!sel._wired) {
-          sel.addEventListener('change', () => { refreshClockAdminTimes(); });
+          sel.addEventListener('change', () => {
+            const vid = Number(sel.value);
+            const vol = (sel._vols || []).find(x => Number(x.id) === vid);
+            if (vol) setActiveTimeZoneForGroup(vol.group_id);
+            refreshClockAdminTimes();
+          });
           sel._wired = true;
         }
         if (sel.value) {
+          const vol = (sel._vols || []).find(x => String(x.id) === String(sel.value));
+          if (vol) setActiveTimeZoneForGroup(vol.group_id);
           await refreshClockAdminTimes();
         } else {
           tbody.innerHTML = '';
@@ -1428,6 +1515,9 @@
           if (empty) empty.textContent = 'Select a volunteer to view or adjust time entries.';
           return;
         }
+        const volunteerId = Number(sel.value);
+        const tz = getVolunteerTimeZone(volunteerId);
+        activeTimeZone = tz;
         const res = await authed(`/time-tracking?volunteer_id=${encodeURIComponent(sel.value)}`);
         if (!res.ok) {
           tbody.innerHTML = '';
@@ -1441,13 +1531,15 @@
           return;
         }
         if (empty) empty.textContent = '';
+        timeEntryTimeZoneById = {};
         rows.forEach(r => {
           const tr = document.createElement('tr');
           const hours = (r.duration_hours != null ? Number(r.duration_hours).toFixed(2) : '');
+          timeEntryTimeZoneById[r.id] = tz;
           tr.innerHTML =
             `<td>${r.id}</td><td>${r.duty_id || ''}</td>
-             <td><input type="datetime-local" id="clock-start-${r.id}" value="${formatDateTimeLocal(r.start_time)}"></td>
-             <td><input type="datetime-local" id="clock-end-${r.id}" value="${formatDateTimeLocal(r.end_time)}"></td>
+             <td><input type="datetime-local" id="clock-start-${r.id}" value="${formatDateTimeLocal(r.start_time, tz)}"></td>
+             <td><input type="datetime-local" id="clock-end-${r.id}" value="${formatDateTimeLocal(r.end_time, tz)}"></td>
              <td>${hours}</td>
              <td><input type="date" id="clock-date-${r.id}" value="${formatDateLocal(r.duty_date)}"></td>
              <td><button data-tid="${r.id}" class="clockSaveBtn">Save</button></td>
@@ -1854,10 +1946,13 @@
         rows.forEach(r => {
           const tr = document.createElement('tr');
           const hours = (r.duration_hours != null ? Number(r.duration_hours).toFixed(2) : '');
+          const tz = getVolunteerTimeZone(r.volunteer_id || userId);
+          const startDisplay = formatDisplayDateTime(r.start_time, tz);
+          const endDisplay = formatDisplayDateTime(r.end_time, tz);
           tr.innerHTML =
             `<td>${r.id}</td><td>${r.duty_id || ''}</td>
-             <td class="nowrap">${r.start_time || ''}</td>
-             <td class="nowrap">${r.end_time || ''}</td>
+             <td class="nowrap">${startDisplay}</td>
+             <td class="nowrap">${endDisplay}</td>
              <td>${hours}</td>
              <td>${r.duty_date || ''}</td>`;
           tbody.appendChild(tr);
@@ -1873,7 +1968,13 @@
         // Use dedicated endpoint to list volunteers from DB
         const res = await authed(`/volunteers${params.toString() ? `?${params.toString()}` : ''}`);
         if (!res.ok) return [];
-        return await res.json();
+        const list = await res.json();
+        if (Array.isArray(list)) {
+          list.forEach(v => {
+            if (v && v.id != null) volunteerTimeZoneById[v.id] = getGroupTimeZone(v.group_id);
+          });
+        }
+        return list;
       } catch { return []; }
     }
 
@@ -1886,6 +1987,9 @@
         const res = await authed('/users?role=volunteer');
         if (!res.ok) return;
         const list = await res.json();
+        (list || []).forEach(v => {
+          if (v && v.id != null) volunteerTimeZoneById[v.id] = getGroupTimeZone(v.group_id);
+        });
         const cur = volSel.value;
         volSel.innerHTML = '<option value="">— Select volunteer —</option>';
         list.forEach(v => {
@@ -1947,6 +2051,8 @@
     async function populateVolunteerMgmt() {
       try {
         const orgVal = (role === 'superadmin') ? (document.getElementById('vmOrgPicker')?.value || document.getElementById('superadminOrgPicker')?.value || '') : (groupId != null ? String(groupId) : '');
+        if (orgVal) setActiveTimeZoneForGroup(orgVal);
+        else if (groupId != null) setActiveTimeZoneForGroup(groupId);
         // Admins don't pick org: ensure key rows are visible
         if (role !== 'superadmin') {
           const vRow0 = document.getElementById('vmVolunteerRow'); if (vRow0) vRow0.classList.remove('hidden');
@@ -2028,6 +2134,9 @@
                 }
                 editSel.value = selId ? String(selId) : '';
               }
+            if (selId) {
+              activeTimeZone = getVolunteerTimeZone(selId);
+            }
               // Show edit row/panel if we have a selection
               const vmEditRow = document.getElementById('vmEditSelectRow');
               if (vmEditRow) vmEditRow.classList.toggle('hidden', !selId);
@@ -2226,10 +2335,11 @@
       if (!sel || !tbody || !sel.value) { if (tbody) tbody.innerHTML=''; return; }
       const logs = await fetchVolunteerLogs(sel.value);
       tbody.innerHTML = '';
+      const tz = getVolunteerTimeZone(Number(sel.value));
       logs.forEach(r => {
         const tr = document.createElement('tr');
         const hours = (r.duration_hours != null ? Number(r.duration_hours).toFixed(2) : '');
-        tr.innerHTML = `<td>${r.id}</td><td>${r.duty_id || ''}</td><td>${r.start_time || ''}</td><td>${r.end_time || ''}</td><td>${hours}</td><td>${r.duty_date || ''}</td>`;
+        tr.innerHTML = `<td>${r.id}</td><td>${r.duty_id || ''}</td><td>${formatDisplayDateTime(r.start_time, tz)}</td><td>${formatDisplayDateTime(r.end_time, tz)}</td><td>${hours}</td><td>${r.duty_date || ''}</td>`;
         tbody.appendChild(tr);
       });
     }
@@ -2277,13 +2387,16 @@
         const tbody = document.getElementById('superAdminTimeList') || document.getElementById('adminTimeList');
         if (!tbody) return;
         tbody.innerHTML = '';
+        timeEntryTimeZoneById = {};
         rows.forEach(r => {
           const tr = document.createElement('tr');
           const hours = (r.duration_hours != null ? Number(r.duration_hours).toFixed(2) : '');
+          const tz = getVolunteerTimeZone(r.volunteer_id);
+          timeEntryTimeZoneById[r.id] = tz;
           tr.innerHTML =
             `<td>${r.id}</td><td>${r.volunteer_id || ''}</td><td>${r.duty_id || ''}</td>
-             <td><input type="datetime-local" id="start-${r.id}" value="${formatDateTimeLocal(r.start_time)}"></td>
-             <td><input type="datetime-local" id="end-${r.id}" value="${formatDateTimeLocal(r.end_time)}"></td>
+             <td><input type="datetime-local" id="start-${r.id}" value="${formatDateTimeLocal(r.start_time, tz)}"></td>
+             <td><input type="datetime-local" id="end-${r.id}" value="${formatDateTimeLocal(r.end_time, tz)}"></td>
              <td>${hours}</td>
              <td><input type="date" id="date-${r.id}" value="${formatDateLocal(r.duty_date)}"></td>
              <td><button onclick="saveTime(${r.id})">Save</button></td>
@@ -2293,12 +2406,8 @@
       } catch (e) { /* silent */ }
     }
 
-    function formatDateTimeLocal(iso) {
-      if (!iso) return '';
-      const d = new Date(iso);
-      const pad = n => String(n).padStart(2,'0');
-      const local = new Date(d.getTime());
-      return `${local.getFullYear()}-${pad(local.getMonth()+1)}-${pad(local.getDate())}T${pad(local.getHours())}:${pad(local.getMinutes())}`;
+    function formatDateTimeLocal(iso, tz) {
+      return convertUtcToLocalInput(iso, tz || activeTimeZone);
     }
     function formatDateLocal(iso) {
       if (!iso) return '';
@@ -2309,9 +2418,12 @@
 
     async function saveTime(id) {
       try {
+        const tz = timeEntryTimeZoneById[id] || activeTimeZone;
+        const startLocal = document.getElementById(`start-${id}`).value || null;
+        const endLocal = document.getElementById(`end-${id}`).value || null;
         const payload = {
-          start_time: document.getElementById(`start-${id}`).value || null,
-          end_time: document.getElementById(`end-${id}`).value || null,
+          start_time: startLocal ? convertLocalInputToUtc(startLocal, tz) : null,
+          end_time: endLocal ? convertLocalInputToUtc(endLocal, tz) : null,
           duty_date: document.getElementById(`date-${id}`).value || null,
         };
         const res = await authed(`/time-tracking/${id}`, {
@@ -2339,9 +2451,12 @@
     }
     async function saveClockAdjustTime(id) {
       try {
+        const tz = timeEntryTimeZoneById[id] || activeTimeZone;
+        const startLocal = document.getElementById(`clock-start-${id}`)?.value || null;
+        const endLocal = document.getElementById(`clock-end-${id}`)?.value || null;
         const payload = {
-          start_time: document.getElementById(`clock-start-${id}`)?.value || null,
-          end_time: document.getElementById(`clock-end-${id}`)?.value || null,
+          start_time: startLocal ? convertLocalInputToUtc(startLocal, tz) : null,
+          end_time: endLocal ? convertLocalInputToUtc(endLocal, tz) : null,
           duty_date: document.getElementById(`clock-date-${id}`)?.value || null,
         };
         const res = await authed(`/time-tracking/${id}`, {
@@ -2457,20 +2572,23 @@
                 <option value="inactive" ${status==='inactive'?'selected':''}>inactive</option>
               </select>
             </td>
+            <td><select id="saOrgTimeZone"></select></td>
             <td><button id="saOrgSaveBtn">Save</button></td>
             <td><button id="saOrgArchiveBtn">Archive</button></td>
             <td><button id="saOrgDeleteBtn" style="color:#b00020">Delete</button></td>
           </tr>`;
         infoWrap.classList.remove('hidden');
         const errEl = document.getElementById('superadminOrgInfoErr'); if (errEl) errEl.textContent='';
+        populateTimeZoneSelect(document.getElementById('saOrgTimeZone'), group?.time_zone || DEFAULT_TIME_ZONE);
         const save = document.getElementById('saOrgSaveBtn');
         if (save) {
           save.onclick = async () => {
             const nameVal = document.getElementById('saOrgName')?.value.trim();
             const statusVal = document.getElementById('saOrgStatus')?.value;
+            const tzVal = document.getElementById('saOrgTimeZone')?.value || DEFAULT_TIME_ZONE;
             if (errEl) errEl.textContent='';
             try {
-              const res = await authed(`/groups/${selectedId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: nameVal, status: statusVal }) });
+              const res = await authed(`/groups/${selectedId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: nameVal, status: statusVal, time_zone: tzVal }) });
               const data = await res.json().catch(() => ({}));
               if (!res.ok) { if (errEl) errEl.textContent = data.message || 'Failed to save'; return; }
               // Reflect updated values in picker
@@ -2596,6 +2714,7 @@
           if (eFilter) eFilter.value = orgPicker.value || '';
           const dFilter = document.getElementById('superDutyGroupFilter');
           if (dFilter) dFilter.value = orgPicker.value || '';
+          setActiveTimeZoneForGroup(orgPicker.value || null);
           // Update single-org info panel and keep full table hidden
           const infoWrap = document.getElementById('superadminOrgInfo');
           const infoBody = document.getElementById('superadminOrgInfoBody');
@@ -2634,6 +2753,7 @@
           const evtRow = document.getElementById('vmEventRow');
           if (evtRow) evtRow.classList.toggle('hidden', !vmOrgSel.value);
           if (evtSel) { evtSel.disabled = !vmOrgSel.value; evtSel.innerHTML = '<option value="">— Select event —</option>'; }
+          setActiveTimeZoneForGroup(vmOrgSel.value || null);
           const vmEditRow = document.getElementById('vmEditSelectRow'); if (vmEditRow) vmEditRow.classList.toggle('hidden', currentRole === 'superadmin');
           const vmEditPanel = document.getElementById('vmEditPanel'); if (vmEditPanel) vmEditPanel.classList.add('hidden');
           // Sync top superadmin pickers
@@ -2944,10 +3064,13 @@
             const end_time = document.getElementById('vmEnd').value || null;
             const duty_date = start_time ? String(start_time).split('T')[0] : null;
             try {
+              const startUtc = convertLocalInputToUtc(start_time, activeTimeZone);
+              const endUtc = end_time ? convertLocalInputToUtc(end_time, activeTimeZone) : null;
+              if (!startUtc) { if (err) err.textContent = 'Invalid start time'; return; }
               const res = await authed('/admin/time-tracking', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ volunteer_id, duty_id, start_time, end_time, duty_date })
+                body: JSON.stringify({ volunteer_id, duty_id, start_time: startUtc, end_time: endUtc, duty_date })
               });
               const data = await res.json().catch(() => ({}));
               if (!res.ok) { if (err) err.textContent = data.message || 'Failed to add time'; updateStatusMessage('vmTimeStatus','',false); return; }

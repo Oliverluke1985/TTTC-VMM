@@ -168,6 +168,9 @@ async function ensureTimeTrackingConstraints() {
     await pool.query(
       `ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS name TEXT`
     );
+    await pool.query(
+      `ALTER TABLE IF EXISTS groups ADD COLUMN IF NOT EXISTS time_zone TEXT DEFAULT 'UTC'`
+    );
   } catch (e) {
     console.error('Schema ensure failed (duties.event_id):', e?.message || e);
   }
@@ -723,20 +726,22 @@ app.get('/groups', authRequired, async (req, res) => {
 
 app.post('/groups', authRequired, superadminOnly, async (req, res) => {
   try {
-    const { name, status } = req.body || {};
+    const { name, status, time_zone } = req.body || {};
     const colsRes = await pool.query("SELECT column_name FROM information_schema.columns WHERE table_name='groups'");
     const has = new Set(colsRes.rows.map(r => r.column_name));
     const fields = ['name'];
     const params = ['$1'];
     const values = [name];
-    if (has.has('status')) { fields.push('status'); params.push('$2'); values.push((status || 'active')); }
+    let nextIdx = 2;
+    if (has.has('status')) { fields.push('status'); params.push(`$${nextIdx++}`); values.push((status || 'active')); }
     else if (has.has('group_status')) {
       const normalized = (status || 'Active');
       const mapped = normalized.toLowerCase() === 'active' ? 'Active'
                    : normalized.toLowerCase() === 'inactive' ? 'Inactive'
                    : normalized; // fall back to whatever caller sent
-      fields.push('group_status'); params.push('$2'); values.push(mapped);
+      fields.push('group_status'); params.push(`$${nextIdx++}`); values.push(mapped);
     }
+    if (has.has('time_zone')) { fields.push('time_zone'); params.push(`$${nextIdx++}`); values.push(time_zone || 'UTC'); }
     const sql = `INSERT INTO groups (${fields.join(',')}) VALUES (${params.join(',')}) RETURNING id`;
     const result = await pool.query(sql, values);
     res.json({ id: result.rows[0].id });
@@ -755,7 +760,7 @@ app.patch('/groups/:id', authRequired, superadminOnly, async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (!Number.isFinite(id)) return res.status(400).json({ message: 'Invalid id' });
-    const { name, status } = req.body || {};
+    const { name, status, time_zone } = req.body || {};
     const colsRes = await pool.query("SELECT column_name FROM information_schema.columns WHERE table_name='groups'");
     const has = new Set(colsRes.rows.map(r => r.column_name));
     const setClauses = [];
@@ -770,11 +775,13 @@ app.patch('/groups/:id', authRequired, superadminOnly, async (req, res) => {
         setClauses.push(`group_status=$${idx++}`); params.push(mapped);
       }
     }
+    if (time_zone !== undefined && has.has('time_zone')) { setClauses.push(`time_zone=$${idx++}`); params.push(time_zone); }
     if (setClauses.length === 0) return res.json({ id });
     const returning = ['id'];
     if (has.has('name')) returning.push('name');
     if (has.has('status')) returning.push('status');
     if (has.has('group_status')) returning.push('group_status');
+    if (has.has('time_zone')) returning.push('time_zone');
     const result = await pool.query(`UPDATE groups SET ${setClauses.join(', ')} WHERE id=$${idx} RETURNING ${returning.join(',')}`, [...params, id]);
     if (result.rowCount === 0) return res.status(404).json({ message: 'Not found' });
     res.json(result.rows[0]);
