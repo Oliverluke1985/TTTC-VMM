@@ -65,38 +65,46 @@ async function ensureDutyDateColumn() {
     console.error('Failed ensuring time_tracking.duty_date column:', err?.message || err);
   }
 }
+
+let ensuredTimeTrackingConstraints = false;
 async function ensureTimeTrackingConstraints() {
+  if (ensuredTimeTrackingConstraints) return;
+  const client = await pool.connect();
   try {
-    await pool.query(`
-      DO $$
-      BEGIN
-        IF NOT EXISTS (
-          SELECT 1
-          FROM pg_constraint
-          WHERE conname = 'time_tracking_volunteer_id_fkey'
-            AND conrelid = 'time_tracking'::regclass
-        ) THEN
-          ALTER TABLE time_tracking
-            ADD CONSTRAINT time_tracking_volunteer_id_fkey
-            FOREIGN KEY (volunteer_id)
-            REFERENCES users(id) ON DELETE CASCADE;
-        END IF;
-        IF NOT EXISTS (
-          SELECT 1
-          FROM pg_constraint
-          WHERE conname = 'time_tracking_duty_id_fkey'
-            AND conrelid = 'time_tracking'::regclass
-        ) THEN
-          ALTER TABLE time_tracking
-            ADD CONSTRAINT time_tracking_duty_id_fkey
-            FOREIGN KEY (duty_id)
-            REFERENCES duties(id) ON DELETE SET NULL;
-        END IF;
-      END;
-      $$;
+    await client.query('BEGIN');
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS volunteers (
+        id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE
+      )
     `);
+    await client.query(`
+      INSERT INTO volunteers (id)
+      SELECT id FROM users WHERE LOWER(role) = 'volunteer'
+      ON CONFLICT (id) DO NOTHING
+    `);
+    await client.query(`
+      ALTER TABLE time_tracking
+      ALTER COLUMN volunteer_id TYPE INTEGER USING volunteer_id::INTEGER
+    `);
+    await client.query('ALTER TABLE time_tracking DROP CONSTRAINT IF EXISTS time_tracking_volunteer_id_fkey');
+    await client.query(`
+      ALTER TABLE time_tracking
+      ADD CONSTRAINT time_tracking_volunteer_id_fkey
+      FOREIGN KEY (volunteer_id) REFERENCES volunteers(id) ON DELETE CASCADE
+    `);
+    await client.query('ALTER TABLE time_tracking DROP CONSTRAINT IF EXISTS time_tracking_duty_id_fkey');
+    await client.query(`
+      ALTER TABLE time_tracking
+      ADD CONSTRAINT time_tracking_duty_id_fkey
+      FOREIGN KEY (duty_id) REFERENCES duties(id) ON DELETE SET NULL
+    `);
+    await client.query('COMMIT');
+    ensuredTimeTrackingConstraints = true;
   } catch (err) {
+    await client.query('ROLLBACK');
     console.error('Failed ensuring time_tracking constraints:', err?.message || err);
+  } finally {
+    client.release();
   }
 }
 
