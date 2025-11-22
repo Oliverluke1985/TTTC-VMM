@@ -1855,7 +1855,12 @@
         // Use dedicated endpoint to list volunteers from DB
         const res = await authed(`/volunteers${params.toString() ? `?${params.toString()}` : ''}`);
         if (!res.ok) return [];
-        return await res.json();
+        const list = await res.json();
+        // Guarantee admin lists only contain volunteers by filtering on role
+        return (list || []).filter(v => {
+          const r = (v.role || '').toLowerCase();
+          return !v.role || r === 'volunteer';
+        });
       } catch { return []; }
     }
 
