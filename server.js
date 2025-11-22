@@ -1256,7 +1256,14 @@ app.post('/admin/time-tracking', authRequired, async (req, res) => {
     res.json({ id: result.rows[0].id });
   } catch (err) {
     if (err?.code === '23503') {
-      return res.status(400).json({ message: 'Volunteer or duty not found in the database. Refresh and try again.' });
+      const detail = String(err.detail || '');
+      if (detail.includes('(volunteer_id)')) {
+        return res.status(404).json({ message: `Volunteer #${volunteer_id} no longer exists in the database.` });
+      }
+      if (detail.includes('(duty_id)')) {
+        return res.status(404).json({ message: `Duty #${duty_id} no longer exists in the database.` });
+      }
+      return res.status(400).json({ message: 'Volunteer or duty missing in the database.' });
     }
     res.status(400).json({ message: err.message });
   }
