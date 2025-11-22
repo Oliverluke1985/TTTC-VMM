@@ -596,10 +596,33 @@
     let role = null;
     let groupId = null;
     let userId = null;
-    const supportedTimeZones = (typeof Intl.supportedValuesOf === 'function')
-      ? Intl.supportedValuesOf('timeZone')
-      : ['UTC','America/New_York','America/Chicago','America/Denver','America/Los_Angeles'];
-    const DEFAULT_TIME_ZONE = supportedTimeZones.includes('UTC') ? 'UTC' : supportedTimeZones[0];
+    // North America focused list; add more later if needed
+    const supportedTimeZones = [
+      'America/St_Johns',
+      'America/Halifax',
+      'America/Toronto',
+      'America/New_York',
+      'America/Detroit',
+      'America/Chicago',
+      'America/Winnipeg',
+      'America/Denver',
+      'America/Phoenix',
+      'America/Edmonton',
+      'America/Los_Angeles',
+      'America/Vancouver',
+      'America/Anchorage',
+      'America/Adak',
+      'Pacific/Honolulu',
+      'America/Mexico_City',
+      'America/Monterrey',
+      'America/Regina',
+      'America/Saskatoon',
+      'America/Guatemala',
+      'America/Costa_Rica',
+      'America/Bogota',
+      'UTC'
+    ];
+    const DEFAULT_TIME_ZONE = 'America/Chicago';
     let groupTimeZoneById = {};
     let volunteerTimeZoneById = {};
     let timeEntryTimeZoneById = {};
