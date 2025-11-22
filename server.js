@@ -1190,10 +1190,17 @@ app.post('/admin/time-tracking', authRequired, async (req, res) => {
   try {
     await ensureDutyDateColumn();
     const { volunteer_id, duty_id, start_time, end_time, duty_date } = req.body || {};
-    if (!volunteer_id || !duty_id || !start_time) return res.status(400).json({ message: 'volunteer_id, duty_id, start_time required' });
+    if (!volunteer_id || !duty_id || !start_time) {
+      return res.status(400).json({ message: 'volunteer_id, duty_id, start_time required' });
+    }
+    const volunteerRes = await pool.query('SELECT id, role, group_id FROM users WHERE id=$1', [volunteer_id]);
+    if (volunteerRes.rowCount === 0 || volunteerRes.rows[0].role !== 'volunteer') {
+      return res.status(404).json({ message: 'Volunteer not found. Refresh the volunteer list and try again.' });
+    }
     if (req.user.role === 'admin') {
-      const ok = await pool.query('SELECT 1 FROM users WHERE id=$1 AND group_id=$2', [volunteer_id, req.user.group_id]);
-      if (ok.rowCount === 0) return res.status(403).json({ message: 'Forbidden' });
+      if (volunteerRes.rows[0].group_id !== req.user.group_id) {
+        return res.status(403).json({ message: 'Admins can only add time for volunteers in their organization.' });
+      }
     }
     const result = await pool.query(
       `INSERT INTO time_tracking (volunteer_id,duty_id,start_time,end_time,duty_date)
@@ -1202,6 +1209,9 @@ app.post('/admin/time-tracking', authRequired, async (req, res) => {
     );
     res.json({ id: result.rows[0].id });
   } catch (err) {
+    if (err?.code === '23503') {
+      return res.status(400).json({ message: 'Volunteer or duty not found in the database. Refresh and try again.' });
+    }
     res.status(400).json({ message: err.message });
   }
 });
