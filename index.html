@@ -161,6 +161,7 @@
         <tbody id="timeList"></tbody>
       </table>
     </div>
+    <div id="clockActionMsg" class="ok hidden"></div>
   </section>
 
   <!-- VOLUNTEER: PHOTOS PAGE -->
@@ -532,6 +533,7 @@
         
         <button id="vmAddBtn">Add Time Entry</button>
         <div id="vmErr" class="error"></div>
+        <div id="vmTimeStatus" class="ok hidden"></div>
       </div>
     </div>
     <div id="vmEditPanel" class="row hidden">
@@ -595,6 +597,14 @@
 
     function show(id) { document.getElementById(id).classList.remove('hidden'); }
     function hide(id) { document.getElementById(id).classList.add('hidden'); }
+    function updateStatusMessage(elId, message = '', isError = false) {
+      const el = document.getElementById(elId);
+      if (!el) return;
+      el.textContent = message || '';
+      el.classList.remove('hidden','error','ok');
+      if (!message) { el.classList.add('hidden'); return; }
+      el.classList.add(isError ? 'error' : 'ok');
+    }
 
     // CONFIG/BRANDING
     async function fetchConfig() {
@@ -1795,12 +1805,16 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ duty_date: dutyDate })
         });
-        if (res.ok) fetchTimeTracking();
-        else {
+        if (res.ok) {
+          updateStatusMessage('clockActionMsg', 'Clocked in.');
+          fetchTimeTracking();
+        } else {
           const data = await res.json().catch(() => ({}));
+          updateStatusMessage('clockActionMsg', data.message || 'Failed to clock in', true);
           alert(data.message || 'Failed to clock in');
         }
       } catch {
+        updateStatusMessage('clockActionMsg', 'Error clocking in', true);
         alert('Error clocking in');
       }
     }
@@ -1808,12 +1822,16 @@
     async function stopTime(dutyId) {
       try {
         const res = await authed(`/duties/${dutyId}/time/end`, { method: 'POST' });
-        if (res.ok) fetchTimeTracking();
-        else {
+        if (res.ok) {
+          updateStatusMessage('clockActionMsg', 'Clocked out.');
+          fetchTimeTracking();
+        } else {
           const data = await res.json().catch(() => ({}));
+          updateStatusMessage('clockActionMsg', data.message || 'Failed to clock out', true);
           alert(data.message || 'Failed to clock out');
         }
       } catch {
+        updateStatusMessage('clockActionMsg', 'Error clocking out', true);
         alert('Error clocking out');
       }
     }
@@ -2918,6 +2936,7 @@
           addBtn.addEventListener('click', async () => {
             const err = document.getElementById('vmErr');
             if (err) err.textContent = '';
+            updateStatusMessage('vmTimeStatus', '');
             const volunteer_id = Number(document.getElementById('vmVolunteer').value);
             const duty_id = Number(document.getElementById('vmDuty').value);
             const start_time = document.getElementById('vmStart').value;
@@ -2930,11 +2949,13 @@
                 body: JSON.stringify({ volunteer_id, duty_id, start_time, end_time, duty_date })
               });
               const data = await res.json().catch(() => ({}));
-              if (!res.ok) { if (err) err.textContent = data.message || 'Failed to add time'; return; }
+              if (!res.ok) { if (err) err.textContent = data.message || 'Failed to add time'; updateStatusMessage('vmTimeStatus','',false); return; }
               await fetchTimeTracking();
               await refreshVolunteerLogs();
+              updateStatusMessage('vmTimeStatus', 'Clocked in.');
             } catch {
               if (err) err.textContent = 'Error adding time';
+              updateStatusMessage('vmTimeStatus','',false);
             }
           });
           addBtn._wired = true;
