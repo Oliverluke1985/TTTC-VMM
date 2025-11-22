@@ -1824,14 +1824,14 @@
         const tbody = document.getElementById('timeList');
         if (!tbody) return;
         if (role === 'admin' || role === 'superadmin') {
-          tbody.innerHTML = '';
-          return;
-        }
+            tbody.innerHTML = '';
+            return;
+          }
         let rows = [];
-        const params = new URLSearchParams();
-        const res = await authed(`/time-tracking${params.toString() ? `?${params.toString()}` : ''}`);
-        if (!res.ok) { tbody.innerHTML=''; return; }
-        rows = await res.json();
+          const params = new URLSearchParams();
+          const res = await authed(`/time-tracking${params.toString() ? `?${params.toString()}` : ''}`);
+          if (!res.ok) { tbody.innerHTML=''; return; }
+          rows = await res.json();
         tbody.innerHTML = '';
         rows.forEach(r => {
           const tr = document.createElement('tr');
@@ -1855,12 +1855,7 @@
         // Use dedicated endpoint to list volunteers from DB
         const res = await authed(`/volunteers${params.toString() ? `?${params.toString()}` : ''}`);
         if (!res.ok) return [];
-        const list = await res.json();
-        // Guarantee admin lists only contain volunteers by filtering on role
-        return (list || []).filter(v => {
-          const r = (v.role || '').toLowerCase();
-          return !v.role || r === 'volunteer';
-        });
+        return await res.json();
       } catch { return []; }
     }
 
@@ -2729,8 +2724,8 @@
         const isAdminishClock = currentRole === 'admin' || currentRole === 'superadmin';
         const filterRow = document.getElementById('clockSuperFilter');
         if (filterRow) filterRow.classList.add('hidden');
-        const dutiesWrap = document.getElementById('clockDutiesWrap');
-        const timesWrap = document.getElementById('clockTimesWrap');
+          const dutiesWrap = document.getElementById('clockDutiesWrap');
+          const timesWrap = document.getElementById('clockTimesWrap');
         const adjustWrap = document.getElementById('clockAdminAdjustWrap');
         if (dutiesWrap) dutiesWrap.classList.toggle('hidden', isAdminishClock);
         if (timesWrap) timesWrap.classList.toggle('hidden', isAdminishClock);
