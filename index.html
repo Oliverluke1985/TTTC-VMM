@@ -2297,7 +2297,8 @@
       if (!iso) return '';
       const d = new Date(iso);
       const pad = n => String(n).padStart(2,'0');
-      return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      const local = new Date(d.getTime());
+      return `${local.getFullYear()}-${pad(local.getMonth()+1)}-${pad(local.getDate())}T${pad(local.getHours())}:${pad(local.getMinutes())}`;
     }
     function formatDateLocal(iso) {
       if (!iso) return '';
