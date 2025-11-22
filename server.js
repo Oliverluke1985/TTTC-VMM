@@ -1263,6 +1263,7 @@ app.post('/admin/time-tracking', authRequired, async (req, res) => {
     );
     res.json({ id: result.rows[0].id });
   } catch (err) {
+    console.error('Failed to add time entry:', err);
     if (err?.code === '23503') {
       const detail = String(err.detail || '');
       if (detail.includes('(volunteer_id)')) {
@@ -1273,7 +1274,7 @@ app.post('/admin/time-tracking', authRequired, async (req, res) => {
       }
       return res.status(400).json({ message: 'Volunteer or duty missing in the database.' });
     }
-    res.status(400).json({ message: err.message });
+    res.status(400).json({ message: err?.message || 'Failed to add time entry' });
   }
 });
 
