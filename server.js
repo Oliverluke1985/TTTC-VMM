@@ -545,22 +545,21 @@ app.patch('/users/:id', authRequired, async (req, res) => {
 });
 
 // Delete user (superadmin only)
-app.delete('/users/:id', authRequired, superadminOnly, async (req, res) => {
+app.delete('/users/:id', authRequired, async (req, res) => {
   try {
     const targetId = Number(req.params.id);
     if (!Number.isFinite(targetId)) return res.status(400).json({ message: 'Invalid id' });
     if (targetId === req.user.id) return res.status(400).json({ message: 'Cannot delete your own account' });
+    if (!isAdmin(req.user)) return res.status(403).json({ message: 'Admins only' });
     // Load target role and group
     const existing = await pool.query('SELECT id, role, group_id FROM users WHERE id=$1', [targetId]);
     if (existing.rowCount === 0) return res.status(404).json({ message: 'Not found' });
     const target = existing.rows[0];
-    // Superadmin can delete anyone; admin only volunteers in their own group
+    // Admins can only delete volunteers in their org; superadmins can delete anyone except themselves handled above
     if (req.user.role === 'admin') {
       if (target.role !== 'volunteer' || target.group_id !== req.user.group_id) {
         return res.status(403).json({ message: 'Admins can only delete volunteers in their organization' });
       }
-    } else if (req.user.role !== 'superadmin') {
-      return res.status(403).json({ message: 'Admins or superadmins only' });
     }
     const result = await pool.query('DELETE FROM users WHERE id=$1 RETURNING id', [targetId]);
     if (result.rowCount === 0) return res.status(404).json({ message: 'Not found' });
