@@ -825,14 +825,19 @@
       const duty = (window.dutyById || {})[dutyId];
       const dutyGroup = duty?.group_id ?? groupId ?? null;
       if (!dutyGroup) { sel.disabled = true; return; }
-      if (!dutyRestrictionVolunteerCache[dutyGroup]) {
-        dutyRestrictionVolunteerCache[dutyGroup] = await fetchVolunteers(dutyGroup) || [];
+      let list = dutyRestrictionVolunteerCache[dutyGroup];
+      if (!list || list.length === 0) {
+        list = await fetchVolunteers(dutyGroup) || [];
+        dutyRestrictionVolunteerCache[dutyGroup] = list;
       }
-      const list = dutyRestrictionVolunteerCache[dutyGroup];
       sel.disabled = false;
-      list
-        .filter(v => String(v.role || '').toLowerCase() === 'volunteer')
-        .forEach(v => {
+      const options = list.filter(v => String(v.role || '').toLowerCase() === 'volunteer');
+      if (options.length === 0) {
+        sel.innerHTML = '<option value="">No volunteers found for this organization</option>';
+        sel.disabled = true;
+        return;
+      }
+      options.forEach(v => {
           const opt = document.createElement('option');
           opt.value = v.id;
           opt.textContent = v.name ? `${v.name} (${v.email || v.id})` : (v.email || `Volunteer #${v.id}`);
