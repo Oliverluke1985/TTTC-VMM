@@ -1105,12 +1105,19 @@ app.get('/time-tracking', authRequired, async (req, res) => {
   const groupFilter = req.query.group_id ? Number(req.query.group_id) : null;
   if (req.user.role === 'superadmin') {
     if (Number.isFinite(volunteerFilter)) {
-      const rows = await pool.query('SELECT * FROM time_tracking WHERE volunteer_id=$1 ORDER BY start_time DESC', [volunteerFilter]);
+      const rows = await pool.query(
+        `SELECT t.*, u.name AS volunteer_name, u.email AS volunteer_email
+         FROM time_tracking t
+         LEFT JOIN users u ON u.id = t.volunteer_id
+         WHERE t.volunteer_id=$1
+         ORDER BY t.start_time DESC`,
+        [volunteerFilter]
+      );
       return res.json(rows.rows);
     }
     if (Number.isFinite(groupFilter)) {
       const rows = await pool.query(
-        `SELECT t.*
+        `SELECT t.*, u.name AS volunteer_name, u.email AS volunteer_email
          FROM time_tracking t
          JOIN users u ON u.id = t.volunteer_id
          WHERE u.group_id = $1
@@ -1119,7 +1126,12 @@ app.get('/time-tracking', authRequired, async (req, res) => {
       );
       return res.json(rows.rows);
     }
-    const rows = await pool.query('SELECT * FROM time_tracking ORDER BY start_time DESC');
+    const rows = await pool.query(
+      `SELECT t.*, u.name AS volunteer_name, u.email AS volunteer_email
+       FROM time_tracking t
+       LEFT JOIN users u ON u.id = t.volunteer_id
+       ORDER BY t.start_time DESC`
+    );
     return res.json(rows.rows);
   }
   if (req.user.role === 'admin') {
@@ -1127,11 +1139,18 @@ app.get('/time-tracking', authRequired, async (req, res) => {
       // Ensure volunteer belongs to admin's group
       const ok = await pool.query('SELECT 1 FROM users WHERE id=$1 AND group_id=$2', [volunteerFilter, req.user.group_id]);
       if (ok.rowCount === 0) return res.status(403).json({ message: 'Forbidden' });
-      const rows = await pool.query('SELECT * FROM time_tracking WHERE volunteer_id=$1 ORDER BY start_time DESC', [volunteerFilter]);
+      const rows = await pool.query(
+        `SELECT t.*, u.name AS volunteer_name, u.email AS volunteer_email
+         FROM time_tracking t
+         LEFT JOIN users u ON u.id = t.volunteer_id
+         WHERE t.volunteer_id=$1
+         ORDER BY t.start_time DESC`,
+        [volunteerFilter]
+      );
       return res.json(rows.rows);
     }
     const rows = await pool.query(
-      `SELECT t.*
+      `SELECT t.*, u.name AS volunteer_name, u.email AS volunteer_email
        FROM time_tracking t
        JOIN users u ON u.id = t.volunteer_id
        WHERE u.group_id = $1
@@ -1140,7 +1159,14 @@ app.get('/time-tracking', authRequired, async (req, res) => {
     );
     return res.json(rows.rows);
   }
-  const rows = await pool.query('SELECT * FROM time_tracking WHERE volunteer_id=$1 ORDER BY start_time DESC', [req.user.id]);
+  const rows = await pool.query(
+    `SELECT t.*, u.name AS volunteer_name, u.email AS volunteer_email
+     FROM time_tracking t
+     LEFT JOIN users u ON u.id = t.volunteer_id
+     WHERE t.volunteer_id=$1
+     ORDER BY t.start_time DESC`,
+    [req.user.id]
+  );
   res.json(rows.rows);
 });
 

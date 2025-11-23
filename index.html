@@ -211,7 +211,7 @@
       </div>
     </div>
     <table>
-      <thead><tr><th>ID</th><th>Title</th><th>Date(s)</th><th id="eventJoinHeader">Join</th><th id="eventActionsHeader" class="hidden">Actions</th></tr></thead>
+      <thead><tr><th>ID</th><th>Title</th><th>Date(s)</th><th>Join</th><th id="eventActionsHeader" class="hidden">Actions</th></tr></thead>
       <tbody id="eventList"></tbody>
     </table>
     <div id="eventEditWrap" class="row hidden">
@@ -379,7 +379,7 @@
     </div>
     <div id="superadminOrgInfo" class="row hidden">
       <div class="col">
-    <table>
+        <table>
           <thead><tr><th>ID</th><th>Name</th><th>Status</th><th>Time Zone</th><th>Save</th></tr></thead>
           <tbody id="superadminOrgInfoBody"></tbody>
         </table>
@@ -653,6 +653,14 @@
     }
     function getVolunteerTimeZone(volId) {
       return volunteerTimeZoneById[volId] || activeTimeZone;
+    }
+    function formatVolunteerLabel(row) {
+      if (!row) return '';
+      const id = row.volunteer_id;
+      if (id == null || id === '') return '';
+      const source = row.volunteer_name || row.volunteer_email || '';
+      if (source) return `${source} (#${id})`;
+      return `#${id}`;
     }
     function convertUtcToLocalInput(iso, tz) {
       if (!iso) return '';
@@ -1273,12 +1281,9 @@
               actions = `<button data-eid="${e.id}" class="editEventPrefillBtn">Edit</button> <button data-eid="${e.id}" class="archiveEventBtn">Archive</button> <button data-eid="${e.id}" class="deleteEventBtn">Delete</button>`;
             }
           const dateTxt = e.start_date ? (e.end_date ? `${e.start_date} – ${e.end_date}` : `${e.start_date}`) : (e.event_date || '');
-          const joinCell = role === 'volunteer'
-            ? `<td>${e.joined ? `<button data-eid="${e.id}" class="leaveBtn">Leave</button>` : `<button data-eid=\"${e.id}\" class=\"joinBtn\">Join</button>`}</td>`
-            : '<td class="hidden"></td>';
           tr.innerHTML =
             `<td>${e.id}</td><td>${e.title}</td><td>${dateTxt}</td>
-               ${joinCell}
+               <td>${e.joined ? `<button data-eid="${e.id}" class="leaveBtn">Leave</button>` : `<button data-eid=\"${e.id}\" class=\"joinBtn\">Join</button>`}</td>
                <td>${actions}</td>`;
           tbody.appendChild(tr);
         });
@@ -2162,7 +2167,7 @@
               }
             if (selId) {
               activeTimeZone = getVolunteerTimeZone(selId);
-              }
+            }
               // Show edit row/panel if we have a selection
               const vmEditRow = document.getElementById('vmEditSelectRow');
               if (vmEditRow) vmEditRow.classList.toggle('hidden', !selId);
@@ -2382,8 +2387,9 @@
         rows.filter(r => !r.approved).forEach(r => {
           const tr = document.createElement('tr');
           const hours = (r.duration_hours != null ? Number(r.duration_hours).toFixed(2) : '');
+          const volunteerLabel = formatVolunteerLabel(r);
           tr.innerHTML =
-            `<td>${r.id}</td><td>${r.volunteer_id || ''}</td><td>${hours}</td><td>${r.duty_date || ''}</td>
+            `<td>${r.id}</td><td>${volunteerLabel}</td><td>${hours}</td><td>${r.duty_date || ''}</td>
              <td><button onclick="approve(${r.id})">Approve</button></td>`;
           tbody.appendChild(tr);
         });
@@ -2419,8 +2425,9 @@
           const hours = (r.duration_hours != null ? Number(r.duration_hours).toFixed(2) : '');
           const tz = getVolunteerTimeZone(r.volunteer_id);
           timeEntryTimeZoneById[r.id] = tz;
+          const volunteerLabel = formatVolunteerLabel(r);
           tr.innerHTML =
-            `<td>${r.id}</td><td>${r.volunteer_id || ''}</td><td>${r.duty_id || ''}</td>
+            `<td>${r.id}</td><td>${volunteerLabel}</td><td>${r.duty_id || ''}</td>
              <td><input type="datetime-local" id="start-${r.id}" value="${formatDateTimeLocal(r.start_time, tz)}"></td>
              <td><input type="datetime-local" id="end-${r.id}" value="${formatDateTimeLocal(r.end_time, tz)}"></td>
              <td>${hours}</td>
@@ -2881,8 +2888,6 @@
         if (wrap) wrap.classList.toggle('hidden', !isAdminish);
         const actionsHeader = document.getElementById('eventActionsHeader');
         if (actionsHeader) actionsHeader.classList.toggle('hidden', !isAdminish);
-        const joinHeader = document.getElementById('eventJoinHeader');
-        if (joinHeader) joinHeader.classList.toggle('hidden', currentRole !== 'volunteer');
         // Keep edit form hidden until an event is selected to edit
         const editWrap = document.getElementById('eventEditWrap');
         if (editWrap) editWrap.classList.add('hidden');
