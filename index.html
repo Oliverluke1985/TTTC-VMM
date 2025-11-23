@@ -488,7 +488,7 @@
 
     <h3>Pending Approvals</h3>
     <table>
-      <thead><tr><th>Log ID</th><th>Volunteer</th><th>Hours</th><th>Date</th><th>Approve</th></tr></thead>
+      <thead><tr><th>Log ID</th><th>Volunteer</th><th>Hours</th><th>Date</th><th>Approve</th><th>Delete</th></tr></thead>
       <tbody id="approvalList"></tbody>
     </table>
 
@@ -2393,7 +2393,8 @@
           const volunteerLabel = formatVolunteerLabel(r);
           tr.innerHTML =
             `<td>${r.id}</td><td>${volunteerLabel}</td><td>${hours}</td><td>${r.duty_date || ''}</td>
-             <td><button onclick="approve(${r.id})">Approve</button></td>`;
+             <td><button onclick="approve(${r.id})">Approve</button></td>
+             <td><button onclick="rejectApproval(${r.id})">Delete</button></td>`;
           tbody.appendChild(tr);
         });
       } catch (e) { /* silent */ }
@@ -2403,6 +2404,24 @@
         const res = await authed(`/time-tracking/${id}/approve`, { method: 'POST' });
         if (res.ok) fetchApprovals();
       } catch (e) { /* silent */ }
+    }
+    async function rejectApproval(id) {
+      if (!confirm('Delete this pending time log?')) return;
+      try {
+        const res = await authed(`/time-tracking/${id}`, { method: 'DELETE' });
+        if (res.ok) {
+          await fetchApprovals();
+          await fetchAdminTimes();
+          showActionStatus('Time entry deleted.');
+        } else {
+          const data = await res.json().catch(() => ({}));
+          alert(data.message || 'Failed to delete time entry');
+          showActionStatus(data.message || 'Failed to delete time entry', true);
+        }
+      } catch {
+        alert('Error deleting time entry');
+        showActionStatus('Error deleting time entry', true);
+      }
     }
 
     // ADMIN TIMES TABLE
