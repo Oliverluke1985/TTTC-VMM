@@ -65,6 +65,16 @@ async function ensureDutyDateColumn() {
     console.error('Failed ensuring time_tracking.duty_date column:', err?.message || err);
   }
 }
+let ensuredDurationColumn = false;
+async function ensureDurationHoursColumn() {
+  if (ensuredDurationColumn) return;
+  try {
+    await pool.query('ALTER TABLE IF EXISTS time_tracking ADD COLUMN IF NOT EXISTS duration_hours DOUBLE PRECISION');
+    ensuredDurationColumn = true;
+  } catch (err) {
+    console.error('Failed ensuring time_tracking.duration_hours column:', err?.message || err);
+  }
+}
 
 let ensuredTimeTrackingConstraints = false;
 async function ensureTimeTrackingConstraints() {
@@ -1058,6 +1068,7 @@ app.patch('/duties/:id', authRequired, async (req, res) => {
 app.post('/duties/:id/time/start', authRequired, async (req, res) => {
   try {
     await ensureDutyDateColumn();
+    await ensureDurationHoursColumn();
     await ensureTimeTrackingConstraints();
     const { duty_date } = req.body;
     const result = await pool.query(
@@ -1072,6 +1083,8 @@ app.post('/duties/:id/time/start', authRequired, async (req, res) => {
 
 app.post('/duties/:id/time/end', authRequired, async (req, res) => {
   try {
+    await ensureDurationHoursColumn();
+    await ensureTimeTrackingConstraints();
     const result = await pool.query(
       `UPDATE time_tracking
        SET end_time=NOW(),
@@ -1168,6 +1181,7 @@ app.patch('/time-tracking/:id', authRequired, async (req, res) => {
   const { start_time, end_time, duty_date, duration_hours } = req.body || {};
   try {
     await ensureDutyDateColumn();
+    await ensureDurationHoursColumn();
     await ensureTimeTrackingConstraints();
     // Build update pieces
     const setClauses = [];
@@ -1248,6 +1262,7 @@ app.post('/admin/time-tracking', authRequired, async (req, res) => {
   if (!isAdmin(req.user)) return res.status(403).json({ message: 'Admins only' });
   try {
     await ensureDutyDateColumn();
+    await ensureDurationHoursColumn();
     await ensureTimeTrackingConstraints();
     const { volunteer_id, duty_id, start_time, end_time, duty_date } = req.body || {};
     const volunteerIdNum = volunteer_id == null ? null : Number(volunteer_id);
