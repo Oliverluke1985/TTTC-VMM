@@ -1466,6 +1466,75 @@ app.post('/admin/time-tracking', authRequired, async (req, res) => {
   }
 });
 
+// Duty restrictions management
+app.get('/duties/:id/restrictions', authRequired, async (req, res) => {
+  if (!isAdmin(req.user)) return res.status(403).json({ message: 'Admins only' });
+  const dutyId = Number(req.params.id);
+  if (!Number.isFinite(dutyId)) return res.status(400).json({ message: 'Invalid id' });
+  const duty = await pool.query('SELECT id, group_id FROM duties WHERE id=$1', [dutyId]);
+  if (duty.rowCount === 0) return res.status(404).json({ message: 'Duty not found' });
+  if (req.user.role === 'admin' && duty.rows[0].group_id !== req.user.group_id) {
+    return res.status(403).json({ message: 'Admins can only manage duties in their organization.' });
+  }
+  const rows = await pool.query(
+    `SELECT u.id, COALESCE(u.name, p.name) AS name, u.email
+     FROM duty_restrictions dr
+     JOIN users u ON u.id = dr.volunteer_id
+     LEFT JOIN user_profile p ON p.user_id = u.id
+     WHERE dr.duty_id=$1
+     ORDER BY COALESCE(u.name, p.name, u.email, u.id::text)`,
+    [dutyId]
+  );
+  res.json(rows.rows);
+});
+
+app.post('/duties/:id/restrictions', authRequired, async (req, res) => {
+  if (!isAdmin(req.user)) return res.status(403).json({ message: 'Admins only' });
+  const dutyId = Number(req.params.id);
+  if (!Number.isFinite(dutyId)) return res.status(400).json({ message: 'Invalid id' });
+  const { volunteer_id } = req.body || {};
+  const volunteerIdNum = Number(volunteer_id);
+  if (!Number.isFinite(volunteerIdNum)) return res.status(400).json({ message: 'Invalid volunteer_id' });
+  const duty = await pool.query('SELECT id, group_id FROM duties WHERE id=$1', [dutyId]);
+  if (duty.rowCount === 0) return res.status(404).json({ message: 'Duty not found' });
+  if (req.user.role === 'admin' && duty.rows[0].group_id !== req.user.group_id) {
+    return res.status(403).json({ message: 'Admins can only manage duties in their organization.' });
+  }
+  const volunteerRes = await pool.query('SELECT id, role, group_id FROM users WHERE id=$1', [volunteerIdNum]);
+  if (volunteerRes.rowCount === 0 || String(volunteerRes.rows[0].role || '').toLowerCase() !== 'volunteer') {
+    return res.status(404).json({ message: 'Volunteer not found' });
+  }
+  if (req.user.role === 'admin' && volunteerRes.rows[0].group_id !== req.user.group_id) {
+    return res.status(403).json({ message: 'Admins can only manage volunteers in their organization.' });
+  }
+  if (req.user.role === 'superadmin') {
+    const dutyGroup = duty.rows[0].group_id;
+    const volunteerGroup = volunteerRes.rows[0].group_id;
+    if (dutyGroup != null && volunteerGroup != null && dutyGroup !== volunteerGroup) {
+      return res.status(400).json({ message: 'Volunteer must belong to the same organization as the duty.' });
+    }
+  }
+  await pool.query(
+    'INSERT INTO duty_restrictions (duty_id, volunteer_id) VALUES ($1,$2) ON CONFLICT DO NOTHING',
+    [dutyId, volunteerIdNum]
+  );
+  res.json({ ok: true });
+});
+
+app.delete('/duties/:id/restrictions/:volunteerId', authRequired, async (req, res) => {
+  if (!isAdmin(req.user)) return res.status(403).json({ message: 'Admins only' });
+  const dutyId = Number(req.params.id);
+  const volunteerId = Number(req.params.volunteerId);
+  if (!Number.isFinite(dutyId) || !Number.isFinite(volunteerId)) return res.status(400).json({ message: 'Invalid id' });
+  const duty = await pool.query('SELECT id, group_id FROM duties WHERE id=$1', [dutyId]);
+  if (duty.rowCount === 0) return res.status(404).json({ message: 'Duty not found' });
+  if (req.user.role === 'admin' && duty.rows[0].group_id !== req.user.group_id) {
+    return res.status(403).json({ message: 'Admins can only manage duties in their organization.' });
+  }
+  await pool.query('DELETE FROM duty_restrictions WHERE duty_id=$1 AND volunteer_id=$2', [dutyId, volunteerId]);
+  res.json({ ok: true });
+});
+
 // --- Milestones
 app.get('/milestones', authRequired, async (req, res) => {
   const rows = await pool.query('SELECT * FROM milestones WHERE volunteer_id=$1', [req.user.id]);

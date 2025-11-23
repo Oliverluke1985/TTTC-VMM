@@ -292,6 +292,20 @@
         <input id="editDutyCapacity" type="number" min="1" placeholder="Unlimited" />
         <button id="saveDutyBtn">Save Duty</button>
         <div id="editDutyError" class="error"></div>
+        <div id="dutyRestrictionsWrap" class="hidden" style="margin-top:16px">
+          <h4>Restrict Volunteers From This Duty</h4>
+          <div class="row" style="gap:12px">
+            <div class="col">
+              <label>Volunteer</label>
+              <select id="dutyRestrictionVolunteer"><option value="">— Select volunteer —</option></select>
+            </div>
+            <div class="col" style="align-self:flex-end">
+              <button id="addDutyRestrictionBtn" type="button">Restrict Volunteer</button>
+            </div>
+          </div>
+          <div id="dutyRestrictionStatus" class="error"></div>
+          <ul id="dutyRestrictionList" class="restrictionList" style="margin-top:8px;padding-left:18px"></ul>
+        </div>
       </div>
     </div>
   </section>
@@ -665,6 +679,8 @@
     let volunteerTimeZoneById = {};
     let timeEntryTimeZoneById = {};
     let activeTimeZone = DEFAULT_TIME_ZONE;
+    let dutyRestrictionVolunteerCache = {};
+    let dutyRestrictionState = { currentDutyId: null };
     const DEFAULT_LOGO_URL = 'https://i.postimg.cc/Ght5qLQw/TTTC-Logo-Redesign2.jpg';
     const DEFAULT_HEADER_IMAGE = 'https://i.postimg.cc/t4S6CDjx/cityscape.jpg';
     const DEFAULT_HERO_IMAGE = 'https://i.postimg.cc/gjsftpNw/original-ticket.jpg';
@@ -771,6 +787,107 @@
       } catch {
         return iso;
       }
+    }
+    function setDutyRestrictionStatus(message = '', isError = false) {
+      const el = document.getElementById('dutyRestrictionStatus');
+      if (!el) return;
+      el.textContent = message || '';
+      el.classList.remove('hidden','error','ok');
+      if (!message) { el.classList.add('hidden'); return; }
+      el.classList.add(isError ? 'error' : 'ok');
+    }
+    function clearDutyRestrictionUI() {
+      dutyRestrictionState.currentDutyId = null;
+      const wrap = document.getElementById('dutyRestrictionsWrap');
+      if (wrap) wrap.classList.add('hidden');
+      const list = document.getElementById('dutyRestrictionList');
+      if (list) list.innerHTML = '';
+      const sel = document.getElementById('dutyRestrictionVolunteer');
+      if (sel) { sel.innerHTML = '<option value="">— Select volunteer —</option>'; sel.disabled = true; }
+      setDutyRestrictionStatus('');
+    }
+    async function prepareDutyRestrictionUI(dutyId) {
+      const wrap = document.getElementById('dutyRestrictionsWrap');
+      if (!wrap || !dutyId || (role !== 'admin' && role !== 'superadmin')) {
+        clearDutyRestrictionUI();
+        return;
+      }
+      dutyRestrictionState.currentDutyId = dutyId;
+      wrap.classList.remove('hidden');
+      setDutyRestrictionStatus('');
+      await populateDutyRestrictionVolunteerSelect(dutyId);
+      await loadDutyRestrictions(dutyId);
+    }
+    async function populateDutyRestrictionVolunteerSelect(dutyId) {
+      const sel = document.getElementById('dutyRestrictionVolunteer');
+      if (!sel) return;
+      sel.innerHTML = '<option value="">— Select volunteer —</option>';
+      const duty = (window.dutyById || {})[dutyId];
+      const dutyGroup = duty?.group_id ?? groupId ?? null;
+      if (!dutyGroup) { sel.disabled = true; return; }
+      if (!dutyRestrictionVolunteerCache[dutyGroup]) {
+        dutyRestrictionVolunteerCache[dutyGroup] = await fetchVolunteers(dutyGroup) || [];
+      }
+      const list = dutyRestrictionVolunteerCache[dutyGroup];
+      sel.disabled = false;
+      list
+        .filter(v => String(v.role || '').toLowerCase() === 'volunteer')
+        .forEach(v => {
+          const opt = document.createElement('option');
+          opt.value = v.id;
+          opt.textContent = v.name ? `${v.name} (${v.email || v.id})` : (v.email || `Volunteer #${v.id}`);
+          sel.appendChild(opt);
+        });
+    }
+    async function loadDutyRestrictions(dutyId) {
+      const listEl = document.getElementById('dutyRestrictionList');
+      if (!listEl) return;
+      listEl.innerHTML = '<li class="hint">Loading…</li>';
+      try {
+        const res = await authed(`/duties/${dutyId}/restrictions`);
+        if (!res.ok) throw new Error('failed');
+        const rows = await res.json();
+        renderDutyRestrictionList(rows, dutyId);
+      } catch (e) {
+        listEl.innerHTML = '';
+        setDutyRestrictionStatus('Failed to load restrictions', true);
+      }
+    }
+    function renderDutyRestrictionList(list, dutyId) {
+      const listEl = document.getElementById('dutyRestrictionList');
+      if (!listEl) return;
+      listEl.innerHTML = '';
+      if (!Array.isArray(list) || list.length === 0) {
+        const li = document.createElement('li');
+        li.className = 'hint';
+        li.textContent = 'No restricted volunteers.';
+        listEl.appendChild(li);
+        return;
+      }
+      list.forEach(vol => {
+        const li = document.createElement('li');
+        const label = vol.name || vol.email || `Volunteer #${vol.id}`;
+        li.innerHTML = `${label} <button type="button" data-vid="${vol.id}" class="dutyUnrestrictBtn" style="margin-left:8px">Allow</button>`;
+        listEl.appendChild(li);
+      });
+      listEl.querySelectorAll('.dutyUnrestrictBtn').forEach(btn => btn.addEventListener('click', async (ev) => {
+        const volunteerId = Number(ev.currentTarget.getAttribute('data-vid'));
+        const currentDutyId = dutyId || dutyRestrictionState.currentDutyId;
+        if (!currentDutyId || !volunteerId) return;
+        setDutyRestrictionStatus('');
+        try {
+          const res = await authed(`/duties/${currentDutyId}/restrictions/${volunteerId}`, { method: 'DELETE' });
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            setDutyRestrictionStatus(data.message || 'Failed to remove restriction', true);
+            return;
+          }
+          await loadDutyRestrictions(currentDutyId);
+          setDutyRestrictionStatus('Volunteer allowed.');
+        } catch {
+          setDutyRestrictionStatus('Error removing restriction', true);
+        }
+      }));
     }
     function applyBranding(branding) {
       if (!defaultBranding) return;
@@ -1219,6 +1336,7 @@
       const sErr = document.getElementById('signupError'); if (sErr) sErr.textContent = '';
       const sOrgErr = document.getElementById('signupOrgError'); if (sOrgErr) sOrgErr.textContent = '';
       const sugg = document.getElementById('signupGroupSuggestions'); if (sugg) { sugg.classList.add('hidden'); sugg.innerHTML = ''; }
+      clearDutyRestrictionUI();
       currentOrgBranding = null;
       applyBranding(null);
       setBrandingStatus('');
@@ -1994,6 +2112,7 @@
           const capInput = document.getElementById('editDutyCapacity');
           const stored = (window.dutyById && window.dutyById[id]) ? window.dutyById[id].max_volunteers : null;
           if (capInput) capInput.value = stored != null ? stored : '';
+          prepareDutyRestrictionUI(id);
         }));
         // wire delete duty
         tbody.querySelectorAll('.deleteDutyBtn').forEach(btn => btn.addEventListener('click', async (ev) => {
@@ -2019,6 +2138,7 @@
         const capInput = document.getElementById('editDutyCapacity');
         const stored = (window.dutyById && window.dutyById[id]) ? window.dutyById[id].max_volunteers : null;
         if (capInput) capInput.value = stored != null ? stored : '';
+        prepareDutyRestrictionUI(id);
         return;
       }
       const cells = row.children;
@@ -2030,6 +2150,7 @@
       const capInput = document.getElementById('editDutyCapacity');
       const stored = (window.dutyById && window.dutyById[id]) ? window.dutyById[id].max_volunteers : null;
       if (capInput) capInput.value = stored != null ? stored : '';
+      prepareDutyRestrictionUI(id);
     });
 
     // Create Duty (admin)
@@ -2119,8 +2240,33 @@
         if (!res.ok) { document.getElementById('editDutyError').textContent = data.message || 'Failed to save duty'; return; }
         document.getElementById('editDutyError').textContent = '';
         document.getElementById('dutyEditWrap').classList.add('hidden');
+        clearDutyRestrictionUI();
         await fetchDuties();
       } catch { document.getElementById('editDutyError').textContent = 'Error saving duty'; }
+    });
+    document.getElementById('addDutyRestrictionBtn')?.addEventListener('click', async () => {
+      if (role !== 'admin' && role !== 'superadmin') return;
+      const dutyId = Number(document.getElementById('editDutyId').value);
+      const volunteerId = Number(document.getElementById('dutyRestrictionVolunteer')?.value || '');
+      if (!dutyId) { setDutyRestrictionStatus('Select a duty first.', true); return; }
+      if (!volunteerId) { setDutyRestrictionStatus('Select a volunteer to restrict.', true); return; }
+      setDutyRestrictionStatus('');
+      try {
+        const res = await authed(`/duties/${dutyId}/restrictions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ volunteer_id: volunteerId })
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          setDutyRestrictionStatus(data.message || 'Failed to restrict volunteer', true);
+          return;
+        }
+        await loadDutyRestrictions(dutyId);
+        setDutyRestrictionStatus('Volunteer restricted.');
+      } catch {
+        setDutyRestrictionStatus('Error restricting volunteer', true);
+      }
     });
 
     // Create Duty (volunteer)
