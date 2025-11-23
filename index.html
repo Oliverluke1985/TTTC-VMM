@@ -353,10 +353,13 @@
         <p class="hint" style="margin-top:0">Customize how this application looks for members of your organization.</p>
         <label>Logo URL</label>
         <input id="brandingLogoUrl" type="url" placeholder="https://example.com/logo.png" />
+        <input id="brandingLogoFile" type="file" accept="image/png,image/jpeg,image/webp" />
         <label>Banner Image URL</label>
         <input id="brandingBannerUrl" type="url" placeholder="https://example.com/banner.jpg" />
+        <input id="brandingBannerFile" type="file" accept="image/png,image/jpeg,image/webp" />
         <label>Footer Image URL</label>
         <input id="brandingFooterUrl" type="url" placeholder="https://example.com/footer.jpg" />
+        <input id="brandingFooterFile" type="file" accept="image/png,image/jpeg,image/webp" />
         <div class="row" style="gap:12px">
           <div style="flex:1 1 160px">
             <label>Primary Color</label>
@@ -967,6 +970,55 @@
         return;
       }
       statusEl.classList.add(isError ? 'error' : 'ok');
+    }
+    const BRANDING_FIELD_MAP = {
+      logo: 'brandingLogoUrl',
+      banner: 'brandingBannerUrl',
+      footer: 'brandingFooterUrl'
+    };
+    function wireBrandingFileInputs() {
+      const pairs = [
+        { target: 'logo', input: 'brandingLogoFile' },
+        { target: 'banner', input: 'brandingBannerFile' },
+        { target: 'footer', input: 'brandingFooterFile' }
+      ];
+      pairs.forEach(({ target, input }) => {
+        const el = document.getElementById(input);
+        if (el && !el._wired) {
+          el.addEventListener('change', (event) => handleBrandingFileUpload(event, target));
+          el._wired = true;
+        }
+      });
+    }
+    async function handleBrandingFileUpload(event, target) {
+      const fileInput = event?.target;
+      const file = fileInput?.files?.[0];
+      if (!file) return;
+      setBrandingStatus('Uploading image…');
+      try {
+        const formData = new FormData();
+        formData.append('target', target);
+        formData.append('image', file);
+        const res = await authed('/branding/upload', {
+          method: 'POST',
+          body: formData
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          setBrandingStatus(data.message || 'Failed to upload image', true);
+          return;
+        }
+        const fieldId = BRANDING_FIELD_MAP[target];
+        if (fieldId) {
+          const field = document.getElementById(fieldId);
+          if (field) field.value = data.url || data.path || '';
+        }
+        setBrandingStatus('Image uploaded. Click “Save Branding” to apply.');
+      } catch {
+        setBrandingStatus('Error uploading image', true);
+      } finally {
+        if (fileInput) fileInput.value = '';
+      }
     }
     populateTimeZoneSelect(document.getElementById('groupTimeZone'), DEFAULT_TIME_ZONE);
 
@@ -2956,6 +3008,7 @@
         setBrandingStatus('Error saving branding', true);
       }
     });
+    wireBrandingFileInputs();
     document.getElementById('resetBrandingBtn')?.addEventListener('click', async () => {
       if (role !== 'admin') return;
       if (!confirm('Reset your branding back to the default theme?')) return;
