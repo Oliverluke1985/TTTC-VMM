@@ -99,7 +99,6 @@
     <button id="navCreateDutyBtn">Create Duty</button>
     <button id="navVolunteerMgmtBtn" class="hidden">Volunteer Management</button>
     <button id="navClockBtn">Time Clock</button>
-    <button id="navPhotosBtn">Photos</button>
     <button id="navLogoutBtn">Logout</button>
   </nav>
   <div id="globalStatus" class="ok hidden" style="margin:8px 0;"></div>
@@ -166,25 +165,6 @@
   </section>
 
   <!-- VOLUNTEER: PHOTOS PAGE -->
-  <section id="photosSection" class="col hidden">
-    <h2>Photos</h2>
-    <div id="photosFilterWrap" class="row hidden">
-      <div class="col">
-        <label>Volunteer (filter)</label>
-        <select id="photosVolunteerFilter"><option value="">— All —</option></select>
-      </div>
-    </div>
-    <div id="photoUploadWrap">
-      <label for="photoDuty">Duty</label>
-      <select id="photoDuty"></select>
-      <input id="photoCaption" type="text" placeholder="Caption (optional)" />
-      <input id="photoFile" type="file" accept="image/*" capture="environment" />
-      <button id="uploadPhotoBtn">Upload Photo</button>
-      <div id="photoError" class="error"></div>
-    </div>
-    <div id="photoGallery"></div>
-  </section>
-
   <!-- VOLUNTEER: EVENTS PAGE -->
   <section id="eventsSection" class="col hidden">
     <h2>Events</h2>
@@ -569,9 +549,6 @@
       <tbody id="adminTimeList"></tbody>
     </table>
 
-    
-    <h3>Photo Approvals</h3>
-    <div id="photoApprovals"></div>
   </section>
 
   <!-- VOLUNTEER MANAGEMENT (Admin/Superadmin) -->
@@ -1141,10 +1118,8 @@
       await fetchEvents();
       await fetchDuties();
       await fetchTimeTracking();
-      await fetchPhotos();
       await fetchApprovals();
       await fetchAdminTimes();
-      await fetchPhotoApprovals();
     }
 
     // LOGIN
@@ -1326,7 +1301,7 @@
       // Hide app UI and show clean login/signup
       const tb = document.getElementById('toolbar'); if (tb) tb.classList.add('hidden');
       show('authSection');
-      ['infoSection','superadminSection','adminSection','homeSection','createDutySection','clockSection','eventsSection','photosSection']
+    ['infoSection','superadminSection','adminSection','homeSection','createDutySection','clockSection','eventsSection']
         .forEach(id => { const el = document.getElementById(id); if (el) el.classList.add('hidden'); });
       // Clear login fields
       const le = document.getElementById('email'); if (le) le.value = '';
@@ -2049,8 +2024,6 @@
           if (enforcing && filterSel && (!filterSel.value || filterSel.value === '')) {
             if (tbody) tbody.innerHTML = '';
             // Disable dependent duty selects until org is chosen
-            const photoDutySel = document.getElementById('photoDuty');
-            if (photoDutySel) { photoDutySel.innerHTML = '<option value="">— Select organization first —</option>'; photoDutySel.disabled = true; }
             const editSel = document.getElementById('dutyEditSelect');
             if (editSel) { editSel.innerHTML = '<option value="">— Select organization first —</option>'; editSel.disabled = true; }
             const vmDutySel = document.getElementById('vmDuty');
@@ -2062,10 +2035,8 @@
         }
         if (!tbody) return;
         tbody.innerHTML = '';
-        // populate duty table rows and photo duty select
-        const dutySelect = document.getElementById('photoDuty');
+        // populate duty table rows and selects
         const editSelect = document.getElementById('dutyEditSelect');
-        if (dutySelect) { dutySelect.innerHTML = ''; dutySelect.disabled = false; }
         if (editSelect) { editSelect.innerHTML = '<option value="">— Select duty —</option>'; editSelect.disabled = false; }
         const vmDutySelEnabled = document.getElementById('vmDuty');
         if (vmDutySelEnabled) vmDutySelEnabled.disabled = false;
@@ -3008,7 +2979,7 @@
 
     // NAVIGATION / TOOLBAR
     function hideMainSections() {
-      ['infoSection','superadminSection','homeSection','createDutySection','clockSection','photosSection','eventsSection','adminSection','volMgmtSection'].forEach(id => {
+      ['infoSection','superadminSection','homeSection','createDutySection','clockSection','eventsSection','adminSection','volMgmtSection'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.classList.add('hidden');
       });
@@ -3124,8 +3095,6 @@
         const evf = document.getElementById('eventsSuperFilter'); if (evf) evf.value = '';
         // Create Duty/Edit Duty dependent selects
         const deSel = document.getElementById('dutyEditSelect'); if (deSel) { deSel.innerHTML = '<option value="">— Select duty —</option>'; deSel.disabled = true; }
-        // Photos filters
-        const pvf = document.getElementById('photosVolunteerFilter'); if (pvf) pvf.value = '';
         // Volunteer Mgmt selections/rows
         const vmOrg = document.getElementById('vmOrgPicker'); if (vmOrg) vmOrg.value = '';
         const vmEvt = document.getElementById('vmEvent'); if (vmEvt) vmEvt.innerHTML = '<option value="">— Select event —</option>';
@@ -3142,7 +3111,6 @@
       document.getElementById('navCreateDutyBtn').classList.toggle('hidden', !isAdminish);
       // Show Time Clock and Photos for volunteers AND admins/superadmins
       document.getElementById('navClockBtn').classList.toggle('hidden', !(isVolunteer || isAdminish));
-      document.getElementById('navPhotosBtn').classList.toggle('hidden', !(isVolunteer || isAdminish));
       document.getElementById('navHomeBtn').onclick = () => { resetGlobalFilters(); navigateTo('homeSection'); };
       function resetVolunteerMgmtUI() {
         const orgRow = document.getElementById('vmSuperOrgRow');
@@ -3308,11 +3276,9 @@
         if (currentRole === 'superadmin') {
           const gSel = document.getElementById('superDutyGroupFilter');
           const editSel = document.getElementById('dutyEditSelect');
-          const photoDutySel = document.getElementById('photoDuty');
           const vmDutySel = document.getElementById('vmDuty');
           const needsOrg = !(gSel && gSel.value);
           if (editSel) { editSel.innerHTML = `<option value="">${needsOrg ? '— Select organization first —' : '— Select duty —'}</option>`; editSel.disabled = needsOrg; }
-          if (photoDutySel) { photoDutySel.innerHTML = `<option value="">${needsOrg ? '— Select organization first —' : ''}</option>`; photoDutySel.disabled = needsOrg; }
           if (vmDutySel) { vmDutySel.innerHTML = `<option value=\"\">${needsOrg ? '— Select organization first —' : '— Select duty —'}</option>`; vmDutySel.disabled = needsOrg; }
         }
         // Ensure duty event dropdowns reflect selected org context
@@ -3368,49 +3334,7 @@
         await fetchDuties();
         await fetchTimeTracking();
       };
-      document.getElementById('navPhotosBtn').onclick = async () => {
-        resetGlobalFilters();
-        resetVolunteerMgmtUI();
-        navigateTo('photosSection');
-        await fetchDuties();
-        const wrap = document.getElementById('photosFilterWrap');
-        if (wrap) wrap.classList.toggle('hidden', !(currentRole === 'admin' || currentRole === 'superadmin'));
-        // Populate volunteer filter scoped by organization
-        try {
-          const sel = document.getElementById('photosVolunteerFilter');
-          if (!sel) { await fetchPhotos(); return; }
-          let gid = '';
-          if (currentRole === 'superadmin') {
-            gid = document.getElementById('superadminOrgPicker')?.value || '';
-            if (!gid) {
-              sel.innerHTML = '<option value=\"\">— Select organization first —</option>';
-              sel.disabled = true;
-              await fetchPhotos(); // will no-op until org chosen
-              return;
-            }
-          } else if (currentRole === 'admin') {
-            gid = (groupId != null ? String(groupId) : '');
-          }
-          const qp = new URLSearchParams({ role: 'volunteer' });
-          if (gid) qp.set('group_id', gid);
-          const res = await authed(`/users?${qp.toString()}`);
-          if (res.ok) {
-            const vols = await res.json();
-            const current = sel.value;
-            sel.disabled = false;
-            sel.innerHTML = '<option value=\"\">— All —</option>';
-            vols.forEach(v => {
-              const opt = document.createElement('option');
-              opt.value = v.id;
-              opt.textContent = v.name ? `${v.name} — ${v.email}` : v.email;
-              sel.appendChild(opt);
-            });
-            if (current) sel.value = current;
-            if (!sel._wired) { sel.addEventListener('change', fetchPhotos); sel._wired = true; }
-          }
-        } catch { /* silent */ }
-        await fetchPhotos();
-      };
+
       document.getElementById('navVolunteerMgmtBtn').onclick = async () => {
         resetGlobalFilters();
         resetVolunteerMgmtUI();
@@ -3818,121 +3742,6 @@
       }
     });
 
-    // Photos
-    async function fetchPhotos() {
-      try {
-        const params = new URLSearchParams();
-        // Scope by org for admin/superadmin
-        if (role === 'superadmin') {
-          const gid = document.getElementById('superadminOrgPicker')?.value || '';
-          if (!gid) {
-            const gallery = document.getElementById('photoGallery');
-            if (gallery) gallery.innerHTML = '';
-            return;
-          }
-          params.set('group_id', gid);
-        } else if (role === 'admin') {
-          if (groupId != null) params.set('group_id', String(groupId));
-        }
-        // Optional volunteer filter
-        const sel = document.getElementById('photosVolunteerFilter');
-        if (sel && sel.value) params.set('volunteer_id', sel.value);
-        const res = await authed(`/photos${params.toString() ? `?${params.toString()}` : ''}`);
-        if (!res.ok) return;
-        const rows = await res.json();
-        const gallery = document.getElementById('photoGallery');
-        if (!gallery) return;
-        gallery.innerHTML = '';
-        rows.forEach(p => {
-          const div = document.createElement('div');
-          div.style.marginTop = '8px';
-          const delBtn = (role === 'admin' || role === 'superadmin') ? `<button data-pid="${p.id}" class="photoDelBtn" style="margin-left:8px">Delete</button>` : '';
-          div.innerHTML = `<img src="${p.file_path}" alt="photo" style="max-width:200px;border-radius:8px;"> <div>${p.caption || ''} ${p.approved ? '✔️' : '⏳'} ${delBtn}</div>`;
-          gallery.appendChild(div);
-        });
-        // wire delete
-        gallery.querySelectorAll('.photoDelBtn').forEach(btn => btn.addEventListener('click', async (ev) => {
-          const id = Number(ev.currentTarget.getAttribute('data-pid'));
-          if (!confirm('Delete this photo?')) return;
-          try {
-            const res = await authed(`/photos/${id}`, { method: 'DELETE' });
-            if (res.ok) fetchPhotos();
-          } catch { /* silent */ }
-        }));
-      } catch { /* silent */ }
-    }
-    // Admin photo approvals
-   async function fetchPhotoApprovals() {
-      if (role !== 'admin' && role !== 'superadmin') return;
-      try {
-        let path = '/photos';
-        if (role === 'superadmin') {
-          const gid = document.getElementById('superadminOrgPicker')?.value;
-          const w1 = document.getElementById('photoApprovals');
-          const w2 = document.getElementById('superPhotoApprovals');
-          if (!gid) { [w1, w2].forEach(w => { if (w) w.innerHTML = ''; }); return; }
-          path += `?group_id=${encodeURIComponent(gid)}`;
-        }
-        const res = await authed(path);
-        if (!res.ok) return;
-        const rows = await res.json();
-        const wrap = document.getElementById('superPhotoApprovals') || document.getElementById('photoApprovals');
-        if (!wrap) return;
-        wrap.innerHTML = '';
-        rows.filter(p => !p.approved).forEach(p => {
-          const div = document.createElement('div');
-          div.style.marginTop = '8px';
-          div.innerHTML = `<img src="${p.file_path}" alt="pending" style="max-width:160px;border-radius:6px;margin-right:8px;vertical-align:middle;">` +
-                          `<span>#${p.id} — Volunteer ${p.volunteer_id} — Duty ${p.duty_id} — ${p.caption || ''}</span> ` +
-                          `<button onclick="approvePhoto(${p.id})">Approve</button> ` +
-                          `<button data-pid="${p.id}" class="photoDelBtn">Delete</button>`;
-          wrap.appendChild(div);
-        });
-        wrap.querySelectorAll('.photoDelBtn').forEach(btn => btn.addEventListener('click', async (ev) => {
-          const id = Number(ev.currentTarget.getAttribute('data-pid'));
-          if (!confirm('Delete this photo?')) return;
-          try {
-            const res = await authed(`/photos/${id}`, { method: 'DELETE' });
-            if (res.ok) { fetchPhotoApprovals(); fetchPhotos(); }
-          } catch { /* silent */ }
-        }));
-      } catch { /* silent */ }
-    }
-    async function approvePhoto(id) {
-      try {
-        const res = await authed(`/photos/${id}/approve`, { method: 'POST' });
-        if (res.ok) { fetchPhotoApprovals(); fetchPhotos(); }
-      } catch { /* silent */ }
-    }
-
-    const upBtn = document.getElementById('uploadPhotoBtn');
-    if (upBtn) upBtn.addEventListener('click', async () => {
-      document.getElementById('photoError').textContent = '';
-      try {
-        const dutyId = document.getElementById('photoDuty').value;
-        const file = document.getElementById('photoFile').files[0];
-        const caption = document.getElementById('photoCaption').value.trim();
-        if (!file) { document.getElementById('photoError').textContent = 'Choose a photo'; return; }
-        const form = new FormData();
-        form.append('photo', file);
-        form.append('caption', caption);
-        const res = await fetch(`${apiUrl}/duties/${dutyId}/photos`, {
-          method: 'POST',
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-          body: form,
-        });
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          document.getElementById('photoError').textContent = data.message || 'Upload failed';
-          return;
-        }
-        document.getElementById('photoFile').value = '';
-        document.getElementById('photoCaption').value = '';
-        fetchPhotos();
-      } catch {
-        document.getElementById('photoError').textContent = 'Error uploading photo';
-      }
-    });
   </script>
 </body>
 </html>
