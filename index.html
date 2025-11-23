@@ -330,6 +330,7 @@
     <h2>Account</h2>
     <div>Role: <strong id="role"></strong></div>
     <div>Group: <strong id="groupName"></strong> <span id="groupIdWrap" class="nowrap hidden">(ID: <span id="groupId"></span>)</span></div>
+    <div>Time Zone: <strong id="accountTimeZone">—</strong></div>
     <div>User ID: <strong id="userId"></strong></div>
     <button id="logoutBtn">Logout</button>
     <hr />
@@ -644,6 +645,17 @@
       });
       if (!select.value) select.value = DEFAULT_TIME_ZONE;
     }
+    function formatTimeZoneLabel(value) {
+      const match = supportedTimeZones.find(tz => tz.value === value);
+      return match ? match.label : (value || 'UTC');
+    }
+    function refreshAccountTimeZoneDisplay() {
+      const tzEl = document.getElementById('accountTimeZone');
+      if (!tzEl) return;
+      const tz = (groupId != null && groupTimeZoneById[groupId]) ? groupTimeZoneById[groupId] : activeTimeZone;
+      tzEl.textContent = formatTimeZoneLabel(tz || DEFAULT_TIME_ZONE);
+    }
+    refreshAccountTimeZoneDisplay();
     const pad2 = n => String(n).padStart(2, '0');
     function getGroupTimeZone(id) {
       return (id != null && groupTimeZoneById[id]) ? groupTimeZoneById[id] : DEFAULT_TIME_ZONE;
@@ -1074,6 +1086,7 @@
         } else {
           groupNameEl.textContent = '-';
         }
+        refreshAccountTimeZoneDisplay();
 
         // superadmin/admin: populate org list and new-user/duty group selector(s)
         const tbody = document.getElementById('groupList');
