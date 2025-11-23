@@ -598,28 +598,13 @@
     let userId = null;
     // North America focused list; add more later if needed
     const supportedTimeZones = [
-      'America/St_Johns',
-      'America/Halifax',
-      'America/Toronto',
-      'America/New_York',
-      'America/Detroit',
-      'America/Chicago',
-      'America/Winnipeg',
-      'America/Denver',
-      'America/Phoenix',
-      'America/Edmonton',
-      'America/Los_Angeles',
-      'America/Vancouver',
-      'America/Anchorage',
-      'America/Adak',
-      'Pacific/Honolulu',
-      'America/Mexico_City',
-      'America/Monterrey',
-      'America/Regina',
-      'America/Saskatoon',
-      'America/Guatemala',
-      'America/Costa_Rica',
-      'America/Bogota',
+      'America/New_York',   // Eastern
+      'America/Chicago',    // Central
+      'America/Denver',     // Mountain
+      'America/Phoenix',    // Mountain (no DST)
+      'America/Los_Angeles',// Pacific
+      'America/Anchorage',  // Alaska
+      'Pacific/Honolulu',   // Hawaii
       'UTC'
     ];
     const DEFAULT_TIME_ZONE = 'America/Chicago';
