@@ -102,6 +102,7 @@
     <button id="navPhotosBtn">Photos</button>
     <button id="navLogoutBtn">Logout</button>
   </nav>
+  <div id="globalStatus" class="ok hidden" style="margin:8px 0;"></div>
   <section id="homeSection" class="col hidden">
     <h2>Welcome to the TTTC Volunteer Tracker App</h2>
     <img id="homeHero" alt="Welcome" src="https://i.postimg.cc/gjsftpNw/original-ticket.jpg" />
@@ -622,6 +623,14 @@
       el.classList.remove('hidden','error','ok');
       if (!message) { el.classList.add('hidden'); return; }
       el.classList.add(isError ? 'error' : 'ok');
+    }
+    let actionStatusTimeout = null;
+    function showActionStatus(message = '', isError = false) {
+      updateStatusMessage('globalStatus', message, isError);
+      if (actionStatusTimeout) clearTimeout(actionStatusTimeout);
+      if (message) {
+        actionStatusTimeout = setTimeout(() => updateStatusMessage('globalStatus',''), 4000);
+      }
     }
     function populateTimeZoneSelect(select, selected) {
       if (!select) return;
@@ -1187,8 +1196,14 @@
       try {
         if (!confirm('Delete this organization? This will permanently remove it. You can also Archive instead. Continue?')) return;
         const res = await authed(`/groups/${id}`, { method: 'DELETE' });
-        if (res.ok) fetchGroups();
-      } catch (e) { /* silent */ }
+        if (res.ok) { fetchGroups(); showActionStatus('Organization deleted.'); }
+        else {
+          const data = await res.json().catch(()=>({}));
+          showActionStatus(data.message || 'Failed to delete organization', true);
+        }
+      } catch (e) {
+        showActionStatus('Error deleting organization', true);
+      }
     }
     async function archiveGroup(id) {
       try {
@@ -1198,8 +1213,14 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ status: 'inactive' })
         });
-        if (res.ok) fetchGroups();
-      } catch (e) { /* silent */ }
+        if (res.ok) { fetchGroups(); showActionStatus('Organization archived.'); }
+        else {
+          const data = await res.json().catch(()=>({}));
+          showActionStatus(data.message || 'Failed to archive organization', true);
+        }
+      } catch (e) {
+        showActionStatus('Error archiving organization', true);
+      }
     }
 
     document.getElementById('createGroupBtn')?.addEventListener('click', async () => {
@@ -1214,15 +1235,18 @@
         });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
-          document.getElementById('createGroupError').textContent = data.message || 'Failed to create group';
+          document.getElementById('createGroupError').textContent = data.message || 'Failed to create organization';
+          showActionStatus(data.message || 'Failed to create organization', true);
           return;
         }
         document.getElementById('createGroupError').textContent = '';
         document.getElementById('groupNameInput').value = '';
         populateTimeZoneSelect(document.getElementById('groupTimeZone'), DEFAULT_TIME_ZONE);
         fetchGroups();
+        showActionStatus('Organization created.');
       } catch {
-        document.getElementById('createGroupError').textContent = 'Error creating group';
+        document.getElementById('createGroupError').textContent = 'Error creating organization';
+        showActionStatus('Error creating organization', true);
       }
     });
 
@@ -2439,23 +2463,25 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
-        if (res.ok) { fetchAdminTimes(); fetchTimeTracking(); fetchApprovals(); }
+        if (res.ok) { fetchAdminTimes(); fetchTimeTracking(); fetchApprovals(); showActionStatus('Time entry saved.'); }
         else {
           const data = await res.json().catch(() => ({}));
           alert(data.message || 'Failed to save');
+          showActionStatus(data.message || 'Failed to save time entry', true);
         }
-      } catch { alert('Error saving'); }
+      } catch { alert('Error saving'); showActionStatus('Error saving time entry', true); }
     }
     async function deleteTime(id) {
       if (!confirm('Delete this time log?')) return;
       try {
         const res = await authed(`/time-tracking/${id}`, { method: 'DELETE' });
-        if (res.ok) { fetchAdminTimes(); fetchTimeTracking(); fetchApprovals(); }
+        if (res.ok) { fetchAdminTimes(); fetchTimeTracking(); fetchApprovals(); showActionStatus('Time entry deleted.'); }
         else {
           const data = await res.json().catch(() => ({}));
           alert(data.message || 'Failed to delete');
+          showActionStatus(data.message || 'Failed to delete time entry', true);
         }
-      } catch { alert('Error deleting'); }
+      } catch { alert('Error deleting'); showActionStatus('Error deleting time entry', true); }
     }
     async function saveClockAdjustTime(id) {
       try {
@@ -2475,11 +2501,13 @@
         if (res.ok) {
           await refreshClockAdminTimes();
           await fetchApprovals();
+          showActionStatus('Volunteer time saved.');
         } else {
           const data = await res.json().catch(() => ({}));
           alert(data.message || 'Failed to save');
+          showActionStatus(data.message || 'Failed to save volunteer time', true);
         }
-      } catch { alert('Error saving'); }
+      } catch { alert('Error saving'); showActionStatus('Error saving volunteer time', true); }
     }
     async function deleteClockAdjustTime(id) {
       if (!confirm('Delete this time log?')) return;
@@ -2488,11 +2516,13 @@
         if (res.ok) {
           await refreshClockAdminTimes();
           await fetchApprovals();
+          showActionStatus('Volunteer time deleted.');
         } else {
           const data = await res.json().catch(() => ({}));
           alert(data.message || 'Failed to delete');
+          showActionStatus(data.message || 'Failed to delete volunteer time', true);
         }
-      } catch { alert('Error deleting'); }
+      } catch { alert('Error deleting'); showActionStatus('Error deleting volunteer time', true); }
     }
     
 
@@ -2598,14 +2628,15 @@
             try {
               const res = await authed(`/groups/${selectedId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: nameVal, status: statusVal, time_zone: tzVal }) });
               const data = await res.json().catch(() => ({}));
-              if (!res.ok) { if (errEl) errEl.textContent = data.message || 'Failed to save'; return; }
+              if (!res.ok) { if (errEl) errEl.textContent = data.message || 'Failed to save'; showActionStatus(data.message || 'Failed to save organization', true); return; }
               // Reflect updated values in picker
               const picker = document.getElementById('superadminOrgPicker');
               if (picker && nameVal) {
                 const opt = Array.from(picker.options).find(o => o.value === String(selectedId));
                 if (opt) opt.textContent = nameVal;
               }
-            } catch { if (errEl) errEl.textContent = 'Error saving'; }
+              showActionStatus('Organization saved.');
+            } catch { if (errEl) errEl.textContent = 'Error saving'; showActionStatus('Error saving organization', true); }
           };
         }
         const archiveBtn = document.getElementById('saOrgArchiveBtn');
