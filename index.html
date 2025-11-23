@@ -150,7 +150,7 @@
     <div id="clockDutiesWrap">
       <h3>My Duties</h3>
       <table>
-        <thead><tr><th>ID</th><th>Title</th><th>Description</th><th>Status</th><th>Track Time</th></tr></thead>
+        <thead><tr><th>ID</th><th>Title</th><th>Description</th><th>Status</th><th>Capacity</th><th>Active</th><th>Track Time</th></tr></thead>
         <tbody id="dutyList"></tbody>
       </table>
     </div>
@@ -253,6 +253,8 @@
           <option value="open">open</option>
           <option value="closed">closed</option>
         </select>
+        <label>Max Volunteers (optional)</label>
+        <input id="dutyCapacity" type="number" min="1" placeholder="Unlimited" />
         <button id="createDutyBtn">Create Duty</button>
         <div id="createDutyError" class="error"></div>
       </div>
@@ -286,6 +288,8 @@
           <option value="in_progress">in_progress</option>
           <option value="completed">completed</option>
         </select>
+        <label>Max Volunteers (optional)</label>
+        <input id="editDutyCapacity" type="number" min="1" placeholder="Unlimited" />
         <button id="saveDutyBtn">Save Duty</button>
         <div id="editDutyError" class="error"></div>
       </div>
@@ -1946,15 +1950,21 @@
           const tr = document.createElement('tr');
           let adminActions = '';
           if (role === 'admin' || role === 'superadmin') {
-            adminActions = `<button data-did="${d.id}" class="prefillDutyEditBtn">Edit</button>` +
+            adminActions = `<button data-did="${d.id}" data-max="${d.max_volunteers ?? ''}" class="prefillDutyEditBtn">Edit</button>` +
                            ` <button data-did="${d.id}" class="deleteDutyBtn" style="margin-left:6px;color:#b00020">Delete</button>`;
           }
+          const capacityLabel = (d.max_volunteers != null && d.max_volunteers !== '') ? d.max_volunteers : '—';
+          const activeLabel = d.active_assignments != null ? d.active_assignments : 0;
+          const isFull = d.max_volunteers != null && d.max_volunteers !== '' && Number(d.max_volunteers) > 0 && Number(activeLabel) >= Number(d.max_volunteers);
+          const clockInDisabled = isFull ? 'disabled title="Duty has reached its volunteer limit"' : '';
           tr.innerHTML =
             `<td>${d.id}</td><td>${d.title}</td><td>${d.description || ''}</td><td>${d.status}</td>
+             <td>${capacityLabel}</td><td>${activeLabel}</td>
              <td>
                <input type="date" id="dutyDate-${d.id}" required>
-               <button onclick="startTime(${d.id})">Clock In</button>
+               <button onclick="startTime(${d.id})" ${clockInDisabled}>Clock In</button>
                <button onclick="stopTime(${d.id})">Clock Out</button>
+               ${isFull ? '<div class="hint" style="margin-top:4px">Duty is full</div>' : ''}
                ${adminActions}
              </td>`;
           tbody.appendChild(tr);
@@ -1981,6 +1991,9 @@
           document.getElementById('editDutyTitle').value = row[1].textContent || '';
           document.getElementById('editDutyDesc').value = row[2].textContent || '';
           document.getElementById('editDutyStatus').value = (row[3].textContent || 'pending');
+          const capInput = document.getElementById('editDutyCapacity');
+          const stored = (window.dutyById && window.dutyById[id]) ? window.dutyById[id].max_volunteers : null;
+          if (capInput) capInput.value = stored != null ? stored : '';
         }));
         // wire delete duty
         tbody.querySelectorAll('.deleteDutyBtn').forEach(btn => btn.addEventListener('click', async (ev) => {
@@ -2000,13 +2013,23 @@
       if (!sel || !sel.value) return;
       const id = Number(sel.value);
       const row = Array.from(document.querySelectorAll('#dutyList tr')).find(tr => tr.firstChild?.textContent == String(id));
-      if (!row) { document.getElementById('dutyEditWrap').classList.remove('hidden'); document.getElementById('editDutyId').value = String(id); return; }
+      if (!row) {
+        document.getElementById('dutyEditWrap').classList.remove('hidden');
+        document.getElementById('editDutyId').value = String(id);
+        const capInput = document.getElementById('editDutyCapacity');
+        const stored = (window.dutyById && window.dutyById[id]) ? window.dutyById[id].max_volunteers : null;
+        if (capInput) capInput.value = stored != null ? stored : '';
+        return;
+      }
       const cells = row.children;
       document.getElementById('dutyEditWrap').classList.remove('hidden');
       document.getElementById('editDutyId').value = String(id);
       document.getElementById('editDutyTitle').value = cells[1].textContent || '';
       document.getElementById('editDutyDesc').value = cells[2].textContent || '';
       document.getElementById('editDutyStatus').value = (cells[3].textContent || 'pending');
+      const capInput = document.getElementById('editDutyCapacity');
+      const stored = (window.dutyById && window.dutyById[id]) ? window.dutyById[id].max_volunteers : null;
+      if (capInput) capInput.value = stored != null ? stored : '';
     });
 
     // Create Duty (admin)
@@ -2018,12 +2041,23 @@
         const eventSel = document.getElementById('dutyEvent');
         const event_id = eventSel && eventSel.value ? Number(eventSel.value) : null;
       const status = document.getElementById('dutyStatus').value;
+      const capacityInput = document.getElementById('dutyCapacity');
+      const rawCapacity = capacityInput?.value?.trim();
+      let max_volunteers = null;
+      if (rawCapacity) {
+        max_volunteers = Number(rawCapacity);
+        if (!Number.isFinite(max_volunteers) || max_volunteers < 1) {
+          document.getElementById('createDutyError').textContent = 'Max volunteers must be a positive number';
+          return;
+        }
+        max_volunteers = Math.floor(max_volunteers);
+      }
       try {
         if (!event_id) { document.getElementById('createDutyError').textContent = 'Event is required'; return; }
         const res = await authed('/duties', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title, description, status, group_id, event_id })
+          body: JSON.stringify({ title, description, status, group_id, event_id, max_volunteers })
         });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
@@ -2033,6 +2067,7 @@
         document.getElementById('createDutyError').textContent = '';
         document.getElementById('dutyTitle').value = '';
         document.getElementById('dutyDesc').value = '';
+        if (capacityInput) capacityInput.value = '';
         if (eventSel) eventSel.value = '';
         // If superadmin, sync the top org filter to the group used so list shows immediately
         if (role === 'superadmin') {
@@ -2059,11 +2094,26 @@
       const title = document.getElementById('editDutyTitle').value.trim();
       const description = document.getElementById('editDutyDesc').value.trim();
       const status = document.getElementById('editDutyStatus').value;
+      const capacityInput = document.getElementById('editDutyCapacity');
+      const rawCapacity = capacityInput?.value?.trim();
+      let max_volunteers = null;
+      if (rawCapacity !== undefined) {
+        if (rawCapacity === '') {
+          max_volunteers = null;
+        } else {
+          max_volunteers = Number(rawCapacity);
+          if (!Number.isFinite(max_volunteers) || max_volunteers < 1) {
+            document.getElementById('editDutyError').textContent = 'Max volunteers must be a positive number';
+            return;
+          }
+          max_volunteers = Math.floor(max_volunteers);
+        }
+      }
       try {
         const res = await authed(`/duties/${id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title, description, status })
+          body: JSON.stringify({ title, description, status, max_volunteers })
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) { document.getElementById('editDutyError').textContent = data.message || 'Failed to save duty'; return; }

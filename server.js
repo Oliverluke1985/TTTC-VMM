@@ -182,6 +182,9 @@ async function ensureTimeTrackingConstraints() {
       `ALTER TABLE IF EXISTS groups ADD COLUMN IF NOT EXISTS time_zone TEXT DEFAULT 'UTC'`
     );
     await pool.query(
+      'ALTER TABLE IF EXISTS duties ADD COLUMN IF NOT EXISTS max_volunteers INTEGER'
+    );
+    await pool.query(
       `CREATE TABLE IF NOT EXISTS group_branding (
          group_id INTEGER PRIMARY KEY REFERENCES groups(id) ON DELETE CASCADE,
          logo_url TEXT,
@@ -1035,22 +1038,30 @@ app.post('/events/:id/leave', authRequired, async (req, res) => {
 
 // --- Duties
 app.get('/duties', authRequired, async (req, res) => {
+  const baseSelect = `
+    SELECT d.*,
+      COALESCE((SELECT COUNT(*) FROM time_tracking t WHERE t.duty_id = d.id AND t.end_time IS NULL), 0) AS active_assignments
+    FROM duties d
+  `;
   if (req.user.role === 'superadmin') {
     const groupFilter = req.query.group_id ? Number(req.query.group_id) : null;
     if (Number.isFinite(groupFilter)) {
-      const duties = await pool.query('SELECT * FROM duties WHERE group_id=$1 AND archived_at IS NULL ORDER BY id', [groupFilter]);
+      const duties = await pool.query(`${baseSelect} WHERE d.group_id=$1 AND d.archived_at IS NULL ORDER BY d.id`, [groupFilter]);
       return res.json(duties.rows);
     }
-    const duties = await pool.query('SELECT * FROM duties WHERE archived_at IS NULL ORDER BY id');
+    const duties = await pool.query(`${baseSelect} WHERE d.archived_at IS NULL ORDER BY d.id`);
     return res.json(duties.rows);
   }
-  const duties = await pool.query('SELECT * FROM duties WHERE group_id=$1 AND archived_at IS NULL ORDER BY id', [req.user.group_id]);
+  const duties = await pool.query(
+    `${baseSelect} WHERE d.group_id=$1 AND d.archived_at IS NULL ORDER BY d.id`,
+    [req.user.group_id]
+  );
   res.json(duties.rows);
 });
 
 app.post('/duties', authRequired, async (req, res) => {
   try {
-    const { title, description, status, group_id, event_id } = req.body || {};
+    const { title, description, status, group_id, event_id, max_volunteers } = req.body || {};
     let targetGroupId = group_id ?? null;
     if (isAdmin(req.user)) {
       targetGroupId = (targetGroupId ?? req.user.group_id ?? null);
@@ -1063,6 +1074,15 @@ app.post('/duties', authRequired, async (req, res) => {
     }
     // Require event for all duties
     if (event_id == null) return res.status(400).json({ message: 'Event is required for duties' });
+
+    let maxVol = null;
+    if (max_volunteers !== undefined && max_volunteers !== null && max_volunteers !== '') {
+      maxVol = Number(max_volunteers);
+      if (!Number.isFinite(maxVol) || maxVol < 1) {
+        return res.status(400).json({ message: 'max_volunteers must be a positive number' });
+      }
+      maxVol = Math.floor(maxVol);
+    }
 
     // Build insert compatible with varying schemas
     const colsRes = await pool.query("SELECT column_name FROM information_schema.columns WHERE table_name='duties'");
@@ -1081,6 +1101,7 @@ app.post('/duties', authRequired, async (req, res) => {
     if (has.has('status')) { fields.push('status'); params.push(`$${idx++}`); values.push(normalizedStatus); }
     if (has.has('group_id')) { fields.push('group_id'); params.push(`$${idx++}`); values.push(targetGroupId); }
     if (has.has('event_id')) { fields.push('event_id'); params.push(`$${idx++}`); values.push(event_id ?? null); }
+    if (has.has('max_volunteers')) { fields.push('max_volunteers'); params.push(`$${idx++}`); values.push(maxVol); }
 
     const sql = `INSERT INTO duties (${fields.join(',')}) VALUES (${params.join(',')}) RETURNING id`;
     const result = await pool.query(sql, values);
@@ -1095,7 +1116,7 @@ app.patch('/duties/:id', authRequired, async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (!Number.isFinite(id)) return res.status(400).json({ message: 'Invalid id' });
-    const { title, description, status, event_id, group_id } = req.body || {};
+    const { title, description, status, event_id, group_id, max_volunteers } = req.body || {};
     // Only admins/superadmins can edit duties broadly; volunteers can only edit their own created duty's title/description
     const isAdminish = isAdmin(req.user);
     const colsRes = await pool.query("SELECT column_name FROM information_schema.columns WHERE table_name='duties'");
@@ -1118,6 +1139,17 @@ app.patch('/duties/:id', authRequired, async (req, res) => {
       setClauses.push(`event_id=$${idx++}`); params.push(event_id);
     }
     if (group_id !== undefined && has.has('group_id')) { setClauses.push(`group_id=$${idx++}`); params.push(group_id); }
+    if (max_volunteers !== undefined && has.has('max_volunteers')) {
+      let normalized = null;
+      if (max_volunteers !== null && max_volunteers !== '') {
+        normalized = Number(max_volunteers);
+        if (!Number.isFinite(normalized) || normalized < 1) {
+          return res.status(400).json({ message: 'max_volunteers must be a positive number' });
+        }
+        normalized = Math.floor(normalized);
+      }
+      setClauses.push(`max_volunteers=$${idx++}`); params.push(normalized);
+    }
     if (setClauses.length === 0) return res.json({ id });
 
     let result;
@@ -1151,10 +1183,22 @@ app.post('/duties/:id/time/start', authRequired, async (req, res) => {
     await ensureDutyDateColumn();
     await ensureDurationHoursColumn();
     await ensureTimeTrackingConstraints();
+    const dutyId = Number(req.params.id);
+    if (!Number.isFinite(dutyId)) return res.status(400).json({ message: 'Invalid duty id' });
+    const dutyRes = await pool.query('SELECT max_volunteers FROM duties WHERE id=$1 AND archived_at IS NULL', [dutyId]);
+    if (dutyRes.rowCount === 0) return res.status(404).json({ message: 'Duty not found' });
+    const maxVol = dutyRes.rows[0].max_volunteers;
+    if (maxVol != null && Number.isFinite(Number(maxVol)) && Number(maxVol) > 0) {
+      const activeRes = await pool.query('SELECT COUNT(*) FROM time_tracking WHERE duty_id=$1 AND end_time IS NULL', [dutyId]);
+      const activeCount = Number(activeRes.rows[0].count || 0);
+      if (activeCount >= Number(maxVol)) {
+        return res.status(400).json({ message: 'This duty already has the maximum number of volunteers clocked in.' });
+      }
+    }
     const { duty_date } = req.body;
     const result = await pool.query(
       'INSERT INTO time_tracking (volunteer_id,duty_id,start_time,duty_date) VALUES ($1,$2,NOW(),$3) RETURNING id',
-      [req.user.id, req.params.id, duty_date]
+      [req.user.id, dutyId, duty_date]
     );
     res.json({ id: result.rows[0].id });
   } catch (err) {
