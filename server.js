@@ -15,6 +15,8 @@ process.on('unhandledRejection', (reason) => {
   console.error('Unhandled Promise Rejection:', reason);
 });
 
+const brandingMemoryUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } });
+
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -197,9 +199,27 @@ async function ensureTimeTrackingConstraints() {
          accent3 TEXT,
          accent4 TEXT,
          accent5 TEXT,
+         logo_blob BYTEA,
+         logo_blob_type TEXT,
+         logo_blob_updated_at TIMESTAMP,
+         banner_blob BYTEA,
+         banner_blob_type TEXT,
+         banner_blob_updated_at TIMESTAMP,
+         footer_blob BYTEA,
+         footer_blob_type TEXT,
+         footer_blob_updated_at TIMESTAMP,
          updated_at TIMESTAMP NOT NULL DEFAULT NOW()
        )`
     );
+    await pool.query(`ALTER TABLE IF EXISTS group_branding ADD COLUMN IF NOT EXISTS logo_blob BYTEA`);
+    await pool.query(`ALTER TABLE IF EXISTS group_branding ADD COLUMN IF NOT EXISTS logo_blob_type TEXT`);
+    await pool.query(`ALTER TABLE IF EXISTS group_branding ADD COLUMN IF NOT EXISTS logo_blob_updated_at TIMESTAMP`);
+    await pool.query(`ALTER TABLE IF EXISTS group_branding ADD COLUMN IF NOT EXISTS banner_blob BYTEA`);
+    await pool.query(`ALTER TABLE IF EXISTS group_branding ADD COLUMN IF NOT EXISTS banner_blob_type TEXT`);
+    await pool.query(`ALTER TABLE IF EXISTS group_branding ADD COLUMN IF NOT EXISTS banner_blob_updated_at TIMESTAMP`);
+    await pool.query(`ALTER TABLE IF EXISTS group_branding ADD COLUMN IF NOT EXISTS footer_blob BYTEA`);
+    await pool.query(`ALTER TABLE IF EXISTS group_branding ADD COLUMN IF NOT EXISTS footer_blob_type TEXT`);
+    await pool.query(`ALTER TABLE IF EXISTS group_branding ADD COLUMN IF NOT EXISTS footer_blob_updated_at TIMESTAMP`);
     await pool.query(
       `CREATE TABLE IF NOT EXISTS duty_restrictions (
          duty_id INTEGER NOT NULL REFERENCES duties(id) ON DELETE CASCADE,
@@ -517,10 +537,50 @@ app.get('/branding', authRequired, async (req, res) => {
     const targetGroupId = Number(req.user.group_id);
     if (!Number.isFinite(targetGroupId)) return res.json({ group_id: null, branding: null });
     const result = await pool.query(
-      `SELECT ${BRANDING_COLUMNS.join(', ')} FROM group_branding WHERE group_id=$1`,
+      `
+        SELECT ${BRANDING_COLUMNS.join(', ')},
+               logo_has_blob,
+               banner_has_blob,
+               footer_has_blob,
+               logo_blob_updated_at,
+               banner_blob_updated_at,
+               footer_blob_updated_at
+        FROM (
+          SELECT *,
+                 (logo_blob IS NOT NULL) AS logo_has_blob,
+                 (banner_blob IS NOT NULL) AS banner_has_blob,
+                 (footer_blob IS NOT NULL) AS footer_has_blob
+          FROM group_branding
+        ) gb
+        WHERE gb.group_id=$1
+      `,
       [targetGroupId]
     );
-    res.json({ group_id: targetGroupId, branding: result.rows[0] || null });
+    const row = result.rows[0];
+    if (!row) return res.json({ group_id: targetGroupId, branding: null });
+    const branding = {
+      logo_url: row.logo_url,
+      banner_url: row.banner_url,
+      footer_url: row.footer_url,
+      primary_color: row.primary_color,
+      text_color: row.text_color,
+      accent1: row.accent1,
+      accent2: row.accent2,
+      accent3: row.accent3,
+      accent4: row.accent4,
+      accent5: row.accent5,
+    };
+    const versionSuffix = (ts) => ts ? `?v=${new Date(ts).getTime()}` : '';
+    if (row.logo_has_blob) {
+      branding.logo_url = `/branding/assets/logo?group_id=${targetGroupId}${versionSuffix(row.logo_blob_updated_at)}`;
+    }
+    if (row.banner_has_blob) {
+      branding.banner_url = `/branding/assets/banner?group_id=${targetGroupId}${versionSuffix(row.banner_blob_updated_at)}`;
+    }
+    if (row.footer_has_blob) {
+      branding.footer_url = `/branding/assets/footer?group_id=${targetGroupId}${versionSuffix(row.footer_blob_updated_at)}`;
+    }
+    res.json({ group_id: targetGroupId, branding });
   } catch (err) {
     res.status(500).json({ message: err?.message || 'Failed to load branding' });
   }
@@ -570,6 +630,60 @@ app.delete('/branding', authRequired, adminOnly, async (req, res) => {
     res.json({ group_id: targetGroupId, cleared: true });
   } catch (err) {
     res.status(400).json({ message: err?.message || 'Failed to reset branding' });
+  }
+});
+
+app.post('/branding/upload', authRequired, adminOnly, brandingMemoryUpload.single('image'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
+    const target = String(req.body?.target || '').toLowerCase();
+    const meta = getBrandingAssetColumn(target);
+    if (!meta) {
+      return res.status(400).json({ message: 'Invalid target. Expected logo, banner, or footer.' });
+    }
+    let targetGroupId = Number(req.user.group_id);
+    if (req.user.role === 'superadmin' && req.body?.group_id != null) {
+      const override = Number(req.body.group_id);
+      if (Number.isFinite(override)) targetGroupId = override;
+    }
+    if (!Number.isFinite(targetGroupId)) return res.status(400).json({ message: 'A valid group_id is required.' });
+    if (req.user.role === 'admin' && Number(req.user.group_id) !== targetGroupId) {
+      return res.status(403).json({ message: 'Admins can only upload branding for their organization.' });
+    }
+    await pool.query(
+      `INSERT INTO group_branding (group_id, ${meta.blob}, ${meta.type}, ${meta.updated})
+       VALUES ($1,$2,$3,NOW())
+       ON CONFLICT (group_id) DO UPDATE SET
+         ${meta.blob}=EXCLUDED.${meta.blob},
+         ${meta.type}=EXCLUDED.${meta.type},
+         ${meta.updated}=NOW()`,
+      [targetGroupId, req.file.buffer, req.file.mimetype || 'application/octet-stream']
+    );
+    res.json({ ok: true, target });
+  } catch (err) {
+    console.error('Branding upload failed:', err);
+    res.status(400).json({ message: err?.message || 'Failed to upload image' });
+  }
+});
+
+app.get('/branding/assets/:target', async (req, res) => {
+  try {
+    const target = String(req.params.target || '').toLowerCase();
+    const meta = getBrandingAssetColumn(target);
+    if (!meta) return res.status(400).json({ message: 'Invalid asset type' });
+    const targetGroupId = Number(req.query.group_id);
+    if (!Number.isFinite(targetGroupId)) return res.status(400).json({ message: 'Missing group context' });
+    const result = await pool.query(
+      `SELECT ${meta.blob} AS blob, ${meta.type} AS mime FROM group_branding WHERE group_id=$1`,
+      [targetGroupId]
+    );
+    if (result.rowCount === 0 || !result.rows[0].blob) return res.status(404).json({ message: 'Asset not found' });
+    const row = result.rows[0];
+    res.setHeader('Content-Type', row.mime || 'application/octet-stream');
+    res.setHeader('Cache-Control', 'private, max-age=604800');
+    res.send(row.blob);
+  } catch (err) {
+    res.status(500).json({ message: err?.message || 'Failed to load asset' });
   }
 });
 
@@ -1612,6 +1726,15 @@ const storage = multer.diskStorage({
   }
 });
 const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 } });
+
+function getBrandingAssetColumn(target) {
+  const map = {
+    logo: { blob: 'logo_blob', type: 'logo_blob_type', updated: 'logo_blob_updated_at', urlKey: 'logo_url' },
+    banner: { blob: 'banner_blob', type: 'banner_blob_type', updated: 'banner_blob_updated_at', urlKey: 'banner_url' },
+    footer: { blob: 'footer_blob', type: 'footer_blob_type', updated: 'footer_blob_updated_at', urlKey: 'footer_url' }
+  };
+  return map[target] || null;
+}
 
 // Upload photo for a duty
 app.post('/duties/:id/photos', authRequired, upload.single('photo'), async (req, res) => {
