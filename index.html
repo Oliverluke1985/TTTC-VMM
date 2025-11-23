@@ -666,18 +666,9 @@
     }
     function convertLocalInputToUtc(value, tz) {
       if (!value) return null;
-      const [datePart, timePart] = value.split('T');
-      if (!datePart || !timePart) return null;
-      const [year, month, day] = datePart.split('-').map(Number);
-      const [hour, minute] = timePart.split(':').map(Number);
-      const utcGuess = new Date(Date.UTC(year, month - 1, day, hour, minute));
-      try {
-        const tzDate = new Date(utcGuess.toLocaleString('en-US', { timeZone: tz || activeTimeZone }));
-        const diff = utcGuess.getTime() - tzDate.getTime();
-        return new Date(utcGuess.getTime() + diff).toISOString();
-      } catch {
-        return utcGuess.toISOString();
-      }
+      const localDate = new Date(value);
+      if (Number.isNaN(localDate.getTime())) return null;
+      return localDate.toISOString();
     }
     function formatDisplayDateTime(iso, tz) {
       if (!iso) return '';
