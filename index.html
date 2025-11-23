@@ -831,7 +831,7 @@
         dutyRestrictionVolunteerCache[dutyGroup] = list;
       }
       sel.disabled = false;
-      const options = list.filter(v => String(v.role || '').toLowerCase() === 'volunteer');
+      const options = Array.isArray(list) ? list : [];
       if (options.length === 0) {
         sel.innerHTML = '<option value="">No volunteers found for this organization</option>';
         sel.disabled = true;
