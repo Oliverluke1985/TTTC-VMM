@@ -200,6 +200,14 @@ async function ensureTimeTrackingConstraints() {
          updated_at TIMESTAMP NOT NULL DEFAULT NOW()
        )`
     );
+    await pool.query(
+      `CREATE TABLE IF NOT EXISTS duty_restrictions (
+         duty_id INTEGER NOT NULL REFERENCES duties(id) ON DELETE CASCADE,
+         volunteer_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+         created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+         PRIMARY KEY (duty_id, volunteer_id)
+       )`
+    );
   } catch (e) {
     console.error('Schema ensure failed (duties.event_id):', e?.message || e);
   }
@@ -1052,9 +1060,22 @@ app.get('/duties', authRequired, async (req, res) => {
     const duties = await pool.query(`${baseSelect} WHERE d.archived_at IS NULL ORDER BY d.id`);
     return res.json(duties.rows);
   }
+  if (req.user.role === 'admin') {
+    const duties = await pool.query(
+      `${baseSelect} WHERE d.group_id=$1 AND d.archived_at IS NULL ORDER BY d.id`,
+      [req.user.group_id]
+    );
+    return res.json(duties.rows);
+  }
   const duties = await pool.query(
-    `${baseSelect} WHERE d.group_id=$1 AND d.archived_at IS NULL ORDER BY d.id`,
-    [req.user.group_id]
+    `${baseSelect}
+     WHERE d.group_id=$1 AND d.archived_at IS NULL
+       AND NOT EXISTS (
+         SELECT 1 FROM duty_restrictions dr
+         WHERE dr.duty_id = d.id AND dr.volunteer_id = $2
+       )
+     ORDER BY d.id`,
+    [req.user.group_id, req.user.id]
   );
   res.json(duties.rows);
 });
