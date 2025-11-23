@@ -573,31 +573,6 @@ app.delete('/branding', authRequired, adminOnly, async (req, res) => {
   }
 });
 
-app.post('/branding/upload', authRequired, adminOnly, upload.single('image'), async (req, res) => {
-  try {
-    if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
-    const target = String(req.body?.target || '').toLowerCase();
-    if (!['logo','banner','footer'].includes(target)) {
-      return res.status(400).json({ message: 'Invalid target. Expected logo, banner, or footer.' });
-    }
-    let targetGroupId = Number(req.user.group_id);
-    if (req.user.role === 'superadmin' && req.body?.group_id != null) {
-      const override = Number(req.body.group_id);
-      if (Number.isFinite(override)) targetGroupId = override;
-    }
-    if (!Number.isFinite(targetGroupId)) return res.status(400).json({ message: 'A valid group_id is required.' });
-    if (req.user.role === 'admin' && Number(req.user.group_id) !== targetGroupId) {
-      return res.status(403).json({ message: 'Admins can only upload branding for their organization.' });
-    }
-    const publicPath = `/uploads/${req.file.filename}`;
-    const absoluteUrl = `${req.protocol}://${req.get('host')}${publicPath}`;
-    res.json({ url: absoluteUrl, path: publicPath, target });
-  } catch (err) {
-    console.error('Branding upload failed:', err);
-    res.status(400).json({ message: err?.message || 'Failed to upload image' });
-  }
-});
-
 // --- Users listing (admin/superadmin)
 app.get('/users', authRequired, async (req, res) => {
   try {
