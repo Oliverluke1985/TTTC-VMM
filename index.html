@@ -598,14 +598,14 @@
     let userId = null;
     // North America focused list; add more later if needed
     const supportedTimeZones = [
-      'America/New_York',   // Eastern
-      'America/Chicago',    // Central
-      'America/Denver',     // Mountain
-      'America/Phoenix',    // Mountain (no DST)
-      'America/Los_Angeles',// Pacific
-      'America/Anchorage',  // Alaska
-      'Pacific/Honolulu',   // Hawaii
-      'UTC'
+      { value: 'America/New_York', label: 'Eastern (America/New_York)' },
+      { value: 'America/Chicago', label: 'Central (America/Chicago)' },
+      { value: 'America/Denver', label: 'Mountain (America/Denver)' },
+      { value: 'America/Phoenix', label: 'Mountain AZ - no DST (America/Phoenix)' },
+      { value: 'America/Los_Angeles', label: 'Pacific (America/Los_Angeles)' },
+      { value: 'America/Anchorage', label: 'Alaska (America/Anchorage)' },
+      { value: 'Pacific/Honolulu', label: 'Hawaii (Pacific/Honolulu)' },
+      { value: 'UTC', label: 'UTC' }
     ];
     const DEFAULT_TIME_ZONE = 'America/Chicago';
     let groupTimeZoneById = {};
@@ -628,9 +628,9 @@
       select.innerHTML = '';
       supportedTimeZones.forEach(tz => {
         const opt = document.createElement('option');
-        opt.value = tz;
-        opt.textContent = tz;
-        if (tz === (selected || DEFAULT_TIME_ZONE)) opt.selected = true;
+        opt.value = tz.value;
+        opt.textContent = tz.label;
+        if (tz.value === (selected || DEFAULT_TIME_ZONE)) opt.selected = true;
         select.appendChild(opt);
       });
       if (!select.value) select.value = DEFAULT_TIME_ZONE;
