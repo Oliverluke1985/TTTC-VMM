@@ -211,7 +211,7 @@
       </div>
     </div>
     <table>
-      <thead><tr><th>ID</th><th>Title</th><th>Date(s)</th><th>Join</th><th id="eventActionsHeader" class="hidden">Actions</th></tr></thead>
+      <thead><tr><th>ID</th><th>Title</th><th>Date(s)</th><th id="eventJoinHeader">Join</th><th id="eventActionsHeader" class="hidden">Actions</th></tr></thead>
       <tbody id="eventList"></tbody>
     </table>
     <div id="eventEditWrap" class="row hidden">
@@ -379,7 +379,7 @@
     </div>
     <div id="superadminOrgInfo" class="row hidden">
       <div class="col">
-        <table>
+    <table>
           <thead><tr><th>ID</th><th>Name</th><th>Status</th><th>Time Zone</th><th>Save</th></tr></thead>
           <tbody id="superadminOrgInfoBody"></tbody>
         </table>
@@ -1273,9 +1273,12 @@
               actions = `<button data-eid="${e.id}" class="editEventPrefillBtn">Edit</button> <button data-eid="${e.id}" class="archiveEventBtn">Archive</button> <button data-eid="${e.id}" class="deleteEventBtn">Delete</button>`;
             }
           const dateTxt = e.start_date ? (e.end_date ? `${e.start_date} – ${e.end_date}` : `${e.start_date}`) : (e.event_date || '');
+          const joinCell = role === 'volunteer'
+            ? `<td>${e.joined ? `<button data-eid="${e.id}" class="leaveBtn">Leave</button>` : `<button data-eid=\"${e.id}\" class=\"joinBtn\">Join</button>`}</td>`
+            : '<td class="hidden"></td>';
           tr.innerHTML =
             `<td>${e.id}</td><td>${e.title}</td><td>${dateTxt}</td>
-               <td>${e.joined ? `<button data-eid="${e.id}" class="leaveBtn">Leave</button>` : `<button data-eid=\"${e.id}\" class=\"joinBtn\">Join</button>`}</td>
+               ${joinCell}
                <td>${actions}</td>`;
           tbody.appendChild(tr);
         });
@@ -2159,7 +2162,7 @@
               }
             if (selId) {
               activeTimeZone = getVolunteerTimeZone(selId);
-            }
+              }
               // Show edit row/panel if we have a selection
               const vmEditRow = document.getElementById('vmEditSelectRow');
               if (vmEditRow) vmEditRow.classList.toggle('hidden', !selId);
@@ -2878,6 +2881,8 @@
         if (wrap) wrap.classList.toggle('hidden', !isAdminish);
         const actionsHeader = document.getElementById('eventActionsHeader');
         if (actionsHeader) actionsHeader.classList.toggle('hidden', !isAdminish);
+        const joinHeader = document.getElementById('eventJoinHeader');
+        if (joinHeader) joinHeader.classList.toggle('hidden', currentRole !== 'volunteer');
         // Keep edit form hidden until an event is selected to edit
         const editWrap = document.getElementById('eventEditWrap');
         if (editWrap) editWrap.classList.add('hidden');
