@@ -181,6 +181,22 @@ async function ensureTimeTrackingConstraints() {
     await pool.query(
       `ALTER TABLE IF EXISTS groups ADD COLUMN IF NOT EXISTS time_zone TEXT DEFAULT 'UTC'`
     );
+    await pool.query(
+      `CREATE TABLE IF NOT EXISTS group_branding (
+         group_id INTEGER PRIMARY KEY REFERENCES groups(id) ON DELETE CASCADE,
+         logo_url TEXT,
+         banner_url TEXT,
+         footer_url TEXT,
+         primary_color TEXT,
+         text_color TEXT,
+         accent1 TEXT,
+         accent2 TEXT,
+         accent3 TEXT,
+         accent4 TEXT,
+         accent5 TEXT,
+         updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+       )`
+    );
   } catch (e) {
     console.error('Schema ensure failed (duties.event_id):', e?.message || e);
   }
@@ -468,6 +484,8 @@ app.get('/config', (req, res) => {
   res.json({
     appName: process.env.APP_NAME || 'Volunteer Time Tracking',
     logoUrl: process.env.LOGO_URL || 'https://i.postimg.cc/Ght5qLQw/TTTC-Logo-Redesign2.jpg',
+    bannerUrl: process.env.BANNER_URL || 'https://i.postimg.cc/t4S6CDjx/cityscape.jpg',
+    footerUrl: process.env.FOOTER_URL || 'https://i.postimg.cc/8Cfgxn5P/theater-seats.jpg',
     primaryColor: process.env.THEME_PRIMARY || '#000000',
     textColor: process.env.THEME_TEXT || '#ffffff',
     accents: [
@@ -479,6 +497,69 @@ app.get('/config', (req, res) => {
     ],
     bgImageUrl: process.env.BG_IMAGE_URL || null,
   });
+});
+
+const BRANDING_COLUMNS = ['logo_url','banner_url','footer_url','primary_color','text_color','accent1','accent2','accent3','accent4','accent5'];
+
+app.get('/branding', authRequired, async (req, res) => {
+  try {
+    const targetGroupId = Number(req.user.group_id);
+    if (!Number.isFinite(targetGroupId)) return res.json({ group_id: null, branding: null });
+    const result = await pool.query(
+      `SELECT ${BRANDING_COLUMNS.join(', ')} FROM group_branding WHERE group_id=$1`,
+      [targetGroupId]
+    );
+    res.json({ group_id: targetGroupId, branding: result.rows[0] || null });
+  } catch (err) {
+    res.status(500).json({ message: err?.message || 'Failed to load branding' });
+  }
+});
+
+app.post('/branding', authRequired, adminOnly, async (req, res) => {
+  try {
+    let targetGroupId = Number(req.user.group_id);
+    if (req.user.role === 'superadmin' && req.body?.group_id != null) {
+      const override = Number(req.body.group_id);
+      if (Number.isFinite(override)) targetGroupId = override;
+    }
+    if (!Number.isFinite(targetGroupId)) return res.status(400).json({ message: 'A valid group_id is required for branding.' });
+    if (req.user.role === 'admin' && Number(req.user.group_id) !== targetGroupId) {
+      return res.status(403).json({ message: 'Admins can only edit branding for their organization.' });
+    }
+    const payload = BRANDING_COLUMNS.map(col => {
+      const val = req.body?.[col];
+      if (val == null || val === '') return null;
+      return String(val).trim();
+    });
+    const assignments = BRANDING_COLUMNS.map(col => `${col}=EXCLUDED.${col}`).join(', ');
+    await pool.query(
+      `INSERT INTO group_branding (group_id, ${BRANDING_COLUMNS.join(', ')})
+       VALUES ($1${BRANDING_COLUMNS.map((_, idx) => `,$${idx + 2}`).join('')})
+       ON CONFLICT (group_id) DO UPDATE SET ${assignments}, updated_at=NOW()`,
+      [targetGroupId, ...payload]
+    );
+    res.json({ group_id: targetGroupId, branding: req.body || {} });
+  } catch (err) {
+    res.status(400).json({ message: err?.message || 'Failed to save branding' });
+  }
+});
+
+app.delete('/branding', authRequired, adminOnly, async (req, res) => {
+  try {
+    let targetGroupId = Number(req.user.group_id);
+    if (req.user.role === 'superadmin' && req.body?.group_id != null) {
+      const override = Number(req.body.group_id);
+      if (Number.isFinite(override)) targetGroupId = override;
+    }
+    if (!Number.isFinite(targetGroupId)) return res.status(400).json({ message: 'A valid group_id is required for branding.' });
+    if (req.user.role === 'admin' && Number(req.user.group_id) !== targetGroupId) {
+      return res.status(403).json({ message: 'Admins can only reset branding for their organization.' });
+    }
+    await pool.query('DELETE FROM group_branding WHERE group_id=$1', [targetGroupId]);
+    res.json({ group_id: targetGroupId, cleared: true });
+  } catch (err) {
+    res.status(400).json({ message: err?.message || 'Failed to reset branding' });
+  }
 });
 
 // --- Users listing (admin/superadmin)

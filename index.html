@@ -8,11 +8,11 @@
   />
   <title>Volunteer Time Tracking</title>
   <style>
-    :root { color-scheme: light dark; --primary: #000000; --text: #ffffff; --accent1: #35b1fb; --accent2: #0289db; --accent3: #054a74; --accent4: #00433a; --accent5: #ffffff; }
+    :root { color-scheme: light dark; --primary: #000000; --text: #ffffff; --accent1: #35b1fb; --accent2: #0289db; --accent3: #054a74; --accent4: #00433a; --accent5: #ffffff; --header-bg-image: url('https://i.postimg.cc/t4S6CDjx/cityscape.jpg'); --footer-bg-image: url('https://i.postimg.cc/8Cfgxn5P/theater-seats.jpg'); }
     html, body { height: 100%; }
     body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 24px; line-height: 1.35; background-size: cover; background-repeat: no-repeat; color: var(--text); background-color: var(--primary); min-height: 100vh; display: flex; flex-direction: column; }
     header { position: relative; display:flex; justify-content:center; align-items:center; padding: 51px 0; margin-bottom: -32px; overflow: hidden; border-radius: 0; margin-left: -24px; margin-right: -24px; width: calc(100% + 48px); }
-    header::before { content: ""; position: absolute; inset: 0; background: url('https://i.postimg.cc/t4S6CDjx/cityscape.jpg') 50% 34%/cover no-repeat; opacity: 0.75; pointer-events: none; }
+    header::before { content: ""; position: absolute; inset: 0; background-image: var(--header-bg-image); background-position: 50% 34%; background-size: cover; background-repeat: no-repeat; opacity: 0.75; pointer-events: none; }
     header > * { position: relative; z-index: 1; }
     #logo { max-height: 112px; border-radius: 6px; transform: translateY(-7%); }
     h1 { margin: 0 0 16px; font-size: 22px; color: var(--accent1); text-align:center; }
@@ -71,7 +71,7 @@
 
     /* Footer background image */
     footer#footer { position: relative; height: 288px; margin-top: auto; border-radius: 0; overflow: hidden; pointer-events: none; margin-left: -24px; margin-right: -24px; width: calc(100% + 48px); }
-    footer#footer::before { content: ""; position: absolute; inset: 0; background: url('https://i.postimg.cc/8Cfgxn5P/theater-seats.jpg') 50% 78%/cover no-repeat; opacity: 0.75; pointer-events: none; }
+    footer#footer::before { content: ""; position: absolute; inset: 0; background-image: var(--footer-bg-image); background-position: 50% 78%; background-size: cover; background-repeat: no-repeat; opacity: 0.75; pointer-events: none; }
   </style>
 
   <!-- Strip any tracking params like ?utm_source=... to avoid parser oddities -->
@@ -349,6 +349,53 @@
         <div id="accountInfoError" class="error"></div>
       </div>
     </div>
+    <div id="brandingSettings" class="row hidden">
+      <div class="col">
+        <h3 id="brandingHeader">Organization Branding</h3>
+        <p class="hint" style="margin-top:0">Customize how this application looks for members of your organization.</p>
+        <label>Logo URL</label>
+        <input id="brandingLogoUrl" type="url" placeholder="https://example.com/logo.png" />
+        <label>Banner Image URL</label>
+        <input id="brandingBannerUrl" type="url" placeholder="https://example.com/banner.jpg" />
+        <label>Footer Image URL</label>
+        <input id="brandingFooterUrl" type="url" placeholder="https://example.com/footer.jpg" />
+        <div class="row" style="gap:12px">
+          <div style="flex:1 1 160px">
+            <label>Primary Color</label>
+            <input id="brandingPrimaryColor" type="color" value="#000000" />
+          </div>
+          <div style="flex:1 1 160px">
+            <label>Text Color</label>
+            <input id="brandingTextColor" type="color" value="#ffffff" />
+          </div>
+          <div style="flex:1 1 160px">
+            <label>Accent 1</label>
+            <input id="brandingAccent1" type="color" value="#35b1fb" />
+          </div>
+          <div style="flex:1 1 160px">
+            <label>Accent 2</label>
+            <input id="brandingAccent2" type="color" value="#0289db" />
+          </div>
+          <div style="flex:1 1 160px">
+            <label>Accent 3</label>
+            <input id="brandingAccent3" type="color" value="#054a74" />
+          </div>
+          <div style="flex:1 1 160px">
+            <label>Accent 4</label>
+            <input id="brandingAccent4" type="color" value="#00433a" />
+          </div>
+          <div style="flex:1 1 160px">
+            <label>Accent 5</label>
+            <input id="brandingAccent5" type="color" value="#ffffff" />
+          </div>
+        </div>
+        <div style="margin-top:12px">
+          <button id="saveBrandingBtn">Save Branding</button>
+          <button id="resetBrandingBtn" type="button">Reset to Default</button>
+        </div>
+        <div id="brandingStatus" class="ok hidden"></div>
+      </div>
+    </div>
   </section>
 
   <!-- SUPERADMIN -->
@@ -614,6 +661,25 @@
     let volunteerTimeZoneById = {};
     let timeEntryTimeZoneById = {};
     let activeTimeZone = DEFAULT_TIME_ZONE;
+    const DEFAULT_LOGO_URL = 'https://i.postimg.cc/Ght5qLQw/TTTC-Logo-Redesign2.jpg';
+    const DEFAULT_HEADER_IMAGE = 'https://i.postimg.cc/t4S6CDjx/cityscape.jpg';
+    const DEFAULT_HERO_IMAGE = 'https://i.postimg.cc/gjsftpNw/original-ticket.jpg';
+    const DEFAULT_FOOTER_IMAGE = 'https://i.postimg.cc/8Cfgxn5P/theater-seats.jpg';
+    const rootStyle = getComputedStyle(document.documentElement);
+    let defaultBranding = {
+      primary_color: rootStyle.getPropertyValue('--primary')?.trim() || '#000000',
+      text_color: rootStyle.getPropertyValue('--text')?.trim() || '#ffffff',
+      accent1: rootStyle.getPropertyValue('--accent1')?.trim() || '#35b1fb',
+      accent2: rootStyle.getPropertyValue('--accent2')?.trim() || '#0289db',
+      accent3: rootStyle.getPropertyValue('--accent3')?.trim() || '#054a74',
+      accent4: rootStyle.getPropertyValue('--accent4')?.trim() || '#00433a',
+      accent5: rootStyle.getPropertyValue('--accent5')?.trim() || '#ffffff',
+      logo_url: DEFAULT_LOGO_URL,
+      banner_url: DEFAULT_HEADER_IMAGE,
+      hero_image: DEFAULT_HERO_IMAGE,
+      footer_url: DEFAULT_FOOTER_IMAGE,
+    };
+    let currentOrgBranding = null;
 
     function show(id) { document.getElementById(id).classList.remove('hidden'); }
     function hide(id) { document.getElementById(id).classList.add('hidden'); }
@@ -702,6 +768,103 @@
         return iso;
       }
     }
+    function applyBranding(branding) {
+      if (!defaultBranding) return;
+      currentOrgBranding = branding || null;
+      const theme = Object.assign({}, defaultBranding, branding || {});
+      const root = document.documentElement;
+      root.style.setProperty('--primary', theme.primary_color || defaultBranding.primary_color);
+      root.style.setProperty('--text', theme.text_color || defaultBranding.text_color);
+      root.style.setProperty('--accent1', theme.accent1 || defaultBranding.accent1);
+      root.style.setProperty('--accent2', theme.accent2 || defaultBranding.accent2);
+      root.style.setProperty('--accent3', theme.accent3 || defaultBranding.accent3);
+      root.style.setProperty('--accent4', theme.accent4 || defaultBranding.accent4);
+      root.style.setProperty('--accent5', theme.accent5 || defaultBranding.accent5);
+      const bannerImage = (branding && branding.banner_url) || defaultBranding.banner_url || DEFAULT_HEADER_IMAGE;
+      root.style.setProperty('--header-bg-image', `url('${bannerImage}')`);
+      const heroImage = (branding && branding.banner_url) || defaultBranding.hero_image || DEFAULT_HERO_IMAGE;
+      const heroEl = document.getElementById('homeHero');
+      if (heroEl) heroEl.src = heroImage;
+      const footerImage = (branding && branding.footer_url) || defaultBranding.footer_url || DEFAULT_FOOTER_IMAGE;
+      root.style.setProperty('--footer-bg-image', `url('${footerImage}')`);
+      const logoUrl = (branding && branding.logo_url) || defaultBranding.logo_url || DEFAULT_LOGO_URL;
+      const logoEl = document.getElementById('logo');
+      const logoLink = document.getElementById('logoLink');
+      if (logoEl && logoUrl) {
+        logoEl.src = logoUrl;
+        logoEl.classList.remove('hidden');
+      } else if (logoEl) {
+        logoEl.classList.add('hidden');
+      }
+      if (logoLink && logoUrl) logoLink.href = logoUrl;
+    }
+    async function loadBrandingForCurrentGroup(options = {}) {
+      const { populateForm = false } = options;
+      if (!token || !groupId) {
+        applyBranding(null);
+        if (populateForm && role === 'admin') populateBrandingForm(null);
+        return;
+      }
+      try {
+        const res = await authed('/branding');
+        if (!res.ok) throw new Error('failed');
+        const data = await res.json();
+        applyBranding(data.branding || null);
+        if (populateForm && role === 'admin') populateBrandingForm(data.branding || null);
+      } catch {
+        applyBranding(null);
+        if (populateForm && role === 'admin') populateBrandingForm(null);
+      }
+    }
+    function populateBrandingForm(branding) {
+      if (role !== 'admin') return;
+      const assign = (id, value) => {
+        const el = document.getElementById(id);
+        if (el) el.value = value || '';
+      };
+      const assignColor = (id, value, fallback) => {
+        const el = document.getElementById(id);
+        if (el) el.value = value || fallback;
+      };
+      assign('brandingLogoUrl', branding?.logo_url || '');
+      assign('brandingBannerUrl', branding?.banner_url || '');
+      assign('brandingFooterUrl', branding?.footer_url || '');
+      assignColor('brandingPrimaryColor', branding?.primary_color, defaultBranding.primary_color || '#000000');
+      assignColor('brandingTextColor', branding?.text_color, defaultBranding.text_color || '#ffffff');
+      assignColor('brandingAccent1', branding?.accent1, defaultBranding.accent1 || '#35b1fb');
+      assignColor('brandingAccent2', branding?.accent2, defaultBranding.accent2 || '#0289db');
+      assignColor('brandingAccent3', branding?.accent3, defaultBranding.accent3 || '#054a74');
+      assignColor('brandingAccent4', branding?.accent4, defaultBranding.accent4 || '#00433a');
+      assignColor('brandingAccent5', branding?.accent5, defaultBranding.accent5 || '#ffffff');
+      setBrandingStatus('');
+    }
+    function collectBrandingFormValues() {
+      const clean = (id) => document.getElementById(id)?.value?.trim() || '';
+      const colorVal = (id) => document.getElementById(id)?.value || null;
+      return {
+        logo_url: clean('brandingLogoUrl') || null,
+        banner_url: clean('brandingBannerUrl') || null,
+        footer_url: clean('brandingFooterUrl') || null,
+        primary_color: colorVal('brandingPrimaryColor'),
+        text_color: colorVal('brandingTextColor'),
+        accent1: colorVal('brandingAccent1'),
+        accent2: colorVal('brandingAccent2'),
+        accent3: colorVal('brandingAccent3'),
+        accent4: colorVal('brandingAccent4'),
+        accent5: colorVal('brandingAccent5'),
+      };
+    }
+    function setBrandingStatus(message = '', isError = false) {
+      const statusEl = document.getElementById('brandingStatus');
+      if (!statusEl) return;
+      statusEl.textContent = message || '';
+      statusEl.classList.remove('hidden','error','ok');
+      if (!message) {
+        statusEl.classList.add('hidden');
+        return;
+      }
+      statusEl.classList.add(isError ? 'error' : 'ok');
+    }
     populateTimeZoneSelect(document.getElementById('groupTimeZone'), DEFAULT_TIME_ZONE);
 
     // CONFIG/BRANDING
@@ -715,24 +878,20 @@
           const titleEl = document.getElementById('appTitle');
           if (titleEl) titleEl.textContent = cfg.appName;
         }
-        if (cfg.primaryColor) document.documentElement.style.setProperty('--primary', cfg.primaryColor);
-        if (cfg.textColor) document.documentElement.style.setProperty('--text', cfg.textColor);
-        if (cfg.accents && cfg.accents[0]) document.documentElement.style.setProperty('--accent1', cfg.accents[0]);
-        if (cfg.accents && cfg.accents[1]) document.documentElement.style.setProperty('--accent2', cfg.accents[1]);
-        if (cfg.accents && cfg.accents[2]) document.documentElement.style.setProperty('--accent3', cfg.accents[2]);
-        if (cfg.accents && cfg.accents[3]) document.documentElement.style.setProperty('--accent4', cfg.accents[3]);
-        if (cfg.accents && cfg.accents[4]) document.documentElement.style.setProperty('--accent5', cfg.accents[4]);
         if (cfg.bgImageUrl) document.body.style.backgroundImage = `url('${cfg.bgImageUrl}')`;
-        if (cfg.logoUrl) {
-          const logoEl = document.getElementById('logo');
-          const linkEl = document.getElementById('logoLink');
-          if (linkEl) linkEl.href = cfg.logoUrl;
-          if (logoEl) {
-            logoEl.src = cfg.logoUrl;
-            logoEl.onerror = () => { logoEl.classList.add('hidden'); };
-            logoEl.classList.remove('hidden');
-          }
-        }
+        defaultBranding = Object.assign({}, defaultBranding, {
+          primary_color: cfg.primaryColor || defaultBranding.primary_color,
+          text_color: cfg.textColor || defaultBranding.text_color,
+          accent1: cfg.accents && cfg.accents[0] ? cfg.accents[0] : defaultBranding.accent1,
+          accent2: cfg.accents && cfg.accents[1] ? cfg.accents[1] : defaultBranding.accent2,
+          accent3: cfg.accents && cfg.accents[2] ? cfg.accents[2] : defaultBranding.accent3,
+          accent4: cfg.accents && cfg.accents[3] ? cfg.accents[3] : defaultBranding.accent4,
+          accent5: cfg.accents && cfg.accents[4] ? cfg.accents[4] : defaultBranding.accent5,
+          logo_url: cfg.logoUrl || defaultBranding.logo_url || DEFAULT_LOGO_URL,
+          banner_url: cfg.bannerUrl || defaultBranding.banner_url || DEFAULT_HEADER_IMAGE,
+          footer_url: cfg.footerUrl || defaultBranding.footer_url || DEFAULT_FOOTER_IMAGE,
+        });
+        applyBranding(currentOrgBranding);
       } catch { /* silent */ }
     }
     fetchConfig();
@@ -851,6 +1010,7 @@
 
       await loadMe();
       await fetchConfig();
+      await loadBrandingForCurrentGroup({ populateForm: role === 'admin' });
       await fetchGroups();
       await fetchEvents();
       await fetchDuties();
@@ -1055,6 +1215,10 @@
       const sErr = document.getElementById('signupError'); if (sErr) sErr.textContent = '';
       const sOrgErr = document.getElementById('signupOrgError'); if (sOrgErr) sOrgErr.textContent = '';
       const sugg = document.getElementById('signupGroupSuggestions'); if (sugg) { sugg.classList.add('hidden'); sugg.innerHTML = ''; }
+      currentOrgBranding = null;
+      applyBranding(null);
+      setBrandingStatus('');
+      const brandingWrap = document.getElementById('brandingSettings'); if (brandingWrap) brandingWrap.classList.add('hidden');
       try { window.signupGroups = window.signupGroups || []; } catch {}
       // Scroll to top
       try { window.scrollTo({ top: 0, behavior: 'auto' }); } catch {}
@@ -2598,6 +2762,46 @@
         document.getElementById('accountInfoError').textContent = 'Error saving profile';
       }
     });
+    document.getElementById('saveBrandingBtn')?.addEventListener('click', async () => {
+      if (role !== 'admin') return;
+      setBrandingStatus('');
+      try {
+        const payload = collectBrandingFormValues();
+        const res = await authed('/branding', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          setBrandingStatus(data.message || 'Failed to save branding', true);
+          return;
+        }
+        await loadBrandingForCurrentGroup({ populateForm: true });
+        setBrandingStatus('Branding saved.');
+        showActionStatus('Branding updated.');
+      } catch {
+        setBrandingStatus('Error saving branding', true);
+      }
+    });
+    document.getElementById('resetBrandingBtn')?.addEventListener('click', async () => {
+      if (role !== 'admin') return;
+      if (!confirm('Reset your branding back to the default theme?')) return;
+      setBrandingStatus('');
+      try {
+        const res = await authed('/branding', { method: 'DELETE' });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          setBrandingStatus(data.message || 'Failed to reset branding', true);
+          return;
+        }
+        await loadBrandingForCurrentGroup({ populateForm: true });
+        setBrandingStatus('Branding reset to default.');
+        showActionStatus('Branding reset.');
+      } catch {
+        setBrandingStatus('Error resetting branding', true);
+      }
+    });
 
     // (Per-user theming removed)
 
@@ -2708,6 +2912,8 @@
       tb.classList.remove('hidden');
       const isVolunteer = currentRole === 'volunteer';
       const isAdminish = currentRole === 'admin' || currentRole === 'superadmin';
+      const brandingWrap = document.getElementById('brandingSettings');
+      if (brandingWrap) brandingWrap.classList.toggle('hidden', currentRole !== 'admin');
       // Hard reset of cross-page dropdown selections
       function resetGlobalFilters() {
         // Superadmin global pickers
@@ -3049,7 +3255,14 @@
           const lRow = document.getElementById('vmLogsRow'); if (lRow) lRow.classList.add('hidden');
         await refreshVolunteerLogs();
       };
-      document.getElementById('navAccountBtn').onclick = () => { resetGlobalFilters(); resetVolunteerMgmtUI(); navigateTo('infoSection'); };
+      document.getElementById('navAccountBtn').onclick = async () => {
+        resetGlobalFilters();
+        resetVolunteerMgmtUI();
+        navigateTo('infoSection');
+        if (currentRole === 'admin') {
+          await loadBrandingForCurrentGroup({ populateForm: true });
+        }
+      };
       document.getElementById('navLogoutBtn').onclick = () => document.getElementById('logoutBtn').click();
       // Populate Volunteer Management when entering Admin section
       if (isAdminish) {
