@@ -2111,12 +2111,6 @@
                ${adminActions}
              </td>`;
           tbody.appendChild(tr);
-          if (dutySelect) {
-            const opt = document.createElement('option');
-            opt.value = d.id;
-            opt.textContent = `${d.id} — ${d.title}`;
-            dutySelect.appendChild(opt);
-          }
           if (editSelect) {
             const opt = document.createElement('option');
             opt.value = d.id;
