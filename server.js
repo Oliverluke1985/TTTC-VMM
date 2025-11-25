@@ -228,6 +228,19 @@ async function ensureTimeTrackingConstraints() {
          PRIMARY KEY (duty_id, volunteer_id)
        )`
     );
+    await pool.query(
+      `CREATE TABLE IF NOT EXISTS duty_templates (
+         id SERIAL PRIMARY KEY,
+         group_id INTEGER NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+         title TEXT NOT NULL,
+         description TEXT,
+         status TEXT DEFAULT 'pending',
+         max_volunteers INTEGER,
+         created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+         created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+         updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+       )`
+    );
   } catch (e) {
     console.error('Schema ensure failed (duties.event_id):', e?.message || e);
   }
@@ -1155,6 +1168,77 @@ app.post('/events/:id/leave', authRequired, async (req, res) => {
     res.json({ joined: false });
   } catch (err) {
     res.status(400).json({ message: err.message });
+  }
+});
+
+// Duty templates (saved duty "pool")
+app.get('/duty-templates', authRequired, async (req, res) => {
+  if (!isAdmin(req.user)) return res.status(403).json({ message: 'Admins only' });
+  try {
+    const clauses = [];
+    const params = [];
+    if (req.user.role === 'admin') {
+      const gid = Number(req.user.group_id);
+      if (!Number.isFinite(gid)) {
+        return res.status(400).json({ message: 'Admins must belong to an organization to use duty templates.' });
+      }
+      clauses.push(`dt.group_id = $${params.length + 1}`);
+      params.push(gid);
+    } else {
+      const groupFilter = req.query.group_id ? Number(req.query.group_id) : null;
+      if (Number.isFinite(groupFilter)) {
+        clauses.push(`dt.group_id = $${params.length + 1}`);
+        params.push(groupFilter);
+      }
+    }
+    const sql = `
+      SELECT dt.*, g.name AS group_name
+      FROM duty_templates dt
+      LEFT JOIN groups g ON g.id = dt.group_id
+      ${clauses.length ? 'WHERE ' + clauses.join(' AND ') : ''}
+      ORDER BY g.name NULLS LAST, dt.title, dt.id
+    `;
+    const templates = await pool.query(sql, params);
+    res.json(templates.rows);
+  } catch (err) {
+    res.status(400).json({ message: err?.message || 'Failed to load duty templates' });
+  }
+});
+
+app.post('/duty-templates', authRequired, async (req, res) => {
+  if (!isAdmin(req.user)) return res.status(403).json({ message: 'Admins only' });
+  try {
+    const { title, description, status, max_volunteers, group_id } = req.body || {};
+    if (!title || !String(title).trim()) {
+      return res.status(400).json({ message: 'Title is required' });
+    }
+    let targetGroupId = req.user.role === 'superadmin' ? (group_id ?? null) : req.user.group_id;
+    if (targetGroupId != null) targetGroupId = Number(targetGroupId);
+    if (!Number.isFinite(targetGroupId)) {
+      return res.status(400).json({ message: 'Organization is required for saved duties' });
+    }
+    const statusMap = { open: 'pending', closed: 'completed', complete: 'completed', completed: 'completed' };
+    let normalizedStatus = String(status ?? '').toLowerCase();
+    normalizedStatus = normalizedStatus || 'pending';
+    normalizedStatus = statusMap[normalizedStatus] || normalizedStatus;
+    if (!['pending','in_progress','completed'].includes(normalizedStatus)) normalizedStatus = 'pending';
+    let maxVol = null;
+    if (max_volunteers !== undefined && max_volunteers !== null && max_volunteers !== '') {
+      maxVol = Number(max_volunteers);
+      if (!Number.isFinite(maxVol) || maxVol < 1) {
+        return res.status(400).json({ message: 'max_volunteers must be a positive number' });
+      }
+      maxVol = Math.floor(maxVol);
+    }
+    const result = await pool.query(
+      `INSERT INTO duty_templates (title, description, status, max_volunteers, group_id, created_by, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,NOW())
+       RETURNING *`,
+      [String(title).trim(), description ?? null, normalizedStatus, maxVol, targetGroupId, req.user.id]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(400).json({ message: err?.message || 'Failed to save duty template' });
   }
 });
 

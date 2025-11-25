@@ -250,6 +250,38 @@
         <div id="volCreateDutyError" class="error"></div>
       </div>
     </div>
+    <div id="dutyTemplatePanel" class="row hidden">
+      <div class="col">
+        <h3>Duty Template Pool</h3>
+        <label>Template Options</label>
+        <select id="dutyTemplateMode">
+          <option value="use">Use saved duty</option>
+          <option value="add">Add new template</option>
+        </select>
+        <div id="dutyTemplateUseWrap">
+          <label>Saved Duties</label>
+          <select id="dutyTemplateSelect" disabled><option value="">— No saved duties —</option></select>
+          <button id="applyDutyTemplateBtn" type="button">Apply to Create Duty</button>
+        </div>
+        <div id="dutyTemplateAddWrap" class="hidden">
+          <label>Title</label><input id="templateTitle" type="text" />
+          <label>Description</label><input id="templateDesc" type="text" />
+          <label>Status</label>
+          <select id="templateStatus">
+            <option value="open">open</option>
+            <option value="closed">closed</option>
+          </select>
+          <label>Max Volunteers (optional)</label>
+          <input id="templateCapacity" type="number" min="1" placeholder="Unlimited" />
+          <div id="dutyTemplateGroupRow" class="hidden">
+            <label>Organization</label>
+            <select id="dutyTemplateGroup"><option value="">— Select group —</option></select>
+          </div>
+          <button id="saveDutyTemplateBtn" type="button">Save to Pool</button>
+        </div>
+        <div id="dutyTemplateStatus" class="hint hidden"></div>
+      </div>
+    </div>
     <div id="dutyEditSelectorWrap" class="row hidden">
       <div class="col">
         <label>Select Duty to Edit</label>
@@ -1166,6 +1198,7 @@
       await fetchGroups();
       await fetchEvents();
       await fetchDuties();
+      await loadDutyTemplates();
       await fetchTimeTracking();
       await fetchApprovals();
       await fetchAdminTimes();
@@ -1471,22 +1504,26 @@
           document.getElementById('volGroup'),
           document.getElementById('dutyGroup'),
           document.getElementById('superEventGroupFilter'),
-          document.getElementById('superDutyGroupFilter')
+          document.getElementById('superDutyGroupFilter'),
+          document.getElementById('dutyTemplateGroup')
         ];
         groupSelectors.forEach(sel => {
           if (!sel) return;
           const current = sel.value;
-          const isFilter = sel.id === 'superEventGroupFilter' || sel.id === 'superDutyGroupFilter';
-          sel.innerHTML = isFilter ? '<option value="">— Select organization —</option>' : '<option value="">— None —</option>';
+          const isSuperFilter = sel.id === 'superEventGroupFilter' || sel.id === 'superDutyGroupFilter';
+          const wantsOrgPrompt = isSuperFilter || sel.id === 'dutyTemplateGroup';
+          sel.innerHTML = wantsOrgPrompt ? '<option value="">— Select organization —</option>' : '<option value="">— None —</option>';
           groups.forEach(g => {
             const opt = document.createElement('option');
             opt.value = g.id;
             opt.textContent = `${g.name}`;
             sel.appendChild(opt);
           });
-          if (current) sel.value = current; else if (isFilter && groupId != null) sel.value = String(groupId);
+          if (current) sel.value = current;
+          else if (isSuperFilter && groupId != null) sel.value = String(groupId);
+          else if (sel.id === 'dutyTemplateGroup' && groupId != null && role !== 'superadmin') sel.value = String(groupId);
           // trigger refresh on filter change
-          if (isFilter && !sel._wiredChange) {
+          if (isSuperFilter && !sel._wiredChange) {
             sel.addEventListener('change', () => {
               if (sel.id === 'superEventGroupFilter') fetchEvents();
               if (sel.id === 'superDutyGroupFilter') {
@@ -1502,7 +1539,9 @@
                 if (dutyGroupSel) dutyGroupSel.value = sel.value || '';
                 // Refresh events for that org first, then duties
                 populateEventDropdownsForGroup(sel.value);
+                const filterVal = sel.value ? Number(sel.value) : null;
                 fetchDuties();
+                loadDutyTemplates({ group_id: filterVal });
               }
             });
             sel._wiredChange = true;
@@ -1514,6 +1553,13 @@
               populateEventDropdownsForGroup(gid);
             });
             sel._wiredDuty = true;
+          }
+          if (sel.id === 'dutyTemplateGroup' && !sel._wiredTemplate) {
+            sel.addEventListener('change', () => {
+              const val = sel.value ? Number(sel.value) : null;
+              loadDutyTemplates({ group_id: val });
+            });
+            sel._wiredTemplate = true;
           }
         });
       } catch (e) { /* silent */ }
@@ -2145,6 +2191,115 @@
       } catch (e) { /* silent */ }
     }
 
+    function updateDutyTemplateModeUI() {
+      const modeSel = document.getElementById('dutyTemplateMode');
+      const mode = modeSel ? (modeSel.value || 'use') : 'use';
+      const useWrap = document.getElementById('dutyTemplateUseWrap');
+      const addWrap = document.getElementById('dutyTemplateAddWrap');
+      if (useWrap) useWrap.classList.toggle('hidden', mode !== 'use');
+      if (addWrap) addWrap.classList.toggle('hidden', mode !== 'add');
+    }
+
+    function setDutyTemplateStatus(message = '', isError = false) {
+      const el = document.getElementById('dutyTemplateStatus');
+      if (!el) return;
+      el.textContent = message || '';
+      el.classList.toggle('hidden', !message);
+      el.classList.toggle('error', Boolean(message) && isError);
+      el.classList.toggle('hint', !isError);
+    }
+
+    function populateDutyTemplateSelect() {
+      const sel = document.getElementById('dutyTemplateSelect');
+      if (!sel) return;
+      const templates = Array.isArray(window.dutyTemplates) ? window.dutyTemplates : [];
+      sel.innerHTML = '';
+      const placeholder = document.createElement('option');
+      placeholder.value = '';
+      placeholder.textContent = templates.length ? '— Select saved duty —' : '— No saved duties —';
+      sel.appendChild(placeholder);
+      templates.forEach(t => {
+        if (!t || t.id == null) return;
+        const opt = document.createElement('option');
+        opt.value = t.id;
+        const prefix = (role === 'superadmin' && t.group_name) ? `${t.group_name} — ` : '';
+        opt.textContent = `${prefix}${t.title}`;
+        sel.appendChild(opt);
+      });
+      sel.disabled = templates.length === 0;
+    }
+
+    async function loadDutyTemplates(options = {}) {
+      if (!(role === 'admin' || role === 'superadmin')) return;
+      const select = document.getElementById('dutyTemplateSelect');
+      if (!select) return;
+      try {
+        let path = '/duty-templates';
+        if (role === 'superadmin') {
+          let groupFilter = options.group_id;
+          if (groupFilter != null && !Number.isFinite(groupFilter)) groupFilter = Number(groupFilter);
+          if (groupFilter == null) {
+            const superFilter = document.getElementById('superDutyGroupFilter');
+            if (superFilter && superFilter.value) groupFilter = Number(superFilter.value);
+          }
+          if (groupFilter == null) {
+            const templateGroupSel = document.getElementById('dutyTemplateGroup');
+            if (templateGroupSel && templateGroupSel.value) groupFilter = Number(templateGroupSel.value);
+          }
+          if (groupFilter == null) {
+            const dutyGroupSel = document.getElementById('dutyGroup');
+            if (dutyGroupSel && dutyGroupSel.value) groupFilter = Number(dutyGroupSel.value);
+          }
+          if (Number.isFinite(groupFilter)) {
+            path += `?group_id=${encodeURIComponent(groupFilter)}`;
+          }
+        }
+        const res = await authed(path);
+        if (!res.ok) throw new Error('Failed to load duty templates');
+        const data = await res.json();
+        window.dutyTemplates = Array.isArray(data) ? data : [];
+        window.dutyTemplateById = {};
+        window.dutyTemplates.forEach(t => {
+          if (t && t.id != null) window.dutyTemplateById[t.id] = t;
+        });
+        populateDutyTemplateSelect();
+      } catch {
+        window.dutyTemplates = [];
+        window.dutyTemplateById = {};
+        populateDutyTemplateSelect();
+      }
+    }
+
+    function mapTemplateStatusToCreateOption(stored) {
+      if (!stored) return 'open';
+      const map = { pending: 'open', in_progress: 'open', completed: 'closed' };
+      return map[String(stored).toLowerCase()] || 'open';
+    }
+
+    function applyDutyTemplateToForm(template) {
+      if (!template) return;
+      const titleInput = document.getElementById('dutyTitle');
+      const descInput = document.getElementById('dutyDesc');
+      const statusSel = document.getElementById('dutyStatus');
+      const capacityInput = document.getElementById('dutyCapacity');
+      if (titleInput) titleInput.value = template.title || '';
+      if (descInput) descInput.value = template.description || '';
+      if (statusSel) statusSel.value = mapTemplateStatusToCreateOption(template.status);
+      if (capacityInput) capacityInput.value = template.max_volunteers != null ? template.max_volunteers : '';
+      if (template.group_id != null) {
+        const dutyGroupSel = document.getElementById('dutyGroup');
+        if (role === 'superadmin') {
+          const templateGroupSel = document.getElementById('dutyTemplateGroup');
+          if (templateGroupSel) templateGroupSel.value = String(template.group_id);
+        }
+        if (dutyGroupSel && dutyGroupSel.value !== String(template.group_id)) {
+          dutyGroupSel.value = String(template.group_id);
+          populateEventDropdownsForGroup(template.group_id);
+        }
+      }
+      setDutyTemplateStatus('Template applied.');
+    }
+
     // Wire selecting a duty to prefill edit form
     document.getElementById('dutyEditSelect')?.addEventListener('change', () => {
       const sel = document.getElementById('dutyEditSelect');
@@ -2170,6 +2325,99 @@
       const stored = (window.dutyById && window.dutyById[id]) ? window.dutyById[id].max_volunteers : null;
       if (capInput) capInput.value = stored != null ? stored : '';
       prepareDutyRestrictionUI(id);
+    });
+
+    document.getElementById('dutyTemplateMode')?.addEventListener('change', () => updateDutyTemplateModeUI());
+    updateDutyTemplateModeUI();
+    document.getElementById('applyDutyTemplateBtn')?.addEventListener('click', () => {
+      const sel = document.getElementById('dutyTemplateSelect');
+      if (!sel || !sel.value) {
+        setDutyTemplateStatus('Select a saved duty first.', true);
+        return;
+      }
+      const templateId = Number(sel.value);
+      if (!Number.isFinite(templateId)) {
+        setDutyTemplateStatus('Invalid saved duty.', true);
+        return;
+      }
+      const template = (window.dutyTemplateById || {})[templateId];
+      if (!template) {
+        setDutyTemplateStatus('Saved duty not found.', true);
+        return;
+      }
+      applyDutyTemplateToForm(template);
+    });
+    document.getElementById('saveDutyTemplateBtn')?.addEventListener('click', async () => {
+      if (!(role === 'admin' || role === 'superadmin')) return;
+      const titleInput = document.getElementById('templateTitle');
+      const descInput = document.getElementById('templateDesc');
+      const statusSel = document.getElementById('templateStatus');
+      const capacityInput = document.getElementById('templateCapacity');
+      const title = titleInput?.value.trim();
+      const description = descInput?.value.trim();
+      const status = statusSel?.value || 'open';
+      const rawCap = capacityInput?.value?.trim();
+      let max_volunteers = null;
+      if (rawCap) {
+        const parsed = Number(rawCap);
+        if (!Number.isFinite(parsed) || parsed < 1) {
+          setDutyTemplateStatus('Max volunteers must be a positive number', true);
+          return;
+        }
+        max_volunteers = Math.floor(parsed);
+      }
+      let targetGroupId = groupId ?? null;
+      if (targetGroupId != null) targetGroupId = Number(targetGroupId);
+      if (role === 'superadmin') {
+        targetGroupId = null;
+        const groupSel = document.getElementById('dutyTemplateGroup');
+        if (groupSel && groupSel.value) targetGroupId = Number(groupSel.value);
+        if (!targetGroupId) {
+          const superFilter = document.getElementById('superDutyGroupFilter');
+          if (superFilter && superFilter.value) targetGroupId = Number(superFilter.value);
+        }
+        if (!targetGroupId) {
+          const dutyGroupSel = document.getElementById('dutyGroup');
+          if (dutyGroupSel && dutyGroupSel.value) targetGroupId = Number(dutyGroupSel.value);
+        }
+      }
+      if (!title) {
+        setDutyTemplateStatus('Title is required', true);
+        return;
+      }
+      if (!targetGroupId) {
+        setDutyTemplateStatus('Select an organization for this template.', true);
+        return;
+      }
+      try {
+        setDutyTemplateStatus('Saving template…');
+        const res = await authed('/duty-templates', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title, description, status, max_volunteers, group_id: targetGroupId })
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          setDutyTemplateStatus(data.message || 'Failed to save template', true);
+          return;
+        }
+        if (titleInput) titleInput.value = '';
+        if (descInput) descInput.value = '';
+        if (capacityInput) capacityInput.value = '';
+        if (role === 'superadmin') {
+          const groupSel = document.getElementById('dutyTemplateGroup');
+          if (groupSel) groupSel.value = String(targetGroupId);
+        }
+        await loadDutyTemplates({ group_id: targetGroupId });
+        setDutyTemplateStatus('Template saved to pool.');
+        const modeSel = document.getElementById('dutyTemplateMode');
+        if (modeSel) {
+          modeSel.value = 'use';
+          updateDutyTemplateModeUI();
+        }
+      } catch {
+        setDutyTemplateStatus('Error saving template', true);
+      }
     });
 
     // Create Duty (admin)
@@ -3130,6 +3378,17 @@
       const isAdminish = currentRole === 'admin' || currentRole === 'superadmin';
       const brandingWrap = document.getElementById('brandingSettings');
       if (brandingWrap) brandingWrap.classList.toggle('hidden', currentRole !== 'admin');
+      const templatePanel = document.getElementById('dutyTemplatePanel');
+      if (templatePanel) templatePanel.classList.toggle('hidden', !isAdminish);
+      const templateGroupRow = document.getElementById('dutyTemplateGroupRow');
+      const templateGroupSel = document.getElementById('dutyTemplateGroup');
+      if (templateGroupRow) templateGroupRow.classList.toggle('hidden', currentRole !== 'superadmin');
+      if (templateGroupSel) {
+        templateGroupSel.disabled = currentRole !== 'superadmin';
+        if (currentRole !== 'superadmin' && groupId != null) {
+          templateGroupSel.value = String(groupId);
+        }
+      }
       // Hard reset of cross-page dropdown selections
       function resetGlobalFilters() {
         // Superadmin global pickers
@@ -3149,6 +3408,15 @@
         const eRow = document.getElementById('vmEventRow'); if (eRow) eRow.classList.toggle('hidden', currentRole === 'superadmin');
         const lRow = document.getElementById('vmLogsRow'); if (lRow) lRow.classList.add('hidden');
         const vmPanel = document.getElementById('vmEditPanel'); if (vmPanel) vmPanel.classList.add('hidden');
+        const templateModeSel = document.getElementById('dutyTemplateMode');
+        if (templateModeSel) {
+          templateModeSel.value = 'use';
+          updateDutyTemplateModeUI();
+        }
+        const templateSelect = document.getElementById('dutyTemplateSelect'); if (templateSelect) templateSelect.selectedIndex = 0;
+        const templateGroupClear = document.getElementById('dutyTemplateGroup');
+        if (templateGroupClear && currentRole === 'superadmin') templateGroupClear.value = '';
+        setDutyTemplateStatus('');
       }
       document.getElementById('navAdminBtn').classList.toggle('hidden', !isAdminish);
       document.getElementById('navVolunteerMgmtBtn').classList.toggle('hidden', !isAdminish);
