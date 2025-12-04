@@ -82,6 +82,9 @@
     #calendarEventPanel .col { flex: 1 1 100%; }
     #calendarEventSummary div { margin-bottom: 4px; }
     #calendarStatus.error { color: #ff8a80; }
+    .calendar-day-event-picker { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+    .calendar-day-event-picker button { width: 100%; text-align: left; border-radius: 8px; border: 1px solid var(--accent2); background: rgba(2,137,219,0.15); color: var(--text); padding: 6px 8px; }
+    .calendar-day-event-picker button:hover { background: rgba(2,137,219,0.3); }
 
     /* Home section tweaks */
     #homeSection { max-width: 640px; margin: 0 auto 16px; text-align: center; flex: 0 1 640px; }
@@ -781,6 +784,7 @@
       eventsByDate: {},
       selectedEventId: null,
       lastStatusIsError: false,
+      needsRefresh: true,
     };
     let dutyRestrictionVolunteerCache = {};
     let dutyRestrictionState = { currentDutyId: null };
@@ -929,6 +933,85 @@
       }
     }
 
+    function isCalendarVisible() {
+      const section = document.getElementById('calendarSection');
+      return Boolean(section && !section.classList.contains('hidden'));
+    }
+
+    async function refreshCalendarIfVisible(options = {}) {
+      if (isCalendarVisible()) {
+        await refreshCalendarEvents(options);
+      } else {
+        calendarState.needsRefresh = true;
+      }
+    }
+
+    function formatDateKeyToReadable(key) {
+      if (!key) return '';
+      const [year, month, day] = key.split('-').map(Number);
+      if (!year || !month || !day) return key;
+      const date = new Date(year, month - 1, day);
+      return date.toLocaleDateString(undefined, {
+        weekday: 'long',
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric'
+      });
+    }
+
+    function showCalendarDayEvents(dateKey) {
+      const summary = document.getElementById('calendarEventSummary');
+      const panel = document.getElementById('calendarEventPanel');
+      if (!summary || !panel) return;
+      const events = calendarState.eventsByDate[dateKey] || [];
+      panel.classList.remove('hidden');
+      calendarState.selectedEventId = null;
+      summary.innerHTML = '';
+      const header = document.createElement('div');
+      header.innerHTML = `<strong>${formatDateKeyToReadable(dateKey) || 'Selected Day'}</strong>`;
+      summary.appendChild(header);
+      if (!events.length) {
+        const empty = document.createElement('div');
+        empty.textContent = 'No events scheduled for this day.';
+        summary.appendChild(empty);
+        const adminWrap = document.getElementById('calendarEventAdminWrap');
+        if (adminWrap) adminWrap.classList.add('hidden');
+        return;
+      }
+      const helper = document.createElement('div');
+      helper.textContent = 'Select an event to view details:';
+      summary.appendChild(helper);
+      const list = document.createElement('div');
+      list.className = 'calendar-day-event-picker';
+      events
+        .slice()
+        .sort((a, b) => {
+          const aStart = new Date(`${a.start_date || a.event_date || ''}T${(a.start_time || '00:00')}`);
+          const bStart = new Date(`${b.start_date || b.event_date || ''}T${(b.start_time || '00:00')}`);
+          return aStart - bStart;
+        })
+        .forEach(ev => {
+          const btn = document.createElement('button');
+          const parts = [];
+          const startTime = (ev.start_time || '').slice(0, 5);
+          if (startTime) parts.push(startTime);
+          parts.push(ev.title || `Event #${ev.id}`);
+          if (role === 'superadmin' && ev.group_id != null) {
+            const orgName = groupNameById[ev.group_id];
+            if (orgName) parts.push(`(${orgName})`);
+          }
+          btn.textContent = parts.join(' ');
+          btn.addEventListener('click', (event) => {
+            event.stopPropagation();
+            openCalendarEvent(ev.id);
+          });
+          list.appendChild(btn);
+        });
+      summary.appendChild(list);
+      const adminWrap = document.getElementById('calendarEventAdminWrap');
+      if (adminWrap) adminWrap.classList.add('hidden');
+    }
+
     function resetCalendarView() {
       calendarState.selectedEventId = null;
       const panel = document.getElementById('calendarEventPanel');
@@ -1013,6 +1096,7 @@
         const cell = document.createElement('div');
         cell.className = 'calendar-day';
         if (cellDate.getMonth() !== monthRef.getMonth()) cell.classList.add('calendar-day--muted');
+        cell.dataset.dateKey = key;
         const number = document.createElement('div');
         number.className = 'calendar-day-number';
         number.textContent = cellDate.getDate();
@@ -1032,16 +1116,32 @@
             if (gName) pieces.push(`(${gName})`);
           }
           btn.textContent = pieces.join(' ');
-          btn.addEventListener('click', () => openCalendarEvent(ev.id));
+          btn.addEventListener('click', (event) => {
+            event.stopPropagation();
+            openCalendarEvent(ev.id);
+          });
           list.appendChild(btn);
         });
         if (dayEvents.length > 3) {
           const more = document.createElement('div');
           more.className = 'calendar-more';
           more.textContent = `+${dayEvents.length - 3} more`;
+          more.addEventListener('click', (event) => {
+            event.stopPropagation();
+            showCalendarDayEvents(key);
+          });
           list.appendChild(more);
         }
         cell.appendChild(list);
+        cell.addEventListener('click', (event) => {
+          if (event.target.closest('.calendar-event')) return;
+          if (event.target.classList && event.target.classList.contains('calendar-more')) return;
+          if (dayEvents.length) {
+            showCalendarDayEvents(key);
+          } else {
+            showCalendarStatus('No events scheduled for this day.');
+          }
+        });
         grid.appendChild(cell);
       }
       if (!calendarState.lastStatusIsError) {
@@ -1076,8 +1176,8 @@
     }
 
     async function refreshCalendarEvents(options = {}) {
+      const { preserveSelectionId = null, skipReset = false } = options || {};
       if (!token) return;
-      const { preserveSelectionId = null, skipReset = false } = options;
       if (!skipReset) resetCalendarView();
       const filterValue = getCalendarGroupFilterValue();
       if ((role === 'admin' || role === 'volunteer') && !filterValue) {
@@ -1092,6 +1192,7 @@
         calendarState.events = events;
         calendarState.eventsByDate = buildCalendarEventsByDay(events);
         renderCalendar();
+        calendarState.needsRefresh = false;
         if (preserveSelectionId) openCalendarEvent(preserveSelectionId);
       } catch {
         showCalendarStatus('Failed to load calendar events.', true);
@@ -2169,21 +2270,30 @@
             const id = Number(ev.currentTarget.getAttribute('data-eid'));
             try {
               const res = await authed(`/events/${id}/join`, { method: 'POST' });
-              if (res.ok) fetchEvents(); else { const d = await res.json().catch(()=>({})); alert(d.message||'Failed to join'); }
+              if (res.ok) {
+                await fetchEvents();
+                await refreshCalendarIfVisible({ preserveSelectionId: id, skipReset: true });
+              } else { const d = await res.json().catch(()=>({})); alert(d.message||'Failed to join'); }
             } catch { alert('Error joining'); }
           }));
           tbody.querySelectorAll('.leaveBtn').forEach(btn => btn.addEventListener('click', async (ev) => {
             const id = Number(ev.currentTarget.getAttribute('data-eid'));
             try {
               const res = await authed(`/events/${id}/leave`, { method: 'POST' });
-              if (res.ok) fetchEvents(); else { const d = await res.json().catch(()=>({})); alert(d.message||'Failed to leave'); }
+              if (res.ok) {
+                await fetchEvents();
+                await refreshCalendarIfVisible({ preserveSelectionId: id, skipReset: true });
+              } else { const d = await res.json().catch(()=>({})); alert(d.message||'Failed to leave'); }
             } catch { alert('Error leaving'); }
           }));
           tbody.querySelectorAll('.archiveEventBtn').forEach(btn => btn.addEventListener('click', async (ev) => {
             const id = Number(ev.currentTarget.getAttribute('data-eid'));
             try {
               const res = await authed(`/events/${id}/archive`, { method: 'POST' });
-              if (res.ok) fetchEvents(); else { const d = await res.json().catch(()=>({})); alert(d.message||'Failed to archive'); }
+              if (res.ok) {
+                await fetchEvents();
+                await refreshCalendarIfVisible({ preserveSelectionId: id });
+              } else { const d = await res.json().catch(()=>({})); alert(d.message||'Failed to archive'); }
             } catch { alert('Error archiving'); }
           }));
           tbody.querySelectorAll('.deleteEventBtn').forEach(btn => btn.addEventListener('click', async (ev) => {
@@ -2191,7 +2301,10 @@
             if (!confirm('Delete this event?')) return;
             try {
               const res = await authed(`/events/${id}`, { method: 'DELETE' });
-              if (res.ok) fetchEvents(); else { const d = await res.json().catch(()=>({})); alert(d.message||'Failed to delete'); }
+              if (res.ok) {
+                await fetchEvents();
+                await refreshCalendarIfVisible();
+              } else { const d = await res.json().catch(()=>({})); alert(d.message||'Failed to delete'); }
             } catch { alert('Error deleting'); }
           }));
         }
@@ -2553,7 +2666,8 @@
         document.getElementById('eventStartTime2').value = '';
         document.getElementById('eventEndTime2').value = '';
         if (grpSel2) grpSel2.value = groupId != null ? String(groupId) : '';
-        fetchEvents();
+        await fetchEvents();
+        await refreshCalendarIfVisible();
       } catch {
         document.getElementById('createEventError2').textContent = 'Error creating event';
       }
@@ -2579,6 +2693,7 @@
         document.getElementById('editEventError').textContent = '';
         document.getElementById('eventEditWrap').classList.add('hidden');
         await fetchEvents();
+        await refreshCalendarIfVisible({ preserveSelectionId: id, skipReset: true });
       } catch { document.getElementById('editEventError').textContent = 'Error saving event'; }
     });
 
@@ -4136,7 +4251,12 @@
         }
         updateCalendarMonthLabel();
         renderCalendar();
-        await refreshCalendarEvents();
+        if (calendarState.needsRefresh) {
+          await refreshCalendarEvents();
+        } else {
+          showCalendarStatus('');
+        }
+        calendarState.needsRefresh = false;
       };
       document.getElementById('navClockBtn').onclick = async () => {
         resetGlobalFilters();
