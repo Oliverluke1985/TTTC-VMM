@@ -76,8 +76,8 @@
     .calendar-day-number { font-weight: 600; font-size: 14px; margin-bottom: 6px; color: var(--accent5); }
     .calendar-day--muted { opacity: 0.45; }
     .calendar-events { display: flex; flex-direction: column; gap: 4px; }
-    .calendar-event { border: 1px solid rgba(53,177,251,0.4); background: rgba(2,137,219,0.16); border-left: 4px solid var(--accent1); border-radius: 8px; padding: 4px 6px; font-size: 13px; color: var(--text); cursor: pointer; text-align: left; }
-    .calendar-event:hover { background: rgba(2,137,219,0.28); }
+    .calendar-event { border: 1px solid rgba(53,177,251,0.4); background: rgba(2,137,219,0.16); border-left: 4px solid var(--accent1); border-radius: 8px; padding: 4px 6px; font-size: 13px; color: var(--text); cursor: pointer; text-align: left; transition: background 0.2s ease, border-color 0.2s ease; }
+    .calendar-event:hover { background: rgba(2,137,219,0.32); }
     .calendar-more { font-size: 12px; color: var(--accent1); margin-top: 2px; }
     #calendarEventPanel .col { flex: 1 1 100%; }
     #calendarEventSummary div { margin-bottom: 4px; }
@@ -778,6 +778,16 @@
     let volunteerTimeZoneById = {};
     let timeEntryTimeZoneById = {};
     let activeTimeZone = DEFAULT_TIME_ZONE;
+    const CALENDAR_EVENT_COLORS = [
+      '#35b1fb',
+      '#ef476f',
+      '#ffd166',
+      '#06d6a0',
+      '#118ab2',
+      '#9b5de5',
+      '#f3722c',
+      '#ff6f91'
+    ];
     const calendarState = {
       currentMonth: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
       events: [],
@@ -984,6 +994,57 @@
       return Number.isNaN(date.getTime()) ? null : date;
     }
 
+    function formatTime12(value) {
+      if (!value) return '';
+      const parts = String(value).split(':');
+      const hour = Number(parts[0]);
+      const minute = Number(parts[1]);
+      if (Number.isNaN(hour)) return value;
+      const suffix = hour >= 12 ? 'PM' : 'AM';
+      const normalizedHour = (hour % 12) || 12;
+      const minuteStr = Number.isNaN(minute) ? '00' : String(minute).padStart(2, '0');
+      return `${normalizedHour}:${minuteStr} ${suffix}`;
+    }
+
+    function hashString(str = '') {
+      let hash = 0;
+      for (let i = 0; i < str.length; i += 1) {
+        hash = (hash * 31 + str.charCodeAt(i)) | 0;
+      }
+      return Math.abs(hash);
+    }
+
+    function getEventColor(event) {
+      if (!event) return null;
+      const palette = CALENDAR_EVENT_COLORS;
+      if (!Array.isArray(palette) || palette.length === 0) return null;
+      const key = event.group_id != null ? `g-${event.group_id}` : `e-${event.id ?? 0}`;
+      const idx = hashString(String(key)) % palette.length;
+      return palette[idx];
+    }
+
+    function hexToRgba(hex, alpha = 0.18) {
+      if (typeof hex !== 'string' || !hex.startsWith('#')) return `rgba(53,177,251,${alpha})`;
+      let normalized = hex.slice(1);
+      if (normalized.length === 3) {
+        normalized = normalized.split('').map(ch => ch + ch).join('');
+      }
+      const value = Number.parseInt(normalized, 16);
+      if (Number.isNaN(value)) return `rgba(53,177,251,${alpha})`;
+      const r = (value >> 16) & 255;
+      const g = (value >> 8) & 255;
+      const b = value & 255;
+      return `rgba(${r},${g},${b},${alpha})`;
+    }
+
+    function applyEventColorStyles(el, event) {
+      if (!el) return;
+      const color = getEventColor(event);
+      if (!color) return;
+      el.style.borderColor = color;
+      el.style.background = hexToRgba(color, 0.2);
+    }
+
     function getEventSortTimestamp(event) {
       const datePart = extractDatePart(event.start_date || event.event_date);
       if (!datePart) return 0;
@@ -1023,7 +1084,7 @@
         .forEach(ev => {
           const btn = document.createElement('button');
           const parts = [];
-          const startTime = (ev.start_time || '').slice(0, 5);
+          const startTime = formatTime12((ev.start_time || '').slice(0, 5));
           if (startTime) parts.push(startTime);
           parts.push(ev.title || `Event #${ev.id}`);
           if (role === 'superadmin' && ev.group_id != null) {
@@ -1031,6 +1092,7 @@
             if (orgName) parts.push(`(${orgName})`);
           }
           btn.textContent = parts.join(' ');
+          applyEventColorStyles(btn, ev);
           btn.addEventListener('click', (event) => {
             event.stopPropagation();
             openCalendarEvent(ev.id);
@@ -1138,7 +1200,7 @@
           btn.type = 'button';
           btn.className = 'calendar-event';
           const pieces = [];
-          const startTime = (ev.start_time || '').slice(0, 5);
+          const startTime = formatTime12((ev.start_time || '').slice(0, 5));
           if (startTime) pieces.push(startTime);
           pieces.push(ev.title || `Event #${ev.id}`);
           if (role === 'superadmin' && ev.group_id != null) {
@@ -1146,6 +1208,7 @@
             if (gName) pieces.push(`(${gName})`);
           }
           btn.textContent = pieces.join(' ');
+          applyEventColorStyles(btn, ev);
           btn.addEventListener('click', (event) => {
             event.stopPropagation();
             openCalendarEvent(ev.id);
@@ -1210,8 +1273,12 @@
       if (!token) return;
       if (!skipReset) resetCalendarView();
       const filterValue = getCalendarGroupFilterValue();
-      if ((role === 'admin' || role === 'volunteer') && !filterValue) {
-        showCalendarStatus('You must belong to an organization to view its calendar.', true);
+      if (((role === 'admin' || role === 'volunteer') && !filterValue) ||
+          (role === 'superadmin' && !filterValue)) {
+        const message = role === 'superadmin'
+          ? 'Select an organization above to view its calendar.'
+          : 'You must belong to an organization to view its calendar.';
+        showCalendarStatus(message, true);
         const grid = document.getElementById('calendarGrid');
         if (grid) grid.innerHTML = '';
         return;
@@ -1238,6 +1305,17 @@
       const titleRow = document.createElement('div');
       const strong = document.createElement('strong');
       strong.textContent = event.title || 'Untitled Event';
+      const color = getEventColor(event);
+      if (color) {
+        const swatch = document.createElement('span');
+        swatch.style.display = 'inline-block';
+        swatch.style.width = '12px';
+        swatch.style.height = '12px';
+        swatch.style.borderRadius = '50%';
+        swatch.style.marginRight = '6px';
+        swatch.style.background = color;
+        titleRow.appendChild(swatch);
+      }
       titleRow.appendChild(strong);
       const dateRow = document.createElement('div');
       dateRow.textContent = describeEventRange(event);
@@ -2247,26 +2325,29 @@
     // EVENTS
     async function fetchEvents() {
       try {
+        const tbody = document.getElementById('eventList');
         let path = '/events';
         if (role === 'superadmin') {
           const sel = document.getElementById('superEventGroupFilter');
-          if (sel && sel.value) path = `/events?group_id=${encodeURIComponent(sel.value)}`;
+          const filterWrap = document.getElementById('eventsSuperFilter');
+          const note = document.getElementById('eventsSuperNote');
+          const needsSelection = filterWrap && !filterWrap.classList.contains('hidden');
+          if (needsSelection && (!sel || !sel.value)) {
+            if (tbody) tbody.innerHTML = '';
+            if (note) {
+              note.classList.remove('error');
+              note.classList.add('hint');
+              note.textContent = 'Select an organization above to view events.';
+            }
+            return;
+          }
+          if (sel && sel.value) {
+            path = `/events?group_id=${encodeURIComponent(sel.value)}`;
+            if (note) note.textContent = '';
+          }
         }
         const res = await authed(path);
         const events = await res.json();
-        const tbody = document.getElementById('eventList');
-        if (role === 'superadmin') {
-          const filterSel = document.getElementById('superEventGroupFilter');
-          const filterWrap = document.getElementById('eventsSuperFilter');
-          const note = document.getElementById('eventsSuperNote');
-          const enforcing = filterWrap && !filterWrap.classList.contains('hidden');
-          if (enforcing && filterSel && (!filterSel.value || filterSel.value === '')) {
-            if (tbody) tbody.innerHTML = '';
-            if (note) { note.classList.remove('error'); note.classList.add('hint'); note.textContent = 'Select an organization above to view events.'; }
-            return;
-          }
-          if (note) note.textContent = '';
-        }
         if (tbody) {
         tbody.innerHTML = '';
         events.forEach(e => {
