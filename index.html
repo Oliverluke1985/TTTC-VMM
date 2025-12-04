@@ -62,8 +62,26 @@
     /* Toolbar */
     nav#toolbar { display:flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 12px 0 16px; background: rgba(0,0,0,0.6); border: 1px solid var(--accent3); border-radius: 8px; padding: 8px; }
     nav#toolbar button { background: rgba(0,0,0,0.2); }
-    /* */
-    /* */
+
+    /* Calendar */
+    #calendarSection { max-width: 960px; margin: 0 auto; }
+    #calendarFilterRow .col { min-width: 200px; }
+    .calendar-month-controls { display: flex; align-items: center; gap: 8px; }
+    .calendar-month-controls button { margin: 0; }
+    .calendar-month-label { font-weight: 600; font-size: 16px; min-width: 140px; text-align: center; }
+    .calendar-weekdays { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; margin: 12px 0 6px; text-align: center; font-weight: 600; color: var(--accent5); }
+    .calendar-weekdays div { padding: 4px 0; background: rgba(255,255,255,0.04); border-radius: 6px; }
+    .calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; min-height: 360px; }
+    .calendar-day { border: 1px solid var(--accent3); border-radius: 10px; padding: 6px; min-height: 90px; background: rgba(0,0,0,0.25); display: flex; flex-direction: column; }
+    .calendar-day-number { font-weight: 600; font-size: 14px; margin-bottom: 6px; color: var(--accent5); }
+    .calendar-day--muted { opacity: 0.45; }
+    .calendar-events { display: flex; flex-direction: column; gap: 4px; }
+    .calendar-event { border: 1px solid rgba(53,177,251,0.4); background: rgba(2,137,219,0.16); border-left: 4px solid var(--accent1); border-radius: 8px; padding: 4px 6px; font-size: 13px; color: var(--text); cursor: pointer; text-align: left; }
+    .calendar-event:hover { background: rgba(2,137,219,0.28); }
+    .calendar-more { font-size: 12px; color: var(--accent1); margin-top: 2px; }
+    #calendarEventPanel .col { flex: 1 1 100%; }
+    #calendarEventSummary div { margin-bottom: 4px; }
+    #calendarStatus.error { color: #ff8a80; }
 
     /* Home section tweaks */
     #homeSection { max-width: 640px; margin: 0 auto 16px; text-align: center; flex: 0 1 640px; }
@@ -98,6 +116,7 @@
     <button id="navEventsBtn">Events</button>
     <button id="navCreateDutyBtn">Create Duty</button>
     <button id="navVolunteerMgmtBtn" class="hidden">Volunteer Management</button>
+    <button id="navCalendarBtn">Calendar</button>
     <button id="navClockBtn">Time Clock</button>
     <button id="navLogoutBtn">Logout</button>
   </nav>
@@ -206,6 +225,70 @@
         <label>End Time</label><input id="editEventEndTime" type="time" />
         <button id="saveEventBtn">Save Event</button>
         <div id="editEventError" class="error"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="calendarSection" class="col hidden">
+    <h2>Calendar</h2>
+    <div id="calendarFilterRow" class="row">
+      <div class="col" id="calendarOrgFilterCol">
+        <label>Organization</label>
+        <select id="calendarGroupFilter"><option value="">All organizations</option></select>
+        <div id="calendarFilterHint" class="hint"></div>
+      </div>
+      <div class="col">
+        <label>Month</label>
+        <div class="calendar-month-controls">
+          <button id="calendarPrevMonth" type="button">&lt; Prev</button>
+          <div id="calendarMonthLabel" class="calendar-month-label"></div>
+          <button id="calendarNextMonth" type="button">Next &gt;</button>
+        </div>
+      </div>
+    </div>
+    <div class="calendar-weekdays">
+      <div>Sun</div>
+      <div>Mon</div>
+      <div>Tue</div>
+      <div>Wed</div>
+      <div>Thu</div>
+      <div>Fri</div>
+      <div>Sat</div>
+    </div>
+    <div id="calendarGrid" class="calendar-grid"></div>
+    <div id="calendarStatus" class="hint"></div>
+    <div id="calendarEventPanel" class="row hidden">
+      <div class="col">
+        <h3>Event Details</h3>
+        <div id="calendarEventSummary">
+          <div>Select an event to view details.</div>
+        </div>
+        <div id="calendarEventAdminWrap" class="hidden" style="margin-top:12px">
+          <label>Title</label><input id="calendarEditTitle" type="text" />
+          <label>Description</label><input id="calendarEditDescription" type="text" />
+          <div class="row">
+            <div class="col">
+              <label>Start Date</label><input id="calendarEditStartDate" type="date" />
+              <label>Start Time</label><input id="calendarEditStartTime" type="time" />
+            </div>
+            <div class="col">
+              <label>End Date</label><input id="calendarEditEndDate" type="date" />
+              <label>End Time</label><input id="calendarEditEndTime" type="time" />
+            </div>
+          </div>
+          <div id="calendarEditGroupRow" class="row hidden">
+            <div class="col">
+              <label>Organization</label>
+              <select id="calendarEditGroup"><option value="">— Select organization —</option></select>
+            </div>
+          </div>
+          <div style="margin-top:10px">
+            <button id="calendarSaveEventBtn" type="button">Save Changes</button>
+            <button id="calendarArchiveEventBtn" type="button" style="margin-left:8px">Archive</button>
+            <button id="calendarDeleteEventBtn" type="button" style="margin-left:8px;color:#b00020">Delete</button>
+          </div>
+          <div id="calendarEditError" class="error"></div>
+        </div>
       </div>
     </div>
   </section>
@@ -688,9 +771,17 @@
     ];
     const DEFAULT_TIME_ZONE = 'America/Chicago';
     let groupTimeZoneById = {};
+    let groupNameById = {};
     let volunteerTimeZoneById = {};
     let timeEntryTimeZoneById = {};
     let activeTimeZone = DEFAULT_TIME_ZONE;
+    const calendarState = {
+      currentMonth: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+      events: [],
+      eventsByDate: {},
+      selectedEventId: null,
+      lastStatusIsError: false,
+    };
     let dutyRestrictionVolunteerCache = {};
     let dutyRestrictionState = { currentDutyId: null };
     const DEFAULT_LOGO_URL = 'https://i.postimg.cc/Ght5qLQw/TTTC-Logo-Redesign2.jpg';
@@ -817,6 +908,387 @@
       const sel = document.getElementById('dutyRestrictionVolunteer');
       if (sel) { sel.innerHTML = '<option value="">— Select volunteer —</option>'; sel.disabled = true; }
       setDutyRestrictionStatus('');
+    }
+
+    function showCalendarStatus(message = '', isError = false) {
+      const el = document.getElementById('calendarStatus');
+      if (!el) return;
+      const hasMessage = Boolean(message);
+      calendarState.lastStatusIsError = hasMessage && Boolean(isError);
+      el.textContent = message || '';
+      if (!hasMessage) {
+        el.classList.remove('error');
+        el.classList.add('hint');
+      } else {
+        el.classList.toggle('error', Boolean(isError));
+        if (!isError) {
+          el.classList.add('hint');
+        } else {
+          el.classList.remove('hint');
+        }
+      }
+    }
+
+    function resetCalendarView() {
+      calendarState.selectedEventId = null;
+      const panel = document.getElementById('calendarEventPanel');
+      if (panel) panel.classList.add('hidden');
+      const summary = document.getElementById('calendarEventSummary');
+      if (summary) {
+        summary.innerHTML = '';
+        const placeholder = document.createElement('div');
+        placeholder.textContent = 'Select an event to view details.';
+        summary.appendChild(placeholder);
+      }
+      const err = document.getElementById('calendarEditError');
+      if (err) err.textContent = '';
+    }
+
+    function formatCalendarDateKey(date) {
+      return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+    }
+
+    function describeEventRange(event) {
+      if (!event) return 'Date TBD';
+      const startDate = event.start_date || event.event_date;
+      const endDate = event.end_date || event.start_date || event.event_date;
+      const startTime = (event.start_time || '').slice(0, 5);
+      const endTime = (event.end_time || '').slice(0, 5);
+      if (!startDate) return 'Date TBD';
+      if (endDate && endDate !== startDate) {
+        const first = `${startDate}${startTime ? ` ${startTime}` : ''}`.trim();
+        const last = `${endDate}${endTime ? ` ${endTime}` : ''}`.trim();
+        return `${first} – ${last}`.trim();
+      }
+      let label = startDate;
+      if (startTime && endTime) label += ` ${startTime} – ${endTime}`;
+      else if (startTime) label += ` ${startTime}`;
+      return label;
+    }
+
+    function buildCalendarEventsByDay(events = []) {
+      const map = {};
+      events.forEach(ev => {
+        const startStr = ev.start_date || ev.event_date;
+        if (!startStr) return;
+        let endStr = ev.end_date || ev.start_date || ev.event_date;
+        const start = new Date(`${startStr}T00:00:00`);
+        let end = new Date(`${endStr}T00:00:00`);
+        if (Number.isNaN(start.getTime())) return;
+        if (Number.isNaN(end.getTime()) || end < start) end = new Date(start);
+        for (let cursor = new Date(start); cursor <= end; cursor.setDate(cursor.getDate() + 1)) {
+          const key = formatCalendarDateKey(cursor);
+          if (!map[key]) map[key] = [];
+          map[key].push(ev);
+        }
+      });
+      return map;
+    }
+
+    function updateCalendarMonthLabel() {
+      const label = document.getElementById('calendarMonthLabel');
+      if (!label) return;
+      const d = calendarState.currentMonth;
+      label.textContent = d.toLocaleString(undefined, { month: 'long', year: 'numeric' });
+    }
+
+    function renderCalendar() {
+      const grid = document.getElementById('calendarGrid');
+      if (!grid) return;
+      grid.innerHTML = '';
+      updateCalendarMonthLabel();
+      const monthRef = calendarState.currentMonth;
+      const startOfMonth = new Date(monthRef.getFullYear(), monthRef.getMonth(), 1);
+      const gridStart = new Date(startOfMonth);
+      gridStart.setDate(startOfMonth.getDate() - startOfMonth.getDay());
+      let hasEventsThisMonth = false;
+      for (let i = 0; i < 42; i += 1) {
+        const cellDate = new Date(gridStart);
+        cellDate.setDate(gridStart.getDate() + i);
+        const key = formatCalendarDateKey(cellDate);
+        const dayEvents = calendarState.eventsByDate[key] || [];
+        if (dayEvents.length && cellDate.getMonth() === monthRef.getMonth()) {
+          hasEventsThisMonth = true;
+        }
+        const cell = document.createElement('div');
+        cell.className = 'calendar-day';
+        if (cellDate.getMonth() !== monthRef.getMonth()) cell.classList.add('calendar-day--muted');
+        const number = document.createElement('div');
+        number.className = 'calendar-day-number';
+        number.textContent = cellDate.getDate();
+        cell.appendChild(number);
+        const list = document.createElement('div');
+        list.className = 'calendar-events';
+        dayEvents.slice(0, 3).forEach(ev => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'calendar-event';
+          const pieces = [];
+          const startTime = (ev.start_time || '').slice(0, 5);
+          if (startTime) pieces.push(startTime);
+          pieces.push(ev.title || `Event #${ev.id}`);
+          if (role === 'superadmin' && ev.group_id != null) {
+            const gName = groupNameById[ev.group_id];
+            if (gName) pieces.push(`(${gName})`);
+          }
+          btn.textContent = pieces.join(' ');
+          btn.addEventListener('click', () => openCalendarEvent(ev.id));
+          list.appendChild(btn);
+        });
+        if (dayEvents.length > 3) {
+          const more = document.createElement('div');
+          more.className = 'calendar-more';
+          more.textContent = `+${dayEvents.length - 3} more`;
+          list.appendChild(more);
+        }
+        cell.appendChild(list);
+        grid.appendChild(cell);
+      }
+      if (!calendarState.lastStatusIsError) {
+        if (!calendarState.events.length) {
+          showCalendarStatus('No events found for this organization.');
+        } else if (!hasEventsThisMonth) {
+          showCalendarStatus('No events scheduled for this month.');
+        } else {
+          showCalendarStatus('');
+        }
+      }
+    }
+
+    function getCalendarGroupFilterValue() {
+      if (role === 'superadmin') {
+        const sel = document.getElementById('calendarGroupFilter');
+        return sel ? (sel.value || null) : null;
+      }
+      if (groupId != null) return String(groupId);
+      return null;
+    }
+
+    async function fetchCalendarEventsData(filterValue) {
+      let path = '/events';
+      if (filterValue) {
+        path = `/events?group_id=${encodeURIComponent(filterValue)}`;
+      }
+      const res = await authed(path);
+      if (!res.ok) throw new Error('Failed to load calendar events');
+      const events = await res.json();
+      return Array.isArray(events) ? events : [];
+    }
+
+    async function refreshCalendarEvents(options = {}) {
+      if (!token) return;
+      const { preserveSelectionId = null, skipReset = false } = options;
+      if (!skipReset) resetCalendarView();
+      const filterValue = getCalendarGroupFilterValue();
+      if ((role === 'admin' || role === 'volunteer') && !filterValue) {
+        showCalendarStatus('You must belong to an organization to view its calendar.', true);
+        const grid = document.getElementById('calendarGrid');
+        if (grid) grid.innerHTML = '';
+        return;
+      }
+      try {
+        showCalendarStatus('Loading…');
+        const events = await fetchCalendarEventsData(filterValue);
+        calendarState.events = events;
+        calendarState.eventsByDate = buildCalendarEventsByDay(events);
+        renderCalendar();
+        if (preserveSelectionId) openCalendarEvent(preserveSelectionId);
+      } catch {
+        showCalendarStatus('Failed to load calendar events.', true);
+        const grid = document.getElementById('calendarGrid');
+        if (grid) grid.innerHTML = '';
+      }
+    }
+
+    function populateCalendarEventSummary(event) {
+      const summary = document.getElementById('calendarEventSummary');
+      if (!summary) return;
+      summary.innerHTML = '';
+      const titleRow = document.createElement('div');
+      const strong = document.createElement('strong');
+      strong.textContent = event.title || 'Untitled Event';
+      titleRow.appendChild(strong);
+      const dateRow = document.createElement('div');
+      dateRow.textContent = describeEventRange(event);
+      const groupRow = document.createElement('div');
+      const groupLabel = groupNameById[event.group_id] || (event.group_id ? `Group ${event.group_id}` : 'No organization specified');
+      groupRow.textContent = `Organization: ${groupLabel}`;
+      const descRow = document.createElement('div');
+      descRow.textContent = event.description ? `Notes: ${event.description}` : 'Notes: None provided.';
+      summary.appendChild(titleRow);
+      summary.appendChild(dateRow);
+      summary.appendChild(groupRow);
+      summary.appendChild(descRow);
+    }
+
+    function populateCalendarEditGroupSelect(selectedId) {
+      const sel = document.getElementById('calendarEditGroup');
+      if (!sel) return;
+      const entries = Object.entries(groupNameById || {});
+      sel.innerHTML = '<option value="">— Select organization —</option>';
+      entries
+        .sort((a, b) => String(a[1]).localeCompare(String(b[1])))
+        .forEach(([id, name]) => {
+          const opt = document.createElement('option');
+          opt.value = id;
+          opt.textContent = name;
+          sel.appendChild(opt);
+        });
+      if (selectedId != null) sel.value = String(selectedId);
+    }
+
+    function openCalendarEvent(eventId) {
+      const events = calendarState.events || [];
+      const event = events.find(ev => Number(ev.id) === Number(eventId));
+      if (!event) return;
+      calendarState.selectedEventId = Number(event.id);
+      const panel = document.getElementById('calendarEventPanel');
+      if (panel) panel.classList.remove('hidden');
+      populateCalendarEventSummary(event);
+      const adminWrap = document.getElementById('calendarEventAdminWrap');
+      const canEdit = role === 'admin' || role === 'superadmin';
+      if (adminWrap) {
+        adminWrap.classList.toggle('hidden', !canEdit);
+        if (canEdit) {
+          const titleInput = document.getElementById('calendarEditTitle');
+          if (titleInput) titleInput.value = event.title || '';
+          const descInput = document.getElementById('calendarEditDescription');
+          if (descInput) descInput.value = event.description || '';
+          const startDateInput = document.getElementById('calendarEditStartDate');
+          if (startDateInput) startDateInput.value = event.start_date || event.event_date || '';
+          const endDateInput = document.getElementById('calendarEditEndDate');
+          if (endDateInput) endDateInput.value = event.end_date || event.start_date || event.event_date || '';
+          const startTimeInput = document.getElementById('calendarEditStartTime');
+          if (startTimeInput) startTimeInput.value = (event.start_time || '').slice(0, 5);
+          const endTimeInput = document.getElementById('calendarEditEndTime');
+          if (endTimeInput) endTimeInput.value = (event.end_time || '').slice(0, 5);
+          const groupRow = document.getElementById('calendarEditGroupRow');
+          if (groupRow) groupRow.classList.toggle('hidden', role !== 'superadmin');
+          if (role === 'superadmin') populateCalendarEditGroupSelect(event.group_id);
+        }
+      }
+      const err = document.getElementById('calendarEditError');
+      if (err) err.textContent = '';
+    }
+
+    async function saveCalendarEventEdits() {
+      if (!(role === 'admin' || role === 'superadmin')) return;
+      const eventId = calendarState.selectedEventId;
+      if (!eventId) return;
+      const err = document.getElementById('calendarEditError');
+      if (err) err.textContent = '';
+      const payload = {
+        title: document.getElementById('calendarEditTitle')?.value.trim() || null,
+        description: document.getElementById('calendarEditDescription')?.value.trim() || null,
+        start_date: document.getElementById('calendarEditStartDate')?.value || null,
+        end_date: document.getElementById('calendarEditEndDate')?.value || null,
+        start_time: document.getElementById('calendarEditStartTime')?.value || null,
+        end_time: document.getElementById('calendarEditEndTime')?.value || null,
+      };
+      if (role === 'superadmin') {
+        payload.group_id = document.getElementById('calendarEditGroup')?.value || null;
+      }
+      try {
+        const res = await authed(`/events/${eventId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          if (err) err.textContent = data.message || 'Failed to save event';
+          return;
+        }
+        showActionStatus('Event updated.');
+        await refreshCalendarEvents({ preserveSelectionId: eventId, skipReset: true });
+        openCalendarEvent(eventId);
+      } catch {
+        if (err) err.textContent = 'Error saving event';
+      }
+    }
+
+    async function archiveCalendarEvent() {
+      if (!(role === 'admin' || role === 'superadmin')) return;
+      const eventId = calendarState.selectedEventId;
+      if (!eventId) return;
+      const err = document.getElementById('calendarEditError');
+      if (err) err.textContent = '';
+      try {
+        const res = await authed(`/events/${eventId}/archive`, { method: 'POST' });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          if (err) err.textContent = data.message || 'Failed to archive event';
+          return;
+        }
+        showActionStatus('Event archived.');
+        await refreshCalendarEvents();
+      } catch {
+        if (err) err.textContent = 'Error archiving event';
+      }
+    }
+
+    async function deleteCalendarEvent() {
+      if (!(role === 'admin' || role === 'superadmin')) return;
+      const eventId = calendarState.selectedEventId;
+      if (!eventId) return;
+      if (!confirm('Delete this event? This cannot be undone.')) return;
+      const err = document.getElementById('calendarEditError');
+      if (err) err.textContent = '';
+      try {
+        const res = await authed(`/events/${eventId}`, { method: 'DELETE' });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          if (err) err.textContent = data.message || 'Failed to delete event';
+          return;
+        }
+        showActionStatus('Event deleted.');
+        await refreshCalendarEvents();
+      } catch {
+        if (err) err.textContent = 'Error deleting event';
+      }
+    }
+
+    function shiftCalendarMonth(delta) {
+      const base = calendarState.currentMonth;
+      calendarState.currentMonth = new Date(base.getFullYear(), base.getMonth() + delta, 1);
+      renderCalendar();
+    }
+
+    function prepareCalendarSection() {
+      const prevBtn = document.getElementById('calendarPrevMonth');
+      if (prevBtn && !prevBtn._wired) {
+        prevBtn.addEventListener('click', () => shiftCalendarMonth(-1));
+        prevBtn._wired = true;
+      }
+      const nextBtn = document.getElementById('calendarNextMonth');
+      if (nextBtn && !nextBtn._wired) {
+        nextBtn.addEventListener('click', () => shiftCalendarMonth(1));
+        nextBtn._wired = true;
+      }
+      const groupSel = document.getElementById('calendarGroupFilter');
+      if (groupSel && !groupSel._wired) {
+        groupSel.addEventListener('change', () => {
+          if (role !== 'superadmin') return;
+          refreshCalendarEvents();
+        });
+        groupSel._wired = true;
+      }
+      const saveBtn = document.getElementById('calendarSaveEventBtn');
+      if (saveBtn && !saveBtn._wired) {
+        saveBtn.addEventListener('click', saveCalendarEventEdits);
+        saveBtn._wired = true;
+      }
+      const archiveBtn = document.getElementById('calendarArchiveEventBtn');
+      if (archiveBtn && !archiveBtn._wired) {
+        archiveBtn.addEventListener('click', archiveCalendarEvent);
+        archiveBtn._wired = true;
+      }
+      const deleteBtn = document.getElementById('calendarDeleteEventBtn');
+      if (deleteBtn && !deleteBtn._wired) {
+        deleteBtn.addEventListener('click', deleteCalendarEvent);
+        deleteBtn._wired = true;
+      }
+      renderCalendar();
     }
     async function prepareDutyRestrictionUI(dutyId) {
       const wrap = document.getElementById('dutyRestrictionsWrap');
@@ -1411,6 +1883,22 @@
     });
 
     // GROUPS (front-end shows name; backend uses id)
+    function populateCalendarGroupOptions(groups = []) {
+      const sel = document.getElementById('calendarGroupFilter');
+      if (!sel) return;
+      const previous = sel.value;
+      sel.innerHTML = '<option value="">All organizations</option>';
+      groups.forEach(g => {
+        const opt = document.createElement('option');
+        opt.value = g.id;
+        opt.textContent = g.name;
+        sel.appendChild(opt);
+      });
+      if (previous && Array.from(sel.options).some(opt => opt.value === previous)) {
+        sel.value = previous;
+      }
+    }
+
     async function fetchGroups() {
       try {
         const res = await authed('/groups');
@@ -1423,6 +1911,7 @@
           nameById[g.id] = g.name;
           groupTimeZoneById[g.id] = g.time_zone || DEFAULT_TIME_ZONE;
         });
+        groupNameById = Object.assign({}, nameById);
         if (groupId != null) {
           setActiveTimeZoneForGroup(groupId);
         }
@@ -1562,6 +2051,7 @@
             sel._wiredTemplate = true;
           }
         });
+        populateCalendarGroupOptions(groups);
       } catch (e) { /* silent */ }
     }
 
@@ -3271,7 +3761,7 @@
 
     // NAVIGATION / TOOLBAR
     function hideMainSections() {
-      ['infoSection','superadminSection','homeSection','createDutySection','clockSection','eventsSection','adminSection','volMgmtSection'].forEach(id => {
+      ['infoSection','superadminSection','homeSection','createDutySection','clockSection','eventsSection','calendarSection','adminSection','volMgmtSection'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.classList.add('hidden');
       });
@@ -3417,6 +3907,7 @@
         const templateGroupClear = document.getElementById('dutyTemplateGroup');
         if (templateGroupClear && currentRole === 'superadmin') templateGroupClear.value = '';
         setDutyTemplateStatus('');
+        resetCalendarView();
       }
       document.getElementById('navAdminBtn').classList.toggle('hidden', !isAdminish);
       document.getElementById('navVolunteerMgmtBtn').classList.toggle('hidden', !isAdminish);
@@ -3617,6 +4108,35 @@
         const eFilter = document.getElementById('eventsSuperFilter');
         if (eFilter) eFilter.classList.toggle('hidden', currentRole !== 'superadmin');
         await fetchEvents();
+      };
+      document.getElementById('navCalendarBtn').onclick = async () => {
+        resetGlobalFilters();
+        resetVolunteerMgmtUI();
+        navigateTo('calendarSection');
+        const filterRow = document.getElementById('calendarFilterRow');
+        const orgCol = document.getElementById('calendarOrgFilterCol');
+        const filterHint = document.getElementById('calendarFilterHint');
+        const groupSel = document.getElementById('calendarGroupFilter');
+        if (currentRole === 'superadmin') {
+          if (filterRow) filterRow.classList.remove('hidden');
+          if (orgCol) orgCol.classList.remove('hidden');
+          if (groupSel) groupSel.disabled = false;
+          if (filterHint) filterHint.textContent = 'View all organizations or narrow to one.';
+        } else {
+          if (orgCol) orgCol.classList.add('hidden');
+          if (groupSel) {
+            groupSel.disabled = true;
+            if (groupId != null) groupSel.value = String(groupId);
+          }
+          if (filterHint) {
+            filterHint.textContent = currentRole === 'admin'
+              ? 'Calendar is scoped to your organization.'
+              : 'Calendar is read-only for volunteers.';
+          }
+        }
+        updateCalendarMonthLabel();
+        renderCalendar();
+        await refreshCalendarEvents();
       };
       document.getElementById('navClockBtn').onclick = async () => {
         resetGlobalFilters();
@@ -4029,6 +4549,8 @@
       }
     }
     // password generation removed per request
+
+    prepareCalendarSection();
 
     // CSV download (role-scoped)
     const dlBtn = document.getElementById('downloadCsvBtn');
