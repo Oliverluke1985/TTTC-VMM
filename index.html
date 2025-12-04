@@ -959,6 +959,40 @@
       });
     }
 
+    function extractDatePart(value) {
+      if (!value) return '';
+      if (value instanceof Date) {
+        return `${value.getUTCFullYear()}-${pad2(value.getUTCMonth() + 1)}-${pad2(value.getUTCDate())}`;
+      }
+      const str = String(value).trim();
+      const match = str.match(/^(\d{4}-\d{2}-\d{2})/);
+      if (match && match[1]) return match[1];
+      try {
+        const date = new Date(str);
+        if (!Number.isNaN(date.getTime())) {
+          return `${date.getUTCFullYear()}-${pad2(date.getUTCMonth() + 1)}-${pad2(date.getUTCDate())}`;
+        }
+      } catch {}
+      return '';
+    }
+
+    function parseEventDateValue(value) {
+      const datePart = extractDatePart(value);
+      if (!datePart) return null;
+      const iso = `${datePart}T00:00:00Z`;
+      const date = new Date(iso);
+      return Number.isNaN(date.getTime()) ? null : date;
+    }
+
+    function getEventSortTimestamp(event) {
+      const datePart = extractDatePart(event.start_date || event.event_date);
+      if (!datePart) return 0;
+      const time = (event.start_time || '00:00').slice(0, 5) || '00:00';
+      const iso = `${datePart}T${time || '00:00'}Z`;
+      const value = Date.parse(iso);
+      return Number.isNaN(value) ? 0 : value;
+    }
+
     function showCalendarDayEvents(dateKey) {
       const summary = document.getElementById('calendarEventSummary');
       const panel = document.getElementById('calendarEventPanel');
@@ -985,11 +1019,7 @@
       list.className = 'calendar-day-event-picker';
       events
         .slice()
-        .sort((a, b) => {
-          const aStart = new Date(`${a.start_date || a.event_date || ''}T${(a.start_time || '00:00')}`);
-          const bStart = new Date(`${b.start_date || b.event_date || ''}T${(b.start_time || '00:00')}`);
-          return aStart - bStart;
-        })
+        .sort((a, b) => getEventSortTimestamp(a) - getEventSortTimestamp(b))
         .forEach(ev => {
           const btn = document.createElement('button');
           const parts = [];
@@ -1028,13 +1058,14 @@
     }
 
     function formatCalendarDateKey(date) {
-      return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+      if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
+      return `${date.getUTCFullYear()}-${pad2(date.getUTCMonth() + 1)}-${pad2(date.getUTCDate())}`;
     }
 
     function describeEventRange(event) {
       if (!event) return 'Date TBD';
-      const startDate = event.start_date || event.event_date;
-      const endDate = event.end_date || event.start_date || event.event_date;
+      const startDate = extractDatePart(event.start_date || event.event_date);
+      const endDate = extractDatePart(event.end_date || event.start_date || event.event_date);
       const startTime = (event.start_time || '').slice(0, 5);
       const endTime = (event.end_time || '').slice(0, 5);
       if (!startDate) return 'Date TBD';
@@ -1052,17 +1083,16 @@
     function buildCalendarEventsByDay(events = []) {
       const map = {};
       events.forEach(ev => {
-        const startStr = ev.start_date || ev.event_date;
-        if (!startStr) return;
-        let endStr = ev.end_date || ev.start_date || ev.event_date;
-        const start = new Date(`${startStr}T00:00:00`);
-        let end = new Date(`${endStr}T00:00:00`);
-        if (Number.isNaN(start.getTime())) return;
-        if (Number.isNaN(end.getTime()) || end < start) end = new Date(start);
-        for (let cursor = new Date(start); cursor <= end; cursor.setDate(cursor.getDate() + 1)) {
+        const start = parseEventDateValue(ev.start_date || ev.event_date);
+        if (!start) return;
+        let end = parseEventDateValue(ev.end_date || ev.start_date || ev.event_date);
+        if (!end || end < start) end = new Date(start);
+        const cursor = new Date(start.getTime());
+        while (cursor <= end) {
           const key = formatCalendarDateKey(cursor);
           if (!map[key]) map[key] = [];
           map[key].push(ev);
+          cursor.setUTCDate(cursor.getUTCDate() + 1);
         }
       });
       return map;
@@ -1256,9 +1286,9 @@
           const descInput = document.getElementById('calendarEditDescription');
           if (descInput) descInput.value = event.description || '';
           const startDateInput = document.getElementById('calendarEditStartDate');
-          if (startDateInput) startDateInput.value = event.start_date || event.event_date || '';
+          if (startDateInput) startDateInput.value = extractDatePart(event.start_date || event.event_date) || '';
           const endDateInput = document.getElementById('calendarEditEndDate');
-          if (endDateInput) endDateInput.value = event.end_date || event.start_date || event.event_date || '';
+          if (endDateInput) endDateInput.value = extractDatePart(event.end_date || event.start_date || event.event_date) || '';
           const startTimeInput = document.getElementById('calendarEditStartTime');
           if (startTimeInput) startTimeInput.value = (event.start_time || '').slice(0, 5);
           const endTimeInput = document.getElementById('calendarEditEndTime');
