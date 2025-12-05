@@ -960,6 +960,13 @@
       setDutyRestrictionStatus('');
     }
 
+    function autoSelectGroupDropdown(elementId, value) {
+      const el = document.getElementById(elementId);
+      if (!el || !value || el.value) return;
+      el.value = String(value);
+      try { el.dispatchEvent(new Event('change')); } catch { /* ignore */ }
+    }
+
     function showCalendarStatus(message = '', isError = false) {
       const el = document.getElementById('calendarStatus');
       if (!el) return;
@@ -3445,6 +3452,15 @@
              <td>${r.duty_date || ''}</td>`;
           tbody.appendChild(tr);
         });
+        if (role === 'superadmin' && groups.length > 0) {
+          const defaultGroupId = groups[0]?.id;
+          if (defaultGroupId != null) {
+            autoSelectGroupDropdown('superadminOrgPicker', defaultGroupId);
+            autoSelectGroupDropdown('superDutyGroupFilter', defaultGroupId);
+            autoSelectGroupDropdown('superEventGroupFilter', defaultGroupId);
+            autoSelectGroupDropdown('vmOrgPicker', defaultGroupId);
+          }
+        }
       } catch (e) { /* silent */ }
     }
 
