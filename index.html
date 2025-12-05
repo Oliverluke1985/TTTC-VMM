@@ -279,6 +279,15 @@
               <label>End Time</label><input id="calendarEditEndTime" type="time" />
             </div>
           </div>
+          <div class="row" id="calendarColorRow" style="gap:12px; align-items:flex-end">
+            <div class="col" style="flex:0 0 180px">
+              <label>Event Color</label>
+              <input id="calendarEditColor" type="color" value="#118ab2" data-cleared="true" />
+            </div>
+            <div class="col" style="flex:0 0 140px">
+              <button id="calendarClearColorBtn" type="button">Clear Color</button>
+            </div>
+          </div>
           <div id="calendarEditGroupRow" class="row hidden">
             <div class="col">
               <label>Organization</label>
@@ -1014,8 +1023,20 @@
       return Math.abs(hash);
     }
 
+    function normalizeHexColor(value) {
+      if (typeof value !== 'string') return null;
+      const trimmed = value.trim();
+      if (!/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(trimmed)) return null;
+      if (trimmed.length === 4) {
+        return '#' + trimmed.slice(1).split('').map(ch => ch + ch).join('').toLowerCase();
+      }
+      return trimmed.toLowerCase();
+    }
+
     function getEventColor(event) {
       if (!event) return null;
+      const explicit = normalizeHexColor(event.color_hex);
+      if (explicit) return explicit;
       const palette = CALENDAR_EVENT_COLORS;
       if (!Array.isArray(palette) || palette.length === 0) return null;
       const key = event.group_id != null ? `g-${event.group_id}` : `e-${event.id ?? 0}`;
@@ -1023,9 +1044,9 @@
       return palette[idx];
     }
 
-    function hexToRgba(hex, alpha = 0.18) {
+    function hexToRgba(hex, alpha = 0.2) {
       if (typeof hex !== 'string' || !hex.startsWith('#')) return `rgba(53,177,251,${alpha})`;
-      let normalized = hex.slice(1);
+      let normalized = hex.replace('#', '');
       if (normalized.length === 3) {
         normalized = normalized.split('').map(ch => ch + ch).join('');
       }
@@ -1042,7 +1063,30 @@
       const color = getEventColor(event);
       if (!color) return;
       el.style.borderColor = color;
-      el.style.background = hexToRgba(color, 0.2);
+      el.style.background = hexToRgba(color, 0.18);
+    }
+
+    function setCalendarColorInput(event) {
+      const colorInput = document.getElementById('calendarEditColor');
+      const clearBtn = document.getElementById('calendarClearColorBtn');
+      if (!colorInput) return;
+      const existing = normalizeHexColor(event?.color_hex);
+      if (existing) {
+        colorInput.value = existing;
+        colorInput.dataset.cleared = 'false';
+        if (clearBtn) clearBtn.disabled = false;
+      } else {
+        colorInput.value = '#118ab2';
+        colorInput.dataset.cleared = 'true';
+        if (clearBtn) clearBtn.disabled = false;
+      }
+    }
+
+    function readCalendarColorInput() {
+      const colorInput = document.getElementById('calendarEditColor');
+      if (!colorInput) return null;
+      if (colorInput.dataset.cleared === 'true') return null;
+      return normalizeHexColor(colorInput.value) || null;
     }
 
     function getEventSortTimestamp(event) {
@@ -1128,8 +1172,8 @@
       if (!event) return 'Date TBD';
       const startDate = extractDatePart(event.start_date || event.event_date);
       const endDate = extractDatePart(event.end_date || event.start_date || event.event_date);
-      const startTime = (event.start_time || '').slice(0, 5);
-      const endTime = (event.end_time || '').slice(0, 5);
+      const startTime = formatTime12((event.start_time || '').slice(0, 5));
+      const endTime = formatTime12((event.end_time || '').slice(0, 5));
       if (!startDate) return 'Date TBD';
       if (endDate && endDate !== startDate) {
         const first = `${startDate}${startTime ? ` ${startTime}` : ''}`.trim();
@@ -1374,6 +1418,7 @@
           const groupRow = document.getElementById('calendarEditGroupRow');
           if (groupRow) groupRow.classList.toggle('hidden', role !== 'superadmin');
           if (role === 'superadmin') populateCalendarEditGroupSelect(event.group_id);
+          setCalendarColorInput(event);
         }
       }
       const err = document.getElementById('calendarEditError');
@@ -1393,6 +1438,7 @@
         end_date: document.getElementById('calendarEditEndDate')?.value || null,
         start_time: document.getElementById('calendarEditStartTime')?.value || null,
         end_time: document.getElementById('calendarEditEndTime')?.value || null,
+        color_hex: readCalendarColorInput(),
       };
       if (role === 'superadmin') {
         payload.group_id = document.getElementById('calendarEditGroup')?.value || null;
@@ -1481,6 +1527,23 @@
           refreshCalendarEvents();
         });
         groupSel._wired = true;
+      }
+      const colorInput = document.getElementById('calendarEditColor');
+      if (colorInput && !colorInput._wired) {
+        colorInput.addEventListener('input', () => {
+          colorInput.dataset.cleared = 'false';
+        });
+        colorInput._wired = true;
+      }
+      const clearColorBtn = document.getElementById('calendarClearColorBtn');
+      if (clearColorBtn && !clearColorBtn._wired) {
+        clearColorBtn.addEventListener('click', () => {
+          const input = document.getElementById('calendarEditColor');
+          if (!input) return;
+          input.dataset.cleared = 'true';
+          input.value = '#118ab2';
+        });
+        clearColorBtn._wired = true;
       }
       const saveBtn = document.getElementById('calendarSaveEventBtn');
       if (saveBtn && !saveBtn._wired) {
@@ -2348,6 +2411,12 @@
         }
         const res = await authed(path);
         const events = await res.json();
+        try {
+          window.eventById = {};
+          events.forEach(ev => {
+            if (ev && ev.id != null) window.eventById[ev.id] = ev;
+          });
+        } catch { /* ignore */ }
         if (tbody) {
         tbody.innerHTML = '';
         events.forEach(e => {
@@ -2369,13 +2438,15 @@
           // wire actions
           tbody.querySelectorAll('.editEventPrefillBtn').forEach(btn => btn.addEventListener('click', (ev) => {
             const id = Number(ev.currentTarget.getAttribute('data-eid'));
+            const eventData = (window.eventById || {})[id] || {};
             document.getElementById('eventEditWrap').classList.remove('hidden');
             document.getElementById('editEventId').value = String(id);
-            const row = Array.from(ev.currentTarget.closest('tr').children);
-            document.getElementById('editEventTitle').value = row[1].textContent || '';
-            document.getElementById('editEventStart').value = e.start_date || '';
-            document.getElementById('editEventEnd').value = e.end_date || '';
-            document.getElementById('editEventDesc').value = '';
+            document.getElementById('editEventTitle').value = eventData.title || '';
+            document.getElementById('editEventDesc').value = eventData.description || '';
+            document.getElementById('editEventStart').value = eventData.start_date || eventData.event_date || '';
+            document.getElementById('editEventEnd').value = eventData.end_date || eventData.start_date || eventData.event_date || '';
+            document.getElementById('editEventStartTime').value = (eventData.start_time || '').slice(0, 5);
+            document.getElementById('editEventEndTime').value = (eventData.end_time || '').slice(0, 5);
           }));
           tbody.querySelectorAll('.joinBtn').forEach(btn => btn.addEventListener('click', async (ev) => {
             const id = Number(ev.currentTarget.getAttribute('data-eid'));
