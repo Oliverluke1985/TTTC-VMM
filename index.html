@@ -94,14 +94,31 @@
     footer#footer { position: relative; height: 288px; margin-top: auto; border-radius: 0; overflow: hidden; pointer-events: none; margin-left: -24px; margin-right: -24px; width: calc(100% + 48px); }
     footer#footer::before { content: ""; position: absolute; inset: 0; background-image: var(--footer-bg-image); background-position: 50% 78%; background-size: cover; background-repeat: no-repeat; opacity: 0.75; pointer-events: none; }
     @media (max-width: 640px) {
-      body { margin: 14px; overflow-x: hidden; }
-      header, footer#footer { margin-left: -14px; margin-right: -14px; width: calc(100% + 28px); }
+      body { margin: 0; padding: 12px; }
+      header, footer#footer { margin: 0; width: 100%; }
+      nav#toolbar, section, .col { width: 100%; max-width: 100%; box-sizing: border-box; }
       .row { flex-direction: column; gap: 12px; }
       .col { flex: 1 1 100%; min-width: 0; }
-      nav#toolbar { width: 100%; justify-content: flex-start; }
+      nav#toolbar { justify-content: flex-start; flex-wrap: wrap; }
       nav#toolbar button { flex: 1 1 45%; min-width: 140px; }
-      table { display: block; width: 100%; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
-      table thead, table tbody, table tr { display: table; width: 100%; min-width: unset; }
+      #eventsSection, #volMgmtSection, #clockSection { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      #eventsSection table,
+      #volMgmtSection table,
+      #clockSection table { min-width: 540px; }
+      table {
+        display: block;
+        width: 100%;
+        min-width: 540px;
+        max-width: none;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+      table thead { display: table-header-group; }
+      table tbody { display: table-row-group; }
+      table tr { display: table-row; }
+      form, select, input, button, textarea { max-width: 100%; box-sizing: border-box; }
+      #calendarGridWrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      #calendarGridInner { min-width: 540px; }
     }
   </style>
 
@@ -259,16 +276,20 @@
         </div>
       </div>
     </div>
-    <div class="calendar-weekdays">
-      <div>Sun</div>
-      <div>Mon</div>
-      <div>Tue</div>
-      <div>Wed</div>
-      <div>Thu</div>
-      <div>Fri</div>
-      <div>Sat</div>
+    <div id="calendarGridWrap">
+      <div id="calendarGridInner">
+        <div class="calendar-weekdays">
+          <div>Sun</div>
+          <div>Mon</div>
+          <div>Tue</div>
+          <div>Wed</div>
+          <div>Thu</div>
+          <div>Fri</div>
+          <div>Sat</div>
+        </div>
+        <div id="calendarGrid" class="calendar-grid"></div>
+      </div>
     </div>
-    <div id="calendarGrid" class="calendar-grid"></div>
     <div id="calendarStatus" class="hint"></div>
     <div id="calendarEventPanel" class="row hidden">
       <div class="col">
