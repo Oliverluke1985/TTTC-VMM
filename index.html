@@ -34,6 +34,16 @@
     .hint { color: var(--accent2); margin-top: 6px; }
     .ok { color: #0b6; }
     .nowrap { white-space: nowrap; }
+    .optional-field { margin-top: 10px; }
+    .optional-field button { margin: 6px 0; }
+    .optional-field-body { margin-top: 6px; }
+    .ghost-btn {
+      background: transparent;
+      border-style: dashed;
+    }
+    .ghost-btn:hover {
+      background: rgba(255,255,255,0.08);
+    }
     /* Defensive: hide extension popovers/overlays if present */
     *[popover]{display:none!important;visibility:hidden!important;opacity:0!important;}
     #top-layer{display:none!important}
@@ -270,6 +280,13 @@
         <label>End Date</label><input id="eventEnd2" type="date" />
         <label>Start Time</label><input id="eventStartTime2" type="time" />
         <label>End Time</label><input id="eventEndTime2" type="time" />
+        <div class="optional-field">
+          <button id="eventAddressToggle" type="button" class="ghost-btn">Add Event Address</button>
+          <div id="eventAddressField" class="optional-field-body hidden">
+            <label>Event Address</label>
+            <input id="eventAddress" type="text" placeholder="123 Main St, City, ST" />
+          </div>
+        </div>
         <button id="createEventBtn2">Create Event</button>
         <div id="createEventError2" class="error"></div>
       </div>
@@ -284,6 +301,7 @@
         <label>Event ID</label><input id="editEventId" type="number" />
         <label>Title</label><input id="editEventTitle" type="text" />
         <label>Description</label><input id="editEventDesc" type="text" />
+        <label>Address</label><input id="editEventAddress" type="text" />
         <label>Start Date</label><input id="editEventStart" type="date" />
         <label>End Date</label><input id="editEventEnd" type="date" />
         <label>Start Time</label><input id="editEventStartTime" type="time" />
@@ -350,6 +368,7 @@
               <button id="calendarClearColorBtn" type="button">Clear Color</button>
             </div>
           </div>
+              <label>Address</label><input id="calendarEditAddress" type="text" />
           <div id="calendarEditGroupRow" class="row hidden">
             <div class="col">
               <label>Organization</label>
@@ -392,6 +411,13 @@
         </select>
         <label>Max Volunteers (optional)</label>
         <input id="dutyCapacity" type="number" min="1" placeholder="Unlimited" />
+        <div class="optional-field">
+          <button id="dutyLocationToggle" type="button" class="ghost-btn">Add Duty Location</button>
+          <div id="dutyLocationField" class="optional-field-body hidden">
+            <label>Location</label>
+            <input id="dutyLocation" type="text" placeholder="Backstage, Hall B" />
+          </div>
+        </div>
         <button id="createDutyBtn">Create Duty</button>
         <div id="createDutyError" class="error"></div>
       </div>
@@ -403,6 +429,13 @@
         <label>Description</label><input id="volDutyDesc" type="text" />
         <label>Event (optional)</label>
         <select id="volDutyEvent"><option value="">— None —</option></select>
+        <div class="optional-field">
+          <button id="volDutyLocationToggle" type="button" class="ghost-btn">Add Duty Location</button>
+          <div id="volDutyLocationField" class="optional-field-body hidden">
+            <label>Location</label>
+            <input id="volDutyLocation" type="text" placeholder="Lobby, Front Desk" />
+          </div>
+        </div>
         <button id="volCreateDutyBtn">Create Duty</button>
         <div id="volCreateDutyError" class="error"></div>
       </div>
@@ -459,6 +492,13 @@
         </select>
         <label>Max Volunteers (optional)</label>
         <input id="editDutyCapacity" type="number" min="1" placeholder="Unlimited" />
+        <div class="optional-field">
+          <button id="editDutyLocationToggle" type="button" class="ghost-btn">Add Duty Location</button>
+          <div id="editDutyLocationField" class="optional-field-body hidden">
+            <label>Location</label>
+            <input id="editDutyLocation" type="text" placeholder="Backstage, Hall B" />
+          </div>
+        </div>
         <button id="saveDutyBtn">Save Duty</button>
         <div id="editDutyError" class="error"></div>
         <div id="dutyRestrictionsWrap" class="hidden" style="margin-top:16px">
@@ -877,6 +917,7 @@
     };
     let dutyRestrictionVolunteerCache = {};
     let dutyRestrictionState = { currentDutyId: null };
+    const optionalFieldControls = {};
     const DEFAULT_LOGO_URL = 'https://i.postimg.cc/Ght5qLQw/TTTC-Logo-Redesign2.jpg';
     const DEFAULT_HEADER_IMAGE = 'https://i.postimg.cc/t4S6CDjx/cityscape.jpg';
     const DEFAULT_HERO_IMAGE = 'https://i.postimg.cc/gjsftpNw/original-ticket.jpg';
@@ -914,6 +955,35 @@
       if (message) {
         actionStatusTimeout = setTimeout(() => updateStatusMessage('globalStatus',''), 4000);
       }
+    }
+    function setupOptionalFieldToggle({ buttonId, fieldId, inputId, showLabel, hideLabel }) {
+      const button = document.getElementById(buttonId);
+      const field = document.getElementById(fieldId);
+      const input = inputId ? document.getElementById(inputId) : (field ? field.querySelector('input,textarea,select') : null);
+      if (!button || !field) {
+        return {
+          show() {},
+          hide() {},
+          isActive() { return false; },
+        };
+      }
+      const setState = (active) => {
+        field.classList.toggle('hidden', !active);
+        button.textContent = active ? hideLabel : showLabel;
+        button.dataset.active = active ? 'true' : 'false';
+        if (!active && input) input.value = '';
+      };
+      button.addEventListener('click', () => {
+        const next = button.dataset.active !== 'true';
+        setState(next);
+        if (next && input) input.focus();
+      });
+      setState(false);
+      return {
+        show: () => setState(true),
+        hide: () => setState(false),
+        isActive: () => button.dataset.active === 'true',
+      };
     }
     function populateTimeZoneSelect(select, selected) {
       if (!select) return;
@@ -1448,6 +1518,11 @@
       titleRow.appendChild(strong);
       const dateRow = document.createElement('div');
       dateRow.textContent = describeEventRange(event);
+      let addressRow = null;
+      if (event.address) {
+        addressRow = document.createElement('div');
+        addressRow.textContent = `Address: ${event.address}`;
+      }
       const groupRow = document.createElement('div');
       const groupLabel = groupNameById[event.group_id] || (event.group_id ? `Group ${event.group_id}` : 'No organization specified');
       groupRow.textContent = `Organization: ${groupLabel}`;
@@ -1455,6 +1530,7 @@
       descRow.textContent = event.description ? `Notes: ${event.description}` : 'Notes: None provided.';
       summary.appendChild(titleRow);
       summary.appendChild(dateRow);
+      if (addressRow) summary.appendChild(addressRow);
       summary.appendChild(groupRow);
       summary.appendChild(descRow);
     }
@@ -1500,6 +1576,8 @@
           if (startTimeInput) startTimeInput.value = (event.start_time || '').slice(0, 5);
           const endTimeInput = document.getElementById('calendarEditEndTime');
           if (endTimeInput) endTimeInput.value = (event.end_time || '').slice(0, 5);
+          const addressInput = document.getElementById('calendarEditAddress');
+          if (addressInput) addressInput.value = event.address || '';
           const groupRow = document.getElementById('calendarEditGroupRow');
           if (groupRow) groupRow.classList.toggle('hidden', role !== 'superadmin');
           if (role === 'superadmin') populateCalendarEditGroupSelect(event.group_id);
@@ -1523,6 +1601,7 @@
         end_date: document.getElementById('calendarEditEndDate')?.value || null,
         start_time: document.getElementById('calendarEditStartTime')?.value || null,
         end_time: document.getElementById('calendarEditEndTime')?.value || null,
+        address: document.getElementById('calendarEditAddress')?.value.trim() || null,
         color_hex: readCalendarColorInput(),
       };
       if (role === 'superadmin') {
@@ -2531,6 +2610,8 @@
             document.getElementById('editEventId').value = String(id);
             document.getElementById('editEventTitle').value = eventData.title || '';
             document.getElementById('editEventDesc').value = eventData.description || '';
+            const editAddress = document.getElementById('editEventAddress');
+            if (editAddress) editAddress.value = eventData.address || '';
             document.getElementById('editEventStart').value = eventData.start_date || eventData.event_date || '';
             document.getElementById('editEventEnd').value = eventData.end_date || eventData.start_date || eventData.event_date || '';
             document.getElementById('editEventStartTime').value = (eventData.start_time || '').slice(0, 5);
@@ -2919,11 +3000,15 @@
       const end_date = document.getElementById('eventEnd2').value;
       const start_time = document.getElementById('eventStartTime2').value;
       const end_time = document.getElementById('eventEndTime2').value;
+      const addressWrap = document.getElementById('eventAddressField');
+      const address = addressWrap && !addressWrap.classList.contains('hidden')
+        ? document.getElementById('eventAddress').value.trim()
+        : '';
       try {
         const res = await authed('/events', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title, description, start_date, end_date, start_time, end_time, group_id: gid2 })
+          body: JSON.stringify({ title, description, start_date, end_date, start_time, end_time, group_id: gid2, address: address || null })
         });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
@@ -2937,6 +3022,7 @@
         document.getElementById('eventEnd2').value = '';
         document.getElementById('eventStartTime2').value = '';
         document.getElementById('eventEndTime2').value = '';
+        optionalFieldControls.eventAddress?.hide();
         if (grpSel2) grpSel2.value = groupId != null ? String(groupId) : '';
         await fetchEvents();
         await refreshCalendarIfVisible();
@@ -2954,11 +3040,12 @@
       const end_date = document.getElementById('editEventEnd').value;
       const start_time = document.getElementById('editEventStartTime').value;
       const end_time = document.getElementById('editEventEndTime').value;
+      const address = document.getElementById('editEventAddress').value.trim();
       try {
         const res = await authed(`/events/${id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title, description, start_date, end_date, start_time, end_time })
+          body: JSON.stringify({ title, description, start_date, end_date, start_time, end_time, address: address || null })
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) { document.getElementById('editEventError').textContent = data.message || 'Failed to save event'; return; }
@@ -3054,6 +3141,19 @@
           const capInput = document.getElementById('editDutyCapacity');
           const stored = (window.dutyById && window.dutyById[id]) ? window.dutyById[id].max_volunteers : null;
           if (capInput) capInput.value = stored != null ? stored : '';
+          const storedLocation = (window.dutyById && window.dutyById[id]) ? window.dutyById[id].location : '';
+          if (optionalFieldControls.editDutyLocation) {
+            if (storedLocation) {
+              optionalFieldControls.editDutyLocation.show();
+              const locInput = document.getElementById('editDutyLocation');
+              if (locInput) locInput.value = storedLocation;
+            } else {
+              optionalFieldControls.editDutyLocation.hide();
+            }
+          } else {
+            const locInput = document.getElementById('editDutyLocation');
+            if (locInput) locInput.value = storedLocation || '';
+          }
           prepareDutyRestrictionUI(id);
         }));
         // wire delete duty
@@ -3189,6 +3289,19 @@
         const capInput = document.getElementById('editDutyCapacity');
         const stored = (window.dutyById && window.dutyById[id]) ? window.dutyById[id].max_volunteers : null;
         if (capInput) capInput.value = stored != null ? stored : '';
+        const storedLocation = (window.dutyById && window.dutyById[id]) ? window.dutyById[id].location : '';
+        if (optionalFieldControls.editDutyLocation) {
+          if (storedLocation) {
+            optionalFieldControls.editDutyLocation.show();
+            const locInput = document.getElementById('editDutyLocation');
+            if (locInput) locInput.value = storedLocation;
+          } else {
+            optionalFieldControls.editDutyLocation.hide();
+          }
+        } else {
+          const locInput = document.getElementById('editDutyLocation');
+          if (locInput) locInput.value = storedLocation || '';
+        }
         prepareDutyRestrictionUI(id);
         return;
       }
@@ -3201,6 +3314,19 @@
       const capInput = document.getElementById('editDutyCapacity');
       const stored = (window.dutyById && window.dutyById[id]) ? window.dutyById[id].max_volunteers : null;
       if (capInput) capInput.value = stored != null ? stored : '';
+      const storedLocation = (window.dutyById && window.dutyById[id]) ? window.dutyById[id].location : '';
+      if (optionalFieldControls.editDutyLocation) {
+        if (storedLocation) {
+          optionalFieldControls.editDutyLocation.show();
+          const locInput = document.getElementById('editDutyLocation');
+          if (locInput) locInput.value = storedLocation;
+        } else {
+          optionalFieldControls.editDutyLocation.hide();
+        }
+      } else {
+        const locInput = document.getElementById('editDutyLocation');
+        if (locInput) locInput.value = storedLocation || '';
+      }
       prepareDutyRestrictionUI(id);
     });
 
@@ -3308,6 +3434,10 @@
       const status = document.getElementById('dutyStatus').value;
       const capacityInput = document.getElementById('dutyCapacity');
       const rawCapacity = capacityInput?.value?.trim();
+      const dutyLocationWrap = document.getElementById('dutyLocationField');
+      const dutyLocationValue = dutyLocationWrap && !dutyLocationWrap.classList.contains('hidden')
+        ? document.getElementById('dutyLocation').value.trim()
+        : '';
       let max_volunteers = null;
       if (rawCapacity) {
         max_volunteers = Number(rawCapacity);
@@ -3322,7 +3452,7 @@
         const res = await authed('/duties', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title, description, status, group_id, event_id, max_volunteers })
+          body: JSON.stringify({ title, description, status, group_id, event_id, max_volunteers, location: dutyLocationValue || null })
         });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
@@ -3334,6 +3464,7 @@
         document.getElementById('dutyDesc').value = '';
         if (capacityInput) capacityInput.value = '';
         if (eventSel) eventSel.value = '';
+        optionalFieldControls.dutyLocation?.hide();
         // If superadmin, sync the top org filter to the group used so list shows immediately
         if (role === 'superadmin') {
           const topFilter = document.getElementById('superDutyGroupFilter');
@@ -3361,6 +3492,8 @@
       const status = document.getElementById('editDutyStatus').value;
       const capacityInput = document.getElementById('editDutyCapacity');
       const rawCapacity = capacityInput?.value?.trim();
+      const editLocationInput = document.getElementById('editDutyLocation');
+      const location = editLocationInput ? editLocationInput.value.trim() : '';
       let max_volunteers = null;
       if (rawCapacity !== undefined) {
         if (rawCapacity === '') {
@@ -3378,7 +3511,7 @@
         const res = await authed(`/duties/${id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title, description, status, max_volunteers })
+          body: JSON.stringify({ title, description, status, max_volunteers, location: location || null })
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) { document.getElementById('editDutyError').textContent = data.message || 'Failed to save duty'; return; }
@@ -3419,11 +3552,15 @@
       const description = document.getElementById('volDutyDesc').value.trim();
       const eventSel = document.getElementById('volDutyEvent');
       const event_id = eventSel && eventSel.value ? Number(eventSel.value) : null;
+      const volLocationWrap = document.getElementById('volDutyLocationField');
+      const volDutyLocationValue = volLocationWrap && !volLocationWrap.classList.contains('hidden')
+        ? document.getElementById('volDutyLocation').value.trim()
+        : '';
       try {
         const res = await authed('/duties', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title, description, event_id })
+          body: JSON.stringify({ title, description, event_id, location: volDutyLocationValue || null })
         });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
@@ -3434,6 +3571,7 @@
         document.getElementById('volDutyTitle').value = '';
         document.getElementById('volDutyDesc').value = '';
         if (eventSel) eventSel.value = '';
+        optionalFieldControls.volDutyLocation?.hide();
         fetchDuties();
       } catch {
         document.getElementById('volCreateDutyError').textContent = 'Error creating duty';
@@ -4173,6 +4311,35 @@
           : 'Hide Organization Branding';
       });
     }
+
+    optionalFieldControls.eventAddress = setupOptionalFieldToggle({
+      buttonId: 'eventAddressToggle',
+      fieldId: 'eventAddressField',
+      inputId: 'eventAddress',
+      showLabel: 'Add Event Address',
+      hideLabel: 'Remove Event Address',
+    });
+    optionalFieldControls.dutyLocation = setupOptionalFieldToggle({
+      buttonId: 'dutyLocationToggle',
+      fieldId: 'dutyLocationField',
+      inputId: 'dutyLocation',
+      showLabel: 'Add Duty Location',
+      hideLabel: 'Remove Duty Location',
+    });
+    optionalFieldControls.volDutyLocation = setupOptionalFieldToggle({
+      buttonId: 'volDutyLocationToggle',
+      fieldId: 'volDutyLocationField',
+      inputId: 'volDutyLocation',
+      showLabel: 'Add Duty Location',
+      hideLabel: 'Remove Duty Location',
+    });
+    optionalFieldControls.editDutyLocation = setupOptionalFieldToggle({
+      buttonId: 'editDutyLocationToggle',
+      fieldId: 'editDutyLocationField',
+      inputId: 'editDutyLocation',
+      showLabel: 'Add Duty Location',
+      hideLabel: 'Remove Duty Location',
+    });
 
     // (Per-user theming removed)
 

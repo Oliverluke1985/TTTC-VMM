@@ -130,6 +130,9 @@ async function ensureTimeTrackingConstraints() {
     await pool.query(
       'ALTER TABLE IF EXISTS duties ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP NULL'
     );
+    await pool.query(
+      'ALTER TABLE IF EXISTS duties ADD COLUMN IF NOT EXISTS location TEXT NULL'
+    );
     // Soft-archive support for events
     await pool.query(
       'ALTER TABLE IF EXISTS events ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP NULL'
@@ -150,6 +153,9 @@ async function ensureTimeTrackingConstraints() {
     );
     await pool.query(
       'ALTER TABLE IF EXISTS events ADD COLUMN IF NOT EXISTS color_hex TEXT'
+    );
+    await pool.query(
+      'ALTER TABLE IF EXISTS events ADD COLUMN IF NOT EXISTS address TEXT NULL'
     );
     // Time tracking duty_date ensure
     await pool.query(
@@ -1068,13 +1074,13 @@ app.get('/events', authRequired, async (req, res) => {
 
 app.post('/events', authRequired, adminOnly, async (req, res) => {
   try {
-    const { title, description, event_date, start_date, end_date, start_time, end_time, color_hex } = req.body || {};
+    const { title, description, event_date, start_date, end_date, start_time, end_time, color_hex, address } = req.body || {};
     let { group_id } = req.body || {};
     if (!group_id) group_id = req.user.group_id || null;
     if (!group_id) return res.status(400).json({ message: 'Group is required for events' });
     const result = await pool.query(
-      'INSERT INTO events (title,description,event_date,start_date,end_date,start_time,end_time,color_hex,group_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id',
-      [title, description ?? null, event_date ?? null, start_date ?? null, end_date ?? null, start_time ?? null, end_time ?? null, color_hex ?? null, group_id]
+      'INSERT INTO events (title,description,event_date,start_date,end_date,start_time,end_time,color_hex,address,group_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id',
+      [title, description ?? null, event_date ?? null, start_date ?? null, end_date ?? null, start_time ?? null, end_time ?? null, color_hex ?? null, address ?? null, group_id]
     );
     res.json({ id: result.rows[0].id });
   } catch (err) {
@@ -1087,7 +1093,7 @@ app.patch('/events/:id', authRequired, adminOnly, async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (!Number.isFinite(id)) return res.status(400).json({ message: 'Invalid id' });
-    const { title, description, event_date, start_date, end_date, start_time, end_time, group_id, color_hex } = req.body || {};
+    const { title, description, event_date, start_date, end_date, start_time, end_time, group_id, color_hex, address } = req.body || {};
     const setClauses = [];
     const params = [];
     let idx = 1;
@@ -1099,6 +1105,7 @@ app.patch('/events/:id', authRequired, adminOnly, async (req, res) => {
     if (start_time !== undefined) { setClauses.push(`start_time = $${idx++}`); params.push(start_time); }
     if (end_time !== undefined) { setClauses.push(`end_time = $${idx++}`); params.push(end_time); }
     if (color_hex !== undefined) { setClauses.push(`color_hex = $${idx++}`); params.push(color_hex ?? null); }
+    if (address !== undefined) { setClauses.push(`address = $${idx++}`); params.push(address ?? null); }
     if (group_id !== undefined) { setClauses.push(`group_id = $${idx++}`); params.push(group_id); }
     if (setClauses.length === 0) return res.json({ id });
     let result;
@@ -1299,7 +1306,7 @@ app.get('/duties', authRequired, async (req, res) => {
 
 app.post('/duties', authRequired, async (req, res) => {
   try {
-    const { title, description, status, group_id, event_id, max_volunteers } = req.body || {};
+    const { title, description, status, group_id, event_id, max_volunteers, location } = req.body || {};
     let targetGroupId = group_id ?? null;
     if (isAdmin(req.user)) {
       targetGroupId = (targetGroupId ?? req.user.group_id ?? null);
@@ -1340,6 +1347,7 @@ app.post('/duties', authRequired, async (req, res) => {
     if (has.has('group_id')) { fields.push('group_id'); params.push(`$${idx++}`); values.push(targetGroupId); }
     if (has.has('event_id')) { fields.push('event_id'); params.push(`$${idx++}`); values.push(event_id ?? null); }
     if (has.has('max_volunteers')) { fields.push('max_volunteers'); params.push(`$${idx++}`); values.push(maxVol); }
+    if (has.has('location')) { fields.push('location'); params.push(`$${idx++}`); values.push(location ?? null); }
 
     const sql = `INSERT INTO duties (${fields.join(',')}) VALUES (${params.join(',')}) RETURNING id`;
     const result = await pool.query(sql, values);
@@ -1354,7 +1362,7 @@ app.patch('/duties/:id', authRequired, async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (!Number.isFinite(id)) return res.status(400).json({ message: 'Invalid id' });
-    const { title, description, status, event_id, group_id, max_volunteers } = req.body || {};
+    const { title, description, status, event_id, group_id, max_volunteers, location } = req.body || {};
     // Only admins/superadmins can edit duties broadly; volunteers can only edit their own created duty's title/description
     const isAdminish = isAdmin(req.user);
     const colsRes = await pool.query("SELECT column_name FROM information_schema.columns WHERE table_name='duties'");
@@ -1387,6 +1395,9 @@ app.patch('/duties/:id', authRequired, async (req, res) => {
         normalized = Math.floor(normalized);
       }
       setClauses.push(`max_volunteers=$${idx++}`); params.push(normalized);
+    }
+    if (location !== undefined && has.has('location')) {
+      setClauses.push(`location=$${idx++}`); params.push(location ?? null);
     }
     if (setClauses.length === 0) return res.json({ id });
 
