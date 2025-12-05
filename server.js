@@ -194,6 +194,7 @@ async function ensureTimeTrackingConstraints() {
          group_id INTEGER PRIMARY KEY REFERENCES groups(id) ON DELETE CASCADE,
          logo_url TEXT,
          banner_url TEXT,
+         hero_url TEXT,
          footer_url TEXT,
          primary_color TEXT,
          text_color TEXT,
@@ -208,6 +209,9 @@ async function ensureTimeTrackingConstraints() {
          banner_blob BYTEA,
          banner_blob_type TEXT,
          banner_blob_updated_at TIMESTAMP,
+         hero_blob BYTEA,
+         hero_blob_type TEXT,
+         hero_blob_updated_at TIMESTAMP,
          footer_blob BYTEA,
          footer_blob_type TEXT,
          footer_blob_updated_at TIMESTAMP,
@@ -220,6 +224,10 @@ async function ensureTimeTrackingConstraints() {
     await pool.query(`ALTER TABLE IF EXISTS group_branding ADD COLUMN IF NOT EXISTS banner_blob BYTEA`);
     await pool.query(`ALTER TABLE IF EXISTS group_branding ADD COLUMN IF NOT EXISTS banner_blob_type TEXT`);
     await pool.query(`ALTER TABLE IF EXISTS group_branding ADD COLUMN IF NOT EXISTS banner_blob_updated_at TIMESTAMP`);
+    await pool.query(`ALTER TABLE IF EXISTS group_branding ADD COLUMN IF NOT EXISTS hero_url TEXT`);
+    await pool.query(`ALTER TABLE IF EXISTS group_branding ADD COLUMN IF NOT EXISTS hero_blob BYTEA`);
+    await pool.query(`ALTER TABLE IF EXISTS group_branding ADD COLUMN IF NOT EXISTS hero_blob_type TEXT`);
+    await pool.query(`ALTER TABLE IF EXISTS group_branding ADD COLUMN IF NOT EXISTS hero_blob_updated_at TIMESTAMP`);
     await pool.query(`ALTER TABLE IF EXISTS group_branding ADD COLUMN IF NOT EXISTS footer_blob BYTEA`);
     await pool.query(`ALTER TABLE IF EXISTS group_branding ADD COLUMN IF NOT EXISTS footer_blob_type TEXT`);
     await pool.query(`ALTER TABLE IF EXISTS group_branding ADD COLUMN IF NOT EXISTS footer_blob_updated_at TIMESTAMP`);
@@ -546,7 +554,7 @@ app.get('/config', (req, res) => {
   });
 });
 
-const BRANDING_COLUMNS = ['logo_url','banner_url','footer_url','primary_color','text_color','accent1','accent2','accent3','accent4','accent5'];
+const BRANDING_COLUMNS = ['logo_url','banner_url','hero_url','footer_url','primary_color','text_color','accent1','accent2','accent3','accent4','accent5'];
 
 app.get('/branding', authRequired, async (req, res) => {
   try {
@@ -557,14 +565,17 @@ app.get('/branding', authRequired, async (req, res) => {
         SELECT ${BRANDING_COLUMNS.join(', ')},
                logo_has_blob,
                banner_has_blob,
+               hero_has_blob,
                footer_has_blob,
                logo_blob_updated_at,
                banner_blob_updated_at,
+               hero_blob_updated_at,
                footer_blob_updated_at
         FROM (
           SELECT *,
                  (logo_blob IS NOT NULL) AS logo_has_blob,
                  (banner_blob IS NOT NULL) AS banner_has_blob,
+                 (hero_blob IS NOT NULL) AS hero_has_blob,
                  (footer_blob IS NOT NULL) AS footer_has_blob
           FROM group_branding
         ) gb
@@ -577,6 +588,7 @@ app.get('/branding', authRequired, async (req, res) => {
     const branding = {
       logo_url: row.logo_url,
       banner_url: row.banner_url,
+      hero_url: row.hero_url,
       footer_url: row.footer_url,
       primary_color: row.primary_color,
       text_color: row.text_color,
@@ -592,6 +604,9 @@ app.get('/branding', authRequired, async (req, res) => {
     }
     if (row.banner_has_blob) {
       branding.banner_url = `/branding/assets/banner?group_id=${targetGroupId}${versionSuffix(row.banner_blob_updated_at)}`;
+    }
+    if (row.hero_has_blob) {
+      branding.hero_url = `/branding/assets/hero?group_id=${targetGroupId}${versionSuffix(row.hero_blob_updated_at)}`;
     }
     if (row.footer_has_blob) {
       branding.footer_url = `/branding/assets/footer?group_id=${targetGroupId}${versionSuffix(row.footer_blob_updated_at)}`;
@@ -1819,6 +1834,7 @@ function getBrandingAssetColumn(target) {
   const map = {
     logo: { blob: 'logo_blob', type: 'logo_blob_type', updated: 'logo_blob_updated_at', urlKey: 'logo_url' },
     banner: { blob: 'banner_blob', type: 'banner_blob_type', updated: 'banner_blob_updated_at', urlKey: 'banner_url' },
+    hero: { blob: 'hero_blob', type: 'hero_blob_type', updated: 'hero_blob_updated_at', urlKey: 'hero_url' },
     footer: { blob: 'footer_blob', type: 'footer_blob_type', updated: 'footer_blob_updated_at', urlKey: 'footer_url' }
   };
   return map[target] || null;

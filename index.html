@@ -511,6 +511,9 @@
         <label>Banner Image URL</label>
         <input id="brandingBannerUrl" type="url" placeholder="https://example.com/banner.jpg" />
         <input id="brandingBannerFile" type="file" accept="image/png,image/jpeg,image/webp" />
+        <label>Welcome Image URL</label>
+        <input id="brandingHeroUrl" type="url" placeholder="https://example.com/welcome.jpg" />
+        <input id="brandingHeroFile" type="file" accept="image/png,image/jpeg,image/webp" />
         <label>Footer Image URL</label>
         <input id="brandingFooterUrl" type="url" placeholder="https://example.com/footer.jpg" />
         <input id="brandingFooterFile" type="file" accept="image/png,image/jpeg,image/webp" />
@@ -1706,7 +1709,7 @@
       root.style.setProperty('--accent5', theme.accent5 || defaultBranding.accent5);
       const bannerImage = (branding && branding.banner_url) || defaultBranding.banner_url || DEFAULT_HEADER_IMAGE;
       root.style.setProperty('--header-bg-image', `url('${bannerImage}')`);
-      const heroImage = (branding && branding.banner_url) || defaultBranding.hero_image || DEFAULT_HERO_IMAGE;
+      const heroImage = (branding && branding.hero_url) || defaultBranding.hero_image || DEFAULT_HERO_IMAGE;
       const heroEl = document.getElementById('homeHero');
       if (heroEl) heroEl.src = heroImage;
       const footerImage = (branding && branding.footer_url) || defaultBranding.footer_url || DEFAULT_FOOTER_IMAGE;
@@ -1752,6 +1755,7 @@
       };
       assign('brandingLogoUrl', branding?.logo_url || '');
       assign('brandingBannerUrl', branding?.banner_url || '');
+      assign('brandingHeroUrl', branding?.hero_url || '');
       assign('brandingFooterUrl', branding?.footer_url || '');
       assignColor('brandingPrimaryColor', branding?.primary_color, defaultBranding.primary_color || '#000000');
       assignColor('brandingTextColor', branding?.text_color, defaultBranding.text_color || '#ffffff');
@@ -1768,6 +1772,7 @@
       return {
         logo_url: clean('brandingLogoUrl') || null,
         banner_url: clean('brandingBannerUrl') || null,
+        hero_url: clean('brandingHeroUrl') || null,
         footer_url: clean('brandingFooterUrl') || null,
         primary_color: colorVal('brandingPrimaryColor'),
         text_color: colorVal('brandingTextColor'),
@@ -1793,6 +1798,7 @@
       const pairs = [
         { inputId: 'brandingLogoFile', target: 'logo' },
         { inputId: 'brandingBannerFile', target: 'banner' },
+        { inputId: 'brandingHeroFile', target: 'hero' },
         { inputId: 'brandingFooterFile', target: 'footer' },
       ];
       pairs.forEach(({ inputId, target }) => {
