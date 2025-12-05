@@ -112,6 +112,38 @@
         padding: 6px 4px;
         word-break: break-word;
       }
+      .stacked-table {
+        border: none;
+      }
+      .stacked-table thead {
+        display: none;
+      }
+      .stacked-table,
+      .stacked-table tbody,
+      .stacked-table tr,
+      .stacked-table td {
+        display: block;
+        width: 100%;
+      }
+      .stacked-table tr {
+        border: 1px solid var(--accent3);
+        border-radius: 10px;
+        padding: 10px;
+        margin-bottom: 12px;
+        background: rgba(0,0,0,0.35);
+      }
+      .stacked-table td {
+        border: none;
+        padding: 6px 0;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .stacked-table td::before {
+        content: attr(data-label);
+        font-weight: 600;
+        color: var(--accent2);
+      }
       form, select, input, button, textarea { width: 100%; max-width: 100%; box-sizing: border-box; }
       input[type="date"],
       input[type="time"],
@@ -190,7 +222,7 @@
       <div class="row">
         <div class="col">
           <h3>Volunteer Timesheet</h3>
-          <table>
+          <table class="stacked-table">
             <thead><tr><th>ID</th><th>Duty</th><th>Start</th><th>End</th><th>Hours</th><th>Date</th><th>Save</th><th>Delete</th></tr></thead>
             <tbody id="clockAdminTimeList"></tbody>
           </table>
@@ -208,7 +240,7 @@
 
     <div id="clockTimesWrap">
       <h3>My Timesheet</h3>
-      <table>
+      <table class="stacked-table">
         <thead><tr><th>ID</th><th>Duty</th><th>Start</th><th>End</th><th>Hours</th><th>Date</th></tr></thead>
         <tbody id="timeList"></tbody>
       </table>
@@ -772,7 +804,7 @@
     <div class="row" id="vmLogsRow">
       <div class="col">
         <h3>Selected Volunteer Logs</h3>
-    <table>
+    <table class="stacked-table">
       <thead><tr><th>ID</th><th>Duty</th><th>Start</th><th>End</th><th>Hours</th><th>Date</th></tr></thead>
           <tbody id="vmLogList"></tbody>
     </table>
@@ -2787,13 +2819,14 @@
           timeEntryTimeZoneById[r.id] = tz;
           const dutyLabel = formatDutyLabel(r.duty_id);
           tr.innerHTML =
-            `<td>${r.id}</td><td>${dutyLabel}</td>
-             <td><input type="datetime-local" id="clock-start-${r.id}" value="${formatDateTimeLocal(r.start_time, tz)}"></td>
-             <td><input type="datetime-local" id="clock-end-${r.id}" value="${formatDateTimeLocal(r.end_time, tz)}"></td>
-             <td>${hours}</td>
-             <td><input type="date" id="clock-date-${r.id}" value="${formatDateLocal(r.duty_date)}"></td>
-             <td><button data-tid="${r.id}" class="clockSaveBtn">Save</button></td>
-             <td><button data-tid="${r.id}" class="clockDeleteBtn" style="color:#b00020">Delete</button></td>`;
+            `<td data-label="ID">${r.id}</td>
+             <td data-label="Duty">${dutyLabel}</td>
+             <td data-label="Start"><input type="datetime-local" id="clock-start-${r.id}" value="${formatDateTimeLocal(r.start_time, tz)}"></td>
+             <td data-label="End"><input type="datetime-local" id="clock-end-${r.id}" value="${formatDateTimeLocal(r.end_time, tz)}"></td>
+             <td data-label="Hours">${hours}</td>
+             <td data-label="Date"><input type="date" id="clock-date-${r.id}" value="${formatDateLocal(r.duty_date)}"></td>
+             <td data-label="Save"><button data-tid="${r.id}" class="clockSaveBtn">Save</button></td>
+             <td data-label="Delete"><button data-tid="${r.id}" class="clockDeleteBtn" style="color:#b00020">Delete</button></td>`;
           tbody.appendChild(tr);
         });
         tbody.querySelectorAll('.clockSaveBtn').forEach(btn => {
@@ -3469,11 +3502,12 @@
           const endDisplay = formatDisplayDateTime(r.end_time, tz);
           const dutyLabel = formatDutyLabel(r.duty_id);
           tr.innerHTML =
-            `<td>${r.id}</td><td>${dutyLabel}</td>
-             <td class="nowrap">${startDisplay}</td>
-             <td class="nowrap">${endDisplay}</td>
-             <td>${hours}</td>
-             <td>${r.duty_date || ''}</td>`;
+            `<td data-label="ID">${r.id}</td>
+             <td data-label="Duty">${dutyLabel}</td>
+             <td data-label="Start" class="nowrap">${startDisplay}</td>
+             <td data-label="End" class="nowrap">${endDisplay}</td>
+             <td data-label="Hours">${hours}</td>
+             <td data-label="Date">${r.duty_date || ''}</td>`;
           tbody.appendChild(tr);
         });
         if (role === 'superadmin' && groups.length > 0) {
@@ -3867,7 +3901,13 @@
       logs.forEach(r => {
         const tr = document.createElement('tr');
         const hours = (r.duration_hours != null ? Number(r.duration_hours).toFixed(2) : '');
-        tr.innerHTML = `<td>${r.id}</td><td>${formatDutyLabel(r.duty_id)}</td><td>${formatDisplayDateTime(r.start_time, tz)}</td><td>${formatDisplayDateTime(r.end_time, tz)}</td><td>${hours}</td><td>${r.duty_date || ''}</td>`;
+        tr.innerHTML =
+          `<td data-label="ID">${r.id}</td>
+           <td data-label="Duty">${formatDutyLabel(r.duty_id)}</td>
+           <td data-label="Start">${formatDisplayDateTime(r.start_time, tz)}</td>
+           <td data-label="End">${formatDisplayDateTime(r.end_time, tz)}</td>
+           <td data-label="Hours">${hours}</td>
+           <td data-label="Date">${r.duty_date || ''}</td>`;
         tbody.appendChild(tr);
       });
     }
