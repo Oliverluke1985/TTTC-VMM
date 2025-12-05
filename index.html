@@ -967,6 +967,14 @@
       try { el.dispatchEvent(new Event('change')); } catch { /* ignore */ }
     }
 
+    function formatDutyLabel(dutyId) {
+      if (!dutyId) return '';
+      const dutyMap = window.dutyById || {};
+      const duty = dutyMap[dutyId];
+      if (duty && duty.title) return `${dutyId} — ${duty.title}`;
+      return String(dutyId);
+    }
+
     function showCalendarStatus(message = '', isError = false) {
       const el = document.getElementById('calendarStatus');
       if (!el) return;
@@ -2763,8 +2771,9 @@
           const tr = document.createElement('tr');
           const hours = (r.duration_hours != null ? Number(r.duration_hours).toFixed(2) : '');
           timeEntryTimeZoneById[r.id] = tz;
+          const dutyLabel = formatDutyLabel(r.duty_id);
           tr.innerHTML =
-            `<td>${r.id}</td><td>${r.duty_id || ''}</td>
+            `<td>${r.id}</td><td>${dutyLabel}</td>
              <td><input type="datetime-local" id="clock-start-${r.id}" value="${formatDateTimeLocal(r.start_time, tz)}"></td>
              <td><input type="datetime-local" id="clock-end-${r.id}" value="${formatDateTimeLocal(r.end_time, tz)}"></td>
              <td>${hours}</td>
@@ -3444,8 +3453,9 @@
           const tz = getVolunteerTimeZone(r.volunteer_id || userId);
           const startDisplay = formatDisplayDateTime(r.start_time, tz);
           const endDisplay = formatDisplayDateTime(r.end_time, tz);
+          const dutyLabel = formatDutyLabel(r.duty_id);
           tr.innerHTML =
-            `<td>${r.id}</td><td>${r.duty_id || ''}</td>
+            `<td>${r.id}</td><td>${dutyLabel}</td>
              <td class="nowrap">${startDisplay}</td>
              <td class="nowrap">${endDisplay}</td>
              <td>${hours}</td>
@@ -3843,7 +3853,7 @@
       logs.forEach(r => {
         const tr = document.createElement('tr');
         const hours = (r.duration_hours != null ? Number(r.duration_hours).toFixed(2) : '');
-        tr.innerHTML = `<td>${r.id}</td><td>${r.duty_id || ''}</td><td>${formatDisplayDateTime(r.start_time, tz)}</td><td>${formatDisplayDateTime(r.end_time, tz)}</td><td>${hours}</td><td>${r.duty_date || ''}</td>`;
+        tr.innerHTML = `<td>${r.id}</td><td>${formatDutyLabel(r.duty_id)}</td><td>${formatDisplayDateTime(r.start_time, tz)}</td><td>${formatDisplayDateTime(r.end_time, tz)}</td><td>${hours}</td><td>${r.duty_date || ''}</td>`;
         tbody.appendChild(tr);
       });
     }
@@ -3918,8 +3928,9 @@
           const tz = getVolunteerTimeZone(r.volunteer_id);
           timeEntryTimeZoneById[r.id] = tz;
           const volunteerLabel = formatVolunteerLabel(r);
+          const dutyLabel = formatDutyLabel(r.duty_id);
           tr.innerHTML =
-            `<td>${r.id}</td><td>${volunteerLabel}</td><td>${r.duty_id || ''}</td>
+            `<td>${r.id}</td><td>${volunteerLabel}</td><td>${dutyLabel}</td>
              <td><input type="datetime-local" id="start-${r.id}" value="${formatDateTimeLocal(r.start_time, tz)}"></td>
              <td><input type="datetime-local" id="end-${r.id}" value="${formatDateTimeLocal(r.end_time, tz)}"></td>
              <td>${hours}</td>
