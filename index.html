@@ -93,6 +93,14 @@
     /* Footer background image */
     footer#footer { position: relative; height: 288px; margin-top: auto; border-radius: 0; overflow: hidden; pointer-events: none; margin-left: -24px; margin-right: -24px; width: calc(100% + 48px); }
     footer#footer::before { content: ""; position: absolute; inset: 0; background-image: var(--footer-bg-image); background-position: 50% 78%; background-size: cover; background-repeat: no-repeat; opacity: 0.75; pointer-events: none; }
+    @media (max-width: 640px) {
+      body { margin: 16px; }
+      .row { flex-direction: column; }
+      .col { flex: 1 1 100%; min-width: 0; }
+      nav#toolbar { width: 100%; }
+      table { display: block; width: 100%; overflow-x: auto; }
+      table thead, table tbody, table tr { width: max-content; min-width: 520px; }
+    }
   </style>
 
   <!-- Strip any tracking params like ?utm_source=... to avoid parser oddities -->
