@@ -4121,9 +4121,11 @@
     wireBrandingFileInputs();
     const brandingToggleBtn = document.getElementById('brandingToggleBtn');
     const brandingSettings = document.getElementById('brandingSettings');
+    const brandingToggleRow = document.getElementById('brandingToggleRow');
     if (brandingToggleBtn && brandingSettings) {
       brandingToggleBtn.addEventListener('click', () => {
         brandingSettings.classList.toggle('hidden');
+        if (brandingToggleRow) brandingToggleRow.classList.remove('hidden');
         brandingToggleBtn.textContent = brandingSettings.classList.contains('hidden')
           ? 'Show Organization Branding'
           : 'Hide Organization Branding';
@@ -4244,10 +4246,13 @@
       const brandingToggleBtn = document.getElementById('brandingToggleBtn');
       if (brandingWrap) {
         const shouldShow = currentRole === 'admin';
-        brandingWrap.classList.toggle('hidden', !shouldShow);
-        if (brandingToggleRow) brandingToggleRow.classList.toggle('hidden', !shouldShow);
-        if (brandingToggleBtn) {
-          brandingToggleBtn.textContent = brandingWrap.classList.contains('hidden') ? 'Show Organization Branding' : 'Hide Organization Branding';
+        if (shouldShow) {
+          brandingWrap.classList.add('hidden');
+          if (brandingToggleRow) brandingToggleRow.classList.remove('hidden');
+          if (brandingToggleBtn) brandingToggleBtn.textContent = 'Show Organization Branding';
+        } else {
+          brandingWrap.classList.add('hidden');
+          if (brandingToggleRow) brandingToggleRow.classList.add('hidden');
         }
       }
       const templatePanel = document.getElementById('dutyTemplatePanel');
