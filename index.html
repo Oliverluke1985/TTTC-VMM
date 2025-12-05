@@ -105,7 +105,6 @@
       table {
         width: 100%;
         max-width: 100%;
-        table-layout: fixed;
         font-size: 13px;
       }
       table th, table td {
@@ -120,7 +119,6 @@
         display: block;
       }
       #calendarGridWrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-      #calendarGridInner { min-width: 520px; }
     }
   </style>
 
@@ -278,20 +276,16 @@
         </div>
       </div>
     </div>
-    <div id="calendarGridWrap">
-      <div id="calendarGridInner">
-        <div class="calendar-weekdays">
-          <div>Sun</div>
-          <div>Mon</div>
-          <div>Tue</div>
-          <div>Wed</div>
-          <div>Thu</div>
-          <div>Fri</div>
-          <div>Sat</div>
-        </div>
-        <div id="calendarGrid" class="calendar-grid"></div>
-      </div>
+    <div class="calendar-weekdays">
+      <div>Sun</div>
+      <div>Mon</div>
+      <div>Tue</div>
+      <div>Wed</div>
+      <div>Thu</div>
+      <div>Fri</div>
+      <div>Sat</div>
     </div>
+    <div id="calendarGrid" class="calendar-grid"></div>
     <div id="calendarStatus" class="hint"></div>
     <div id="calendarEventPanel" class="row hidden">
       <div class="col">
