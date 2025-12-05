@@ -501,6 +501,11 @@
         <div id="accountInfoError" class="error"></div>
       </div>
     </div>
+    <div class="row hidden" id="brandingToggleRow">
+      <div class="col">
+        <button id="brandingToggleBtn" type="button">Show Organization Branding</button>
+      </div>
+    </div>
     <div id="brandingSettings" class="row hidden">
       <div class="col">
         <h3 id="brandingHeader">Organization Branding</h3>
@@ -4113,6 +4118,16 @@
       }
     });
     wireBrandingFileInputs();
+    const brandingToggleBtn = document.getElementById('brandingToggleBtn');
+    const brandingSettings = document.getElementById('brandingSettings');
+    if (brandingToggleBtn && brandingSettings) {
+      brandingToggleBtn.addEventListener('click', () => {
+        brandingSettings.classList.toggle('hidden');
+        brandingToggleBtn.textContent = brandingSettings.classList.contains('hidden')
+          ? 'Show Organization Branding'
+          : 'Hide Organization Branding';
+      });
+    }
 
     // (Per-user theming removed)
 
@@ -4224,7 +4239,17 @@
       const isVolunteer = currentRole === 'volunteer';
       const isAdminish = currentRole === 'admin' || currentRole === 'superadmin';
       const brandingWrap = document.getElementById('brandingSettings');
-      if (brandingWrap) brandingWrap.classList.toggle('hidden', currentRole !== 'admin');
+      const brandingWrap = document.getElementById('brandingSettings');
+      const brandingToggleRow = document.getElementById('brandingToggleRow');
+      const brandingToggleBtn = document.getElementById('brandingToggleBtn');
+      if (brandingWrap) {
+        const shouldShow = currentRole === 'admin';
+        brandingWrap.classList.toggle('hidden', !shouldShow);
+        if (brandingToggleRow) brandingToggleRow.classList.toggle('hidden', !shouldShow);
+        if (brandingToggleBtn) {
+          brandingToggleBtn.textContent = brandingWrap.classList.contains('hidden') ? 'Show Organization Branding' : 'Hide Organization Branding';
+        }
+      }
       const templatePanel = document.getElementById('dutyTemplatePanel');
       if (templatePanel) templatePanel.classList.toggle('hidden', !isAdminish);
       const templateGroupRow = document.getElementById('dutyTemplateGroupRow');
