@@ -95,6 +95,26 @@
     .calendar-day-event-picker { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
     .calendar-day-event-picker button { width: 100%; text-align: left; border-radius: 8px; border: 1px solid var(--accent2); background: rgba(2,137,219,0.15); color: var(--text); padding: 6px 8px; }
     .calendar-day-event-picker button:hover { background: rgba(2,137,219,0.3); }
+    .calendar-day-schedule { margin-top: 18px; padding: 16px; border: 1px solid var(--accent3); border-radius: 12px; background: rgba(0,0,0,0.2); }
+    .calendar-day-schedule-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
+    .calendar-day-schedule-header strong { font-size: 16px; }
+    .calendar-day-schedule-meta { font-size: 13px; color: var(--accent5); margin-top: 2px; }
+    .calendar-day-schedule-controls { display: flex; gap: 8px; }
+    .calendar-day-schedule-controls button { margin: 0; }
+    .calendar-day-schedule-body { min-height: 60px; }
+    .calendar-schedule-columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+    .calendar-schedule-column { border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; background: rgba(255,255,255,0.04); padding: 10px; display: flex; flex-direction: column; gap: 10px; }
+    .calendar-schedule-column.is-focused { box-shadow: 0 0 0 2px rgba(53,177,251,0.4); }
+    .calendar-schedule-column-header { font-weight: 600; font-size: 14px; display: flex; flex-direction: column; gap: 2px; border-left: 4px solid var(--accent1); padding-left: 8px; }
+    .calendar-schedule-column-header span { font-weight: 400; font-size: 12px; color: var(--accent5); }
+    .calendar-schedule-duty { border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; padding: 8px; background: rgba(0,0,0,0.18); }
+    .calendar-schedule-duty h4 { margin: 0 0 6px; font-size: 13px; font-weight: 600; }
+    .calendar-schedule-duty-location { font-size: 12px; color: var(--accent5); margin-bottom: 6px; }
+    .calendar-schedule-assignment { border-left: 4px solid var(--accent1); padding-left: 6px; margin-bottom: 6px; border-radius: 4px; background: rgba(255,255,255,0.05); }
+    .calendar-schedule-assignment:last-child { margin-bottom: 0; }
+    .calendar-schedule-assignment-name { font-weight: 600; font-size: 13px; }
+    .calendar-schedule-assignment-time { font-size: 12px; color: var(--accent5); }
+    .calendar-day-schedule-empty { padding: 8px; font-size: 13px; color: var(--accent5); }
 
     /* Home section tweaks */
     #homeSection { max-width: 640px; margin: 0 auto 16px; text-align: center; flex: 0 1 640px; }
@@ -381,6 +401,20 @@
             <button id="calendarDeleteEventBtn" type="button" style="margin-left:8px;color:#b00020">Delete</button>
           </div>
           <div id="calendarEditError" class="error"></div>
+        </div>
+        <div id="calendarDaySchedule" class="calendar-day-schedule hidden">
+          <div class="calendar-day-schedule-header">
+            <div>
+              <strong id="calendarDayScheduleTitle">Selected Day</strong>
+              <div id="calendarDayScheduleMeta" class="calendar-day-schedule-meta"></div>
+            </div>
+            <div class="calendar-day-schedule-controls">
+              <button id="calendarDayScheduleRefresh" type="button">Refresh</button>
+            </div>
+          </div>
+          <div id="calendarDayScheduleBody" class="calendar-day-schedule-body">
+            <div class="hint">Select a day to view volunteer assignments.</div>
+          </div>
         </div>
       </div>
     </div>
@@ -914,6 +948,9 @@
       selectedEventId: null,
       lastStatusIsError: false,
       needsRefresh: true,
+      activeDateKey: null,
+      scheduleCache: {},
+      scheduleFocusEventId: null,
     };
     let dutyRestrictionVolunteerCache = {};
     let dutyRestrictionState = { currentDutyId: null };
@@ -1213,6 +1250,187 @@
       return `rgba(${r},${g},${b},${alpha})`;
     }
 
+    function getCalendarScheduleGroupId() {
+      if (role === 'superadmin') {
+        const sel = document.getElementById('calendarGroupFilter');
+        return sel && sel.value ? Number(sel.value) : null;
+      }
+      return groupId != null ? Number(groupId) : null;
+    }
+
+    function hideCalendarDaySchedule() {
+      const wrap = document.getElementById('calendarDaySchedule');
+      const body = document.getElementById('calendarDayScheduleBody');
+      if (wrap) wrap.classList.add('hidden');
+      if (body) body.innerHTML = '<div class="hint">Select a day to view volunteer assignments.</div>';
+      calendarState.activeDateKey = null;
+    }
+
+    function clearCalendarSchedule(options = {}) {
+      calendarState.scheduleCache = {};
+      if (options.hide) hideCalendarDaySchedule();
+    }
+
+    function setCalendarScheduleLoading(isLoading) {
+      if (!isLoading) return;
+      const body = document.getElementById('calendarDayScheduleBody');
+      if (body) body.innerHTML = '<div class="hint">Loading volunteers…</div>';
+    }
+
+    function formatScheduleTimeRange(startIso, endIso, tz, fallbackDate) {
+      if (!startIso && !endIso) return fallbackDate || 'Time TBD';
+      try {
+        const fmt = new Intl.DateTimeFormat(undefined, {
+          timeZone: tz || activeTimeZone,
+          hour: 'numeric',
+          minute: '2-digit'
+        });
+        const startLabel = startIso ? fmt.format(new Date(startIso)) : null;
+        const endLabel = endIso ? fmt.format(new Date(endIso)) : null;
+        if (startLabel && endLabel) return `${startLabel} – ${endLabel}`;
+        return startLabel || endLabel || fallbackDate || 'Time TBD';
+      } catch {
+        return fallbackDate || 'Time TBD';
+      }
+    }
+
+    function buildScheduleAssignmentHtml(assign, color, tz) {
+      const timeLabel = formatScheduleTimeRange(assign.start_time, assign.end_time, tz, assign.duty_date);
+      const styleParts = [];
+      if (color) {
+        styleParts.push(`border-left-color:${color}`);
+        styleParts.push(`background:${hexToRgba(color, 0.18)}`);
+      }
+      const styleAttr = styleParts.length ? ` style="${styleParts.join(';')}"` : '';
+      const youLabel = (assign.volunteer_id != null && assign.volunteer_id === userId) ? ' (You)' : '';
+      return `<div class="calendar-schedule-assignment"${styleAttr}>
+        <div class="calendar-schedule-assignment-name">${assign.volunteer_name || 'Volunteer'}${youLabel}</div>
+        <div class="calendar-schedule-assignment-time">${timeLabel}</div>
+      </div>`;
+    }
+
+    function buildScheduleDutyHtml(dutyEntry, color, tz) {
+      const assignments = Array.isArray(dutyEntry.assignments) ? dutyEntry.assignments : [];
+      const assignmentsHtml = assignments.length
+        ? assignments.map(assign => buildScheduleAssignmentHtml(assign, color, tz)).join('')
+        : '<div class="calendar-day-schedule-empty">No volunteers assigned.</div>';
+      const locationRow = dutyEntry.location ? `<div class="calendar-schedule-duty-location">${dutyEntry.location}</div>` : '';
+      return `<div class="calendar-schedule-duty">
+        <h4>${dutyEntry.title || 'Duty'}</h4>
+        ${locationRow}
+        ${assignmentsHtml}
+      </div>`;
+    }
+
+    function buildScheduleColumnHtml(eventEntry, focusEventId) {
+      const firstDutyId = eventEntry?.duties?.[0]?.id;
+      const color = getEventColor({
+        id: eventEntry.event_id || (firstDutyId ? `duty-${firstDutyId}` : undefined),
+        group_id: eventEntry.group_id,
+        color_hex: eventEntry.color_hex
+      });
+      const columnClasses = ['calendar-schedule-column'];
+      if (focusEventId && eventEntry.event_id && Number(eventEntry.event_id) === Number(focusEventId)) {
+        columnClasses.push('is-focused');
+      }
+      const orgName = (eventEntry.group_id != null && groupNameById[eventEntry.group_id])
+        ? groupNameById[eventEntry.group_id]
+        : null;
+      const tz = getGroupTimeZone(eventEntry.group_id);
+      const duties = Array.isArray(eventEntry.duties) ? eventEntry.duties : [];
+      const dutiesHtml = duties.length
+        ? duties.map(duty => buildScheduleDutyHtml(duty, color, tz)).join('')
+        : '<div class="calendar-day-schedule-empty">No duties scheduled.</div>';
+      const metaLabel = orgName || eventEntry.address || '';
+      const metaHtml = metaLabel ? `<span>${metaLabel}</span>` : '';
+      const headerStyle = color ? ` style="border-left-color:${color}"` : '';
+      return `<div class="${columnClasses.join(' ')}">
+        <div class="calendar-schedule-column-header"${headerStyle}>
+          <div>${eventEntry.title || 'Event'}</div>
+          ${metaHtml}
+        </div>
+        ${dutiesHtml}
+      </div>`;
+    }
+
+    function renderCalendarDaySchedule(dateKey) {
+      const wrap = document.getElementById('calendarDaySchedule');
+      const body = document.getElementById('calendarDayScheduleBody');
+      const title = document.getElementById('calendarDayScheduleTitle');
+      const meta = document.getElementById('calendarDayScheduleMeta');
+      if (!wrap || !body) return;
+      wrap.classList.remove('hidden');
+      if (title) title.textContent = formatDateKeyToReadable(dateKey) || 'Selected Day';
+      if (meta) {
+        meta.textContent = role === 'volunteer'
+          ? 'Showing your scheduled duties.'
+          : 'Showing scheduled volunteers for this day.';
+      }
+      const data = calendarState.scheduleCache?.[dateKey];
+      if (!data || !Array.isArray(data.events) || data.events.length === 0) {
+        body.innerHTML = '<div class="calendar-day-schedule-empty">No scheduled duties for this date.</div>';
+        return;
+      }
+      const focusId = calendarState.scheduleFocusEventId || calendarState.selectedEventId || null;
+      const columns = data.events.map(ev => buildScheduleColumnHtml(ev, focusId)).join('');
+      body.innerHTML = `<div class="calendar-schedule-columns">${columns}</div>`;
+    }
+
+    async function loadCalendarDaySchedule(dateKey, options = {}) {
+      const { force = false } = options || {};
+      const wrap = document.getElementById('calendarDaySchedule');
+      const body = document.getElementById('calendarDayScheduleBody');
+      const title = document.getElementById('calendarDayScheduleTitle');
+      const meta = document.getElementById('calendarDayScheduleMeta');
+      if (!wrap || !body) return;
+      calendarState.activeDateKey = dateKey || null;
+      wrap.classList.remove('hidden');
+      if (title) title.textContent = formatDateKeyToReadable(dateKey) || 'Selected Day';
+      if (meta) {
+        meta.textContent = role === 'volunteer'
+          ? 'Showing your scheduled duties.'
+          : 'Showing scheduled volunteers for this day.';
+      }
+      if (!dateKey) {
+        body.innerHTML = '<div class="hint">Select a day to view volunteer assignments.</div>';
+        return;
+      }
+      const groupFilter = getCalendarScheduleGroupId();
+      if (role === 'superadmin' && !groupFilter) {
+        body.innerHTML = '<div class="hint">Select an organization above to view volunteers.</div>';
+        return;
+      }
+      if (!force && calendarState.scheduleCache?.[dateKey]) {
+        renderCalendarDaySchedule(dateKey);
+        return;
+      }
+      setCalendarScheduleLoading(true);
+      try {
+        const params = new URLSearchParams({ date: dateKey });
+        if (role === 'superadmin' && groupFilter) params.set('group_id', groupFilter);
+        const res = await authed(`/calendar/assignments?${params.toString()}`);
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.message || 'Failed to load schedule');
+        calendarState.scheduleCache[dateKey] = data;
+        renderCalendarDaySchedule(dateKey);
+      } catch (err) {
+        body.innerHTML = `<div class="error">${err?.message || 'Failed to load schedule.'}</div>`;
+      }
+    }
+
+    function invalidateCalendarSchedule(dateKey, options = {}) {
+      const { refresh = false } = options || {};
+      if (!calendarState.scheduleCache) calendarState.scheduleCache = {};
+      if (dateKey) {
+        delete calendarState.scheduleCache[dateKey];
+        if (refresh && calendarState.activeDateKey === dateKey) {
+          loadCalendarDaySchedule(dateKey, { force: true });
+        }
+      } else {
+        calendarState.scheduleCache = {};
+      }
+    }
+
     function applyEventColorStyles(el, event) {
       if (!el) return;
       const color = getEventColor(event);
@@ -1260,6 +1478,9 @@
       const events = calendarState.eventsByDate[dateKey] || [];
       panel.classList.remove('hidden');
       calendarState.selectedEventId = null;
+      calendarState.scheduleFocusEventId = null;
+      calendarState.activeDateKey = dateKey;
+      loadCalendarDaySchedule(dateKey);
       summary.innerHTML = '';
       const header = document.createElement('div');
       header.innerHTML = `<strong>${formatDateKeyToReadable(dateKey) || 'Selected Day'}</strong>`;
@@ -1305,6 +1526,7 @@
 
     function resetCalendarView() {
       calendarState.selectedEventId = null;
+      calendarState.scheduleFocusEventId = null;
       const panel = document.getElementById('calendarEventPanel');
       if (panel) panel.classList.add('hidden');
       const summary = document.getElementById('calendarEventSummary');
@@ -1316,6 +1538,7 @@
       }
       const err = document.getElementById('calendarEditError');
       if (err) err.textContent = '';
+      hideCalendarDaySchedule();
     }
 
     function formatCalendarDateKey(date) {
@@ -1586,6 +1809,13 @@
       }
       const err = document.getElementById('calendarEditError');
       if (err) err.textContent = '';
+      calendarState.scheduleFocusEventId = Number(event.id) || null;
+      if (calendarState.activeDateKey) {
+        renderCalendarDaySchedule(calendarState.activeDateKey);
+      } else {
+        const inferredDate = extractDatePart(event.start_date || event.event_date);
+        if (inferredDate) loadCalendarDaySchedule(inferredDate);
+      }
     }
 
     async function saveCalendarEventEdits() {
@@ -1688,6 +1918,7 @@
       if (groupSel && !groupSel._wired) {
         groupSel.addEventListener('change', () => {
           if (role !== 'superadmin') return;
+          clearCalendarSchedule({ hide: true });
           refreshCalendarEvents();
         });
         groupSel._wired = true;
@@ -1723,6 +1954,17 @@
       if (deleteBtn && !deleteBtn._wired) {
         deleteBtn.addEventListener('click', deleteCalendarEvent);
         deleteBtn._wired = true;
+      }
+      const scheduleRefreshBtn = document.getElementById('calendarDayScheduleRefresh');
+      if (scheduleRefreshBtn && !scheduleRefreshBtn._wired) {
+        scheduleRefreshBtn.addEventListener('click', () => {
+          if (calendarState.activeDateKey) {
+            loadCalendarDaySchedule(calendarState.activeDateKey, { force: true });
+          } else {
+            loadCalendarDaySchedule(null);
+          }
+        });
+        scheduleRefreshBtn._wired = true;
       }
       renderCalendar();
     }
@@ -3589,6 +3831,11 @@
         if (res.ok) {
           updateStatusMessage('clockActionMsg', 'Clocked in.');
           fetchTimeTracking();
+          if (dutyDate) {
+            invalidateCalendarSchedule(dutyDate, { refresh: true });
+          } else {
+            invalidateCalendarSchedule(null);
+          }
         } else {
           const data = await res.json().catch(() => ({}));
           updateStatusMessage('clockActionMsg', data.message || 'Failed to clock in', true);
@@ -3606,6 +3853,7 @@
         if (res.ok) {
           updateStatusMessage('clockActionMsg', 'Clocked out.');
           fetchTimeTracking();
+          invalidateCalendarSchedule(calendarState.activeDateKey, { refresh: true });
         } else {
           const data = await res.json().catch(() => ({}));
           updateStatusMessage('clockActionMsg', data.message || 'Failed to clock out', true);
@@ -4159,7 +4407,13 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
-        if (res.ok) { fetchAdminTimes(); fetchTimeTracking(); fetchApprovals(); showActionStatus('Time entry saved.'); }
+        if (res.ok) {
+          fetchAdminTimes();
+          fetchTimeTracking();
+          fetchApprovals();
+          showActionStatus('Time entry saved.');
+          invalidateCalendarSchedule(calendarState.activeDateKey, { refresh: true });
+        }
         else {
           const data = await res.json().catch(() => ({}));
           alert(data.message || 'Failed to save');
@@ -4171,7 +4425,13 @@
       if (!confirm('Delete this time log?')) return;
       try {
         const res = await authed(`/time-tracking/${id}`, { method: 'DELETE' });
-        if (res.ok) { fetchAdminTimes(); fetchTimeTracking(); fetchApprovals(); showActionStatus('Time entry deleted.'); }
+        if (res.ok) {
+          fetchAdminTimes();
+          fetchTimeTracking();
+          fetchApprovals();
+          showActionStatus('Time entry deleted.');
+          invalidateCalendarSchedule(calendarState.activeDateKey, { refresh: true });
+        }
         else {
           const data = await res.json().catch(() => ({}));
           alert(data.message || 'Failed to delete');
@@ -4198,6 +4458,7 @@
           await refreshClockAdminTimes();
           await fetchApprovals();
           showActionStatus('Volunteer time saved.');
+          invalidateCalendarSchedule(calendarState.activeDateKey, { refresh: true });
         } else {
           const data = await res.json().catch(() => ({}));
           alert(data.message || 'Failed to save');
@@ -4213,6 +4474,7 @@
           await refreshClockAdminTimes();
           await fetchApprovals();
           showActionStatus('Volunteer time deleted.');
+          invalidateCalendarSchedule(calendarState.activeDateKey, { refresh: true });
         } else {
           const data = await res.json().catch(() => ({}));
           alert(data.message || 'Failed to delete');
@@ -4924,6 +5186,7 @@
               if (!res.ok) { if (err) err.textContent = data.message || 'Failed to add time'; updateStatusMessage('vmTimeStatus','',false); return; }
               await fetchTimeTracking();
               await refreshVolunteerLogs();
+        if (duty_date) invalidateCalendarSchedule(duty_date, { refresh: true });
               updateStatusMessage('vmTimeStatus', 'Clocked in.');
             } catch {
               if (err) err.textContent = 'Error adding time';

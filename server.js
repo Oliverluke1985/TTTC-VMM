@@ -1573,6 +1573,138 @@ app.get('/time-tracking.csv', authRequired, async (req, res) => {
   }
 });
 
+// Calendar-friendly schedule snapshot for a single date
+app.get('/calendar/assignments', authRequired, async (req, res) => {
+  try {
+    await ensureDutyDateColumn();
+    const rawDate = String(req.query.date || '').trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+      return res.status(400).json({ message: 'A date parameter in YYYY-MM-DD format is required.' });
+    }
+
+    const params = [rawDate];
+    const where = ['t.duty_date = $1'];
+    let idx = 2;
+    let scopedGroupId = null;
+
+    if (req.user.role === 'volunteer') {
+      where.push(`t.volunteer_id = $${idx++}`);
+      params.push(req.user.id);
+    } else if (req.user.role === 'admin') {
+      const gid = Number(req.user.group_id);
+      if (!Number.isFinite(gid)) {
+        return res.status(400).json({ message: 'Admins must belong to an organization to view schedules.' });
+      }
+      where.push(`d.group_id = $${idx++}`);
+      params.push(gid);
+      scopedGroupId = gid;
+    } else if (req.user.role === 'superadmin') {
+      const gid = Number(req.query.group_id);
+      if (!Number.isFinite(gid)) {
+        return res.status(400).json({ message: 'Select an organization to view volunteer schedules.' });
+      }
+      where.push(`d.group_id = $${idx++}`);
+      params.push(gid);
+      scopedGroupId = gid;
+    } else {
+      return res.status(403).json({ message: 'Unsupported role for schedule view.' });
+    }
+
+    const sql = `
+      SELECT
+        t.id AS time_tracking_id,
+        t.volunteer_id,
+        COALESCE(u.name, p.name, u.email, 'Volunteer #' || u.id::text) AS volunteer_name,
+        u.email AS volunteer_email,
+        t.start_time,
+        t.end_time,
+        t.duty_date,
+        d.id AS duty_id,
+        d.title AS duty_title,
+        d.location AS duty_location,
+        d.max_volunteers,
+        d.group_id,
+        e.id AS event_id,
+        e.title AS event_title,
+        e.color_hex AS event_color_hex,
+        e.start_date AS event_start_date,
+        e.end_date AS event_end_date,
+        e.start_time AS event_start_time,
+        e.end_time AS event_end_time,
+        e.address AS event_address
+      FROM time_tracking t
+      JOIN duties d ON d.id = t.duty_id
+      LEFT JOIN events e ON e.id = d.event_id
+      LEFT JOIN users u ON u.id = t.volunteer_id
+      LEFT JOIN user_profile p ON p.user_id = u.id
+      WHERE ${where.join(' AND ')}
+      ORDER BY
+        COALESCE(t.start_time, (t.duty_date::timestamp)),
+        e.title NULLS LAST,
+        d.title,
+        volunteer_name
+    `;
+
+    const rows = (await pool.query(sql, params)).rows;
+    const events = [];
+    const eventMap = new Map();
+
+    rows.forEach(row => {
+      const eventKey = row.event_id ? `event-${row.event_id}` : `duty-${row.duty_id}`;
+      let eventEntry = eventMap.get(eventKey);
+      if (!eventEntry) {
+        eventEntry = {
+          event_id: row.event_id,
+          title: row.event_title || row.duty_title || 'Untitled Event',
+          color_hex: row.event_color_hex || null,
+          group_id: row.group_id,
+          start_date: row.event_start_date,
+          end_date: row.event_end_date,
+          start_time: row.event_start_time,
+          end_time: row.event_end_time,
+          address: row.event_address || null,
+          duties: [],
+        };
+        eventMap.set(eventKey, eventEntry);
+        events.push(eventEntry);
+      }
+      let dutyEntry = eventEntry.duties.find(d => d.id === row.duty_id);
+      if (!dutyEntry) {
+        dutyEntry = {
+          id: row.duty_id,
+          title: row.duty_title,
+          location: row.duty_location || null,
+          max_volunteers: row.max_volunteers,
+          assignments: [],
+        };
+        eventEntry.duties.push(dutyEntry);
+      }
+      dutyEntry.assignments.push({
+        time_tracking_id: row.time_tracking_id,
+        volunteer_id: row.volunteer_id,
+        volunteer_name: row.volunteer_name || row.volunteer_email || (row.volunteer_id ? `Volunteer #${row.volunteer_id}` : 'Volunteer'),
+        volunteer_email: row.volunteer_email || null,
+        start_time: row.start_time,
+        end_time: row.end_time,
+        duty_date: row.duty_date,
+      });
+    });
+
+    if (scopedGroupId == null && rows.length && rows[0].group_id != null) {
+      scopedGroupId = rows[0].group_id;
+    }
+
+    res.json({
+      date: rawDate,
+      group_id: scopedGroupId,
+      events,
+      total_assignments: rows.length,
+    });
+  } catch (err) {
+    res.status(500).json({ message: err?.message || 'Failed to load calendar assignments' });
+  }
+});
+
 // Edit a time log (admin/superadmin)
 app.patch('/time-tracking/:id', authRequired, async (req, res) => {
   if (!isAdmin(req.user)) return res.status(403).json({ message: 'Admins only' });
