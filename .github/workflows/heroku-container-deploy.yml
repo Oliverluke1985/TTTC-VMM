@@ -66,6 +66,9 @@ jobs:
 
       - name: Release container on Heroku (retry)
         uses: nick-fields/retry@v3
+        env:
+          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+          HEROKU_EMAIL: ${{ secrets.HEROKU_EMAIL }}
         with:
           timeout_minutes: 10
           max_attempts: 4
