@@ -253,7 +253,7 @@
         <div class="col">
           <h3>Volunteer Timesheet</h3>
           <table class="stacked-table">
-            <thead><tr><th>ID</th><th>Duty</th><th>Start</th><th>End</th><th>Hours</th><th>Date</th><th>Save</th><th>Delete</th></tr></thead>
+            <thead><tr><th>ID</th><th>Event</th><th>Duty</th><th>Start</th><th>End</th><th>Hours</th><th>Date</th><th>Save</th><th>Delete</th></tr></thead>
             <tbody id="clockAdminTimeList"></tbody>
           </table>
           <div id="clockAdminEmpty" class="hint"></div>
@@ -271,7 +271,7 @@
     <div id="clockTimesWrap">
       <h3>My Timesheet</h3>
       <table class="stacked-table">
-        <thead><tr><th>ID</th><th>Duty</th><th>Start</th><th>End</th><th>Hours</th><th>Date</th></tr></thead>
+        <thead><tr><th>ID</th><th>Event</th><th>Duty</th><th>Start</th><th>End</th><th>Hours</th><th>Date</th></tr></thead>
         <tbody id="timeList"></tbody>
       </table>
     </div>
@@ -752,7 +752,7 @@
     <h3>All Time Logs (By Organization)</h3>
     <table>
       <thead>
-        <tr><th>ID</th><th>Volunteer</th><th>Duty</th><th>Start</th><th>End</th><th>Hours</th><th>Date</th><th>Edit</th><th>Delete</th></tr>
+        <tr><th>ID</th><th>Volunteer</th><th>Event</th><th>Duty</th><th>Start</th><th>End</th><th>Hours</th><th>Date</th><th>Edit</th><th>Delete</th></tr>
       </thead>
       <tbody id="superAdminTimeList"></tbody>
     </table>
@@ -818,7 +818,7 @@
     <h3>All Time Logs (Scoped to Org)</h3>
     <table>
       <thead>
-        <tr><th>ID</th><th>Volunteer</th><th>Duty</th><th>Start</th><th>End</th><th>Hours</th><th>Date</th><th>Edit</th><th>Delete</th></tr>
+        <tr><th>ID</th><th>Volunteer</th><th>Event</th><th>Duty</th><th>Start</th><th>End</th><th>Hours</th><th>Date</th><th>Edit</th><th>Delete</th></tr>
       </thead>
       <tbody id="adminTimeList"></tbody>
     </table>
@@ -1063,21 +1063,66 @@
       if (source) return `${source} (#${id})`;
       return `#${id}`;
     }
+    function mapDateParts(parts = []) {
+      return parts.reduce((acc, part) => {
+        if (part.type && part.type !== 'literal') acc[part.type] = part.value;
+        return acc;
+      }, {});
+    }
     function convertUtcToLocalInput(iso, tz) {
       if (!iso) return '';
       try {
-        const date = new Date(iso);
-        const tzDate = new Date(date.toLocaleString('en-US', { timeZone: tz || activeTimeZone }));
-        return `${tzDate.getFullYear()}-${pad2(tzDate.getMonth()+1)}-${pad2(tzDate.getDate())}T${pad2(tzDate.getHours())}:${pad2(tzDate.getMinutes())}`;
+        const formatter = new Intl.DateTimeFormat('en-CA', {
+          timeZone: tz || activeTimeZone,
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false
+        });
+        const parts = mapDateParts(formatter.formatToParts(new Date(iso)));
+        if (!parts.year || !parts.month || !parts.day || !parts.hour || !parts.minute) return iso;
+        return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
       } catch {
         return iso;
       }
     }
     function convertLocalInputToUtc(value, tz) {
       if (!value) return null;
-      const localDate = new Date(value);
-      if (Number.isNaN(localDate.getTime())) return null;
-      return localDate.toISOString();
+      const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(value);
+      if (!match) return null;
+      const [ , yearStr, monthStr, dayStr, hourStr, minuteStr ] = match;
+      const year = Number(yearStr);
+      const month = Number(monthStr);
+      const day = Number(dayStr);
+      const hour = Number(hourStr);
+      const minute = Number(minuteStr);
+      if ([year, month, day, hour, minute].some(n => Number.isNaN(n))) return null;
+      const targetLocalMs = Date.UTC(year, month - 1, day, hour, minute);
+      const timeZone = tz || activeTimeZone;
+      const formatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone: timeZone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      });
+      let utcMs = targetLocalMs;
+      let iterations = 0;
+      const maxIterations = 5;
+      while (iterations < maxIterations) {
+        const parts = mapDateParts(formatter.formatToParts(new Date(utcMs)));
+        if (!parts.year || !parts.month || !parts.day || !parts.hour || !parts.minute) break;
+        const renderedLocalMs = Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day), Number(parts.hour), Number(parts.minute));
+        const diff = renderedLocalMs - targetLocalMs;
+        if (diff === 0) break;
+        utcMs -= diff;
+        iterations += 1;
+      }
+      return new Date(utcMs).toISOString();
     }
     function formatDisplayDateTime(iso, tz) {
       if (!iso) return '';
@@ -1117,12 +1162,37 @@
       try { el.dispatchEvent(new Event('change')); } catch { /* ignore */ }
     }
 
-    function formatDutyLabel(dutyId) {
+    function formatDutyLabel(dutyId, fallbackTitle) {
       if (!dutyId) return '';
       const dutyMap = window.dutyById || {};
       const duty = dutyMap[dutyId];
-      if (duty && duty.title) return `${dutyId} — ${duty.title}`;
-      return String(dutyId);
+      const title = fallbackTitle || (duty && duty.title);
+      if (title) return `${dutyId} — ${title}`;
+      return `Duty #${dutyId}`;
+    }
+
+    function formatEventLabel(eventId, fallbackTitle) {
+      if (!eventId && !fallbackTitle) return '';
+      if (eventId && fallbackTitle) return `${eventId} — ${fallbackTitle}`;
+      if (fallbackTitle) return fallbackTitle;
+      return `Event #${eventId}`;
+    }
+
+    function describeAssignment(row = {}) {
+      const dutyId = row.duty_id ?? null;
+      const dutyMap = window.dutyById || {};
+      const dutyMeta = dutyMap[dutyId] || {};
+      const eventMap = window.eventById || {};
+      const resolvedEventId = row.resolved_event_id ?? row.event_id ?? row.duty_event_id ?? dutyMeta.event_id ?? null;
+      const dutyLabel = formatDutyLabel(dutyId, row.duty_title || dutyMeta.title);
+      let eventTitle = row.event_title;
+      if (!eventTitle && resolvedEventId && eventMap[resolvedEventId]?.title) {
+        eventTitle = eventMap[resolvedEventId].title;
+      } else if (!eventTitle && dutyMeta.event_title) {
+        eventTitle = dutyMeta.event_title;
+      }
+      const eventLabel = formatEventLabel(resolvedEventId, eventTitle);
+      return { dutyLabel, eventLabel };
     }
 
     function showCalendarStatus(message = '', isError = false) {
@@ -3140,10 +3210,11 @@
           const tr = document.createElement('tr');
           const hours = (r.duration_hours != null ? Number(r.duration_hours).toFixed(2) : '');
           timeEntryTimeZoneById[r.id] = tz;
-          const dutyLabel = formatDutyLabel(r.duty_id);
+          const assignment = describeAssignment(r);
           tr.innerHTML =
             `<td data-label="ID">${r.id}</td>
-             <td data-label="Duty">${dutyLabel}</td>
+             <td data-label="Event">${assignment.eventLabel || '-'}</td>
+             <td data-label="Duty">${assignment.dutyLabel || '-'}</td>
              <td data-label="Start"><input type="datetime-local" id="clock-start-${r.id}" value="${formatDateTimeLocal(r.start_time, tz)}"></td>
              <td data-label="End"><input type="datetime-local" id="clock-end-${r.id}" value="${formatDateTimeLocal(r.end_time, tz)}"></td>
              <td data-label="Hours">${hours}</td>
@@ -3886,10 +3957,11 @@
           const tz = getVolunteerTimeZone(r.volunteer_id || userId);
           const startDisplay = formatDisplayDateTime(r.start_time, tz);
           const endDisplay = formatDisplayDateTime(r.end_time, tz);
-          const dutyLabel = formatDutyLabel(r.duty_id);
+          const assignment = describeAssignment(r);
           tr.innerHTML =
             `<td data-label="ID">${r.id}</td>
-             <td data-label="Duty">${dutyLabel}</td>
+             <td data-label="Event">${assignment.eventLabel || '-'}</td>
+             <td data-label="Duty">${assignment.dutyLabel || '-'}</td>
              <td data-label="Start" class="nowrap">${startDisplay}</td>
              <td data-label="End" class="nowrap">${endDisplay}</td>
              <td data-label="Hours">${hours}</td>
@@ -4368,9 +4440,9 @@
           const tz = getVolunteerTimeZone(r.volunteer_id);
           timeEntryTimeZoneById[r.id] = tz;
           const volunteerLabel = formatVolunteerLabel(r);
-          const dutyLabel = formatDutyLabel(r.duty_id);
+          const assignment = describeAssignment(r);
           tr.innerHTML =
-            `<td>${r.id}</td><td>${volunteerLabel}</td><td>${dutyLabel}</td>
+            `<td>${r.id}</td><td>${volunteerLabel}</td><td>${assignment.eventLabel || '-'}</td><td>${assignment.dutyLabel || '-'}</td>
              <td><input type="datetime-local" id="start-${r.id}" value="${formatDateTimeLocal(r.start_time, tz)}"></td>
              <td><input type="datetime-local" id="end-${r.id}" value="${formatDateTimeLocal(r.end_time, tz)}"></td>
              <td>${hours}</td>

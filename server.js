@@ -78,6 +78,20 @@ async function ensureDurationHoursColumn() {
   }
 }
 
+let ensuredTimeTrackingEventColumn = false;
+async function ensureTimeTrackingEventColumn() {
+  if (ensuredTimeTrackingEventColumn) return;
+  try {
+    await pool.query(`
+      ALTER TABLE IF EXISTS time_tracking
+      ADD COLUMN IF NOT EXISTS event_id INTEGER REFERENCES events(id) ON DELETE SET NULL
+    `);
+    ensuredTimeTrackingEventColumn = true;
+  } catch (err) {
+    console.error('Failed ensuring time_tracking.event_id column:', err?.message || err);
+  }
+}
+
 let ensuredTimeTrackingConstraints = false;
 async function ensureTimeTrackingConstraints() {
   if (ensuredTimeTrackingConstraints) return;
@@ -161,6 +175,10 @@ async function ensureTimeTrackingConstraints() {
     await pool.query(
       'ALTER TABLE IF EXISTS time_tracking ADD COLUMN IF NOT EXISTS duty_date DATE NULL'
     );
+    await pool.query(
+      'ALTER TABLE IF EXISTS time_tracking ADD COLUMN IF NOT EXISTS event_id INTEGER REFERENCES events(id) ON DELETE SET NULL'
+    );
+    ensuredTimeTrackingEventColumn = true;
     // Archive orphan duties that have no event
     try {
       await pool.query("UPDATE duties SET archived_at = COALESCE(archived_at, NOW()) WHERE event_id IS NULL");
@@ -1432,11 +1450,13 @@ app.post('/duties/:id/time/start', authRequired, async (req, res) => {
     await ensureDutyDateColumn();
     await ensureDurationHoursColumn();
     await ensureTimeTrackingConstraints();
+    await ensureTimeTrackingEventColumn();
     const dutyId = Number(req.params.id);
     if (!Number.isFinite(dutyId)) return res.status(400).json({ message: 'Invalid duty id' });
-    const dutyRes = await pool.query('SELECT max_volunteers FROM duties WHERE id=$1 AND archived_at IS NULL', [dutyId]);
+    const dutyRes = await pool.query('SELECT max_volunteers, event_id FROM duties WHERE id=$1 AND archived_at IS NULL', [dutyId]);
     if (dutyRes.rowCount === 0) return res.status(404).json({ message: 'Duty not found' });
     const maxVol = dutyRes.rows[0].max_volunteers;
+    const dutyEventId = dutyRes.rows[0].event_id || null;
     if (maxVol != null && Number.isFinite(Number(maxVol)) && Number(maxVol) > 0) {
       const activeRes = await pool.query('SELECT COUNT(*) FROM time_tracking WHERE duty_id=$1 AND end_time IS NULL', [dutyId]);
       const activeCount = Number(activeRes.rows[0].count || 0);
@@ -1446,8 +1466,8 @@ app.post('/duties/:id/time/start', authRequired, async (req, res) => {
     }
     const { duty_date } = req.body;
     const result = await pool.query(
-      'INSERT INTO time_tracking (volunteer_id,duty_id,start_time,duty_date) VALUES ($1,$2,NOW(),$3) RETURNING id',
-      [req.user.id, dutyId, duty_date]
+      'INSERT INTO time_tracking (volunteer_id,duty_id,event_id,start_time,duty_date) VALUES ($1,$2,$3,NOW(),$4) RETURNING id',
+      [req.user.id, dutyId, dutyEventId, duty_date]
     );
     res.json({ id: result.rows[0].id });
   } catch (err) {
@@ -1475,70 +1495,63 @@ app.post('/duties/:id/time/end', authRequired, async (req, res) => {
 });
 
 app.get('/time-tracking', authRequired, async (req, res) => {
+  await ensureTimeTrackingEventColumn();
   const volunteerFilter = req.query.volunteer_id ? Number(req.query.volunteer_id) : null;
   const groupFilter = req.query.group_id ? Number(req.query.group_id) : null;
+  const baseSelect = `
+    SELECT t.*,
+           u.name AS volunteer_name,
+           u.email AS volunteer_email,
+           d.title AS duty_title,
+           d.event_id AS duty_event_id,
+           ev.title AS event_title,
+           COALESCE(t.event_id, d.event_id) AS resolved_event_id
+    FROM time_tracking t
+    LEFT JOIN users u ON u.id = t.volunteer_id
+    LEFT JOIN duties d ON d.id = t.duty_id
+    LEFT JOIN events ev ON ev.id = COALESCE(t.event_id, d.event_id)
+  `;
+
+  const orderClause = ' ORDER BY t.start_time DESC';
+
   if (req.user.role === 'superadmin') {
     if (Number.isFinite(volunteerFilter)) {
       const rows = await pool.query(
-        `SELECT t.*, u.name AS volunteer_name, u.email AS volunteer_email
-         FROM time_tracking t
-         LEFT JOIN users u ON u.id = t.volunteer_id
-         WHERE t.volunteer_id=$1
-         ORDER BY t.start_time DESC`,
+        `${baseSelect} WHERE t.volunteer_id=$1${orderClause}`,
         [volunteerFilter]
       );
       return res.json(rows.rows);
     }
     if (Number.isFinite(groupFilter)) {
       const rows = await pool.query(
-        `SELECT t.*, u.name AS volunteer_name, u.email AS volunteer_email
-         FROM time_tracking t
-         JOIN users u ON u.id = t.volunteer_id
-         WHERE u.group_id = $1
-         ORDER BY t.start_time DESC`,
+        `${baseSelect} WHERE u.group_id = $1${orderClause}`,
         [groupFilter]
       );
       return res.json(rows.rows);
     }
-    const rows = await pool.query(
-      `SELECT t.*, u.name AS volunteer_name, u.email AS volunteer_email
-       FROM time_tracking t
-       LEFT JOIN users u ON u.id = t.volunteer_id
-       ORDER BY t.start_time DESC`
-    );
+    const rows = await pool.query(`${baseSelect}${orderClause}`);
     return res.json(rows.rows);
   }
+
   if (req.user.role === 'admin') {
     if (Number.isFinite(volunteerFilter)) {
-      // Ensure volunteer belongs to admin's group
       const ok = await pool.query('SELECT 1 FROM users WHERE id=$1 AND group_id=$2', [volunteerFilter, req.user.group_id]);
       if (ok.rowCount === 0) return res.status(403).json({ message: 'Forbidden' });
       const rows = await pool.query(
-        `SELECT t.*, u.name AS volunteer_name, u.email AS volunteer_email
-         FROM time_tracking t
-         LEFT JOIN users u ON u.id = t.volunteer_id
-         WHERE t.volunteer_id=$1
-         ORDER BY t.start_time DESC`,
+        `${baseSelect} WHERE t.volunteer_id=$1${orderClause}`,
         [volunteerFilter]
       );
       return res.json(rows.rows);
     }
     const rows = await pool.query(
-      `SELECT t.*, u.name AS volunteer_name, u.email AS volunteer_email
-       FROM time_tracking t
-       JOIN users u ON u.id = t.volunteer_id
-       WHERE u.group_id = $1
-       ORDER BY t.start_time DESC`,
+      `${baseSelect} WHERE u.group_id = $1${orderClause}`,
       [req.user.group_id]
     );
     return res.json(rows.rows);
   }
+
   const rows = await pool.query(
-    `SELECT t.*, u.name AS volunteer_name, u.email AS volunteer_email
-     FROM time_tracking t
-     LEFT JOIN users u ON u.id = t.volunteer_id
-     WHERE t.volunteer_id=$1
-     ORDER BY t.start_time DESC`,
+    `${baseSelect} WHERE t.volunteer_id=$1${orderClause}`,
     [req.user.id]
   );
   res.json(rows.rows);
@@ -1549,19 +1562,37 @@ app.get('/time-tracking.csv', authRequired, async (req, res) => {
   try {
     let rows;
     if (req.user.role === 'superadmin') {
-      rows = (await pool.query('SELECT * FROM time_tracking ORDER BY start_time DESC')).rows;
+      rows = (await pool.query(
+        `SELECT t.*, d.event_id AS duty_event_id
+         FROM time_tracking t
+         LEFT JOIN duties d ON d.id = t.duty_id
+         ORDER BY t.start_time DESC`
+      )).rows;
     } else if (req.user.role === 'admin') {
       rows = (await pool.query(
-        `SELECT t.*
+        `SELECT t.*, d.event_id AS duty_event_id
          FROM time_tracking t
          JOIN users u ON u.id = t.volunteer_id
+         LEFT JOIN duties d ON d.id = t.duty_id
          WHERE u.group_id = $1
          ORDER BY t.start_time DESC`,
         [req.user.group_id]
       )).rows;
     } else {
-      rows = (await pool.query('SELECT * FROM time_tracking WHERE volunteer_id=$1 ORDER BY start_time DESC', [req.user.id])).rows;
+      rows = (await pool.query(
+        `SELECT t.*, d.event_id AS duty_event_id
+         FROM time_tracking t
+         LEFT JOIN duties d ON d.id = t.duty_id
+         WHERE t.volunteer_id=$1
+         ORDER BY t.start_time DESC`,
+        [req.user.id]
+      )).rows;
     }
+    rows.forEach(r => {
+      if ((r.event_id == null || r.event_id === undefined) && r.duty_event_id != null) {
+        r.event_id = r.duty_event_id;
+      }
+    });
     const header = ['id','volunteer_id','duty_id','event_id','start_time','end_time','duration_hours','duty_date','approved'];
     const body = rows.map(r => header.map(h => r[h] == null ? '' : String(r[h]).replaceAll('"', '""')).map(v => `"${v}"`).join(','));
     const csv = [header.join(','), ...body].join('\n');
@@ -1796,6 +1827,7 @@ app.post('/admin/time-tracking', authRequired, async (req, res) => {
     await ensureDutyDateColumn();
     await ensureDurationHoursColumn();
     await ensureTimeTrackingConstraints();
+    await ensureTimeTrackingEventColumn();
     const { volunteer_id, duty_id, start_time, end_time, duty_date } = req.body || {};
     const volunteerIdNum = volunteer_id == null ? null : Number(volunteer_id);
     const dutyIdNum = duty_id == null ? null : Number(duty_id);
@@ -1813,7 +1845,7 @@ app.post('/admin/time-tracking', authRequired, async (req, res) => {
     if (volunteerRes.rowCount === 0 || volunteerRole !== 'volunteer') {
       return res.status(404).json({ message: 'Volunteer not found. Refresh the volunteer list and try again.' });
     }
-    const dutyRes = await pool.query('SELECT id, group_id FROM duties WHERE id=$1', [dutyIdNum]);
+    const dutyRes = await pool.query('SELECT id, group_id, event_id FROM duties WHERE id=$1', [dutyIdNum]);
     if (dutyRes.rowCount === 0) {
       return res.status(404).json({ message: 'Duty not found. Refresh the duty list and try again.' });
     }
@@ -1825,10 +1857,11 @@ app.post('/admin/time-tracking', authRequired, async (req, res) => {
         return res.status(403).json({ message: 'Admins can only add time for duties in their organization.' });
       }
     }
+    const dutyEventId = dutyRes.rows[0].event_id || null;
     const result = await pool.query(
-      `INSERT INTO time_tracking (volunteer_id,duty_id,start_time,end_time,duty_date)
-       VALUES ($1,$2,$3::timestamp,$4::timestamp,$5::date) RETURNING id`,
-      [volunteerIdNum, dutyIdNum, start_time, end_time || null, duty_date || null]
+      `INSERT INTO time_tracking (volunteer_id,duty_id,event_id,start_time,end_time,duty_date)
+       VALUES ($1,$2,$3,$4::timestamp,$5::timestamp,$6::date) RETURNING id`,
+      [volunteerIdNum, dutyIdNum, dutyEventId, start_time, end_time || null, duty_date || null]
     );
     res.json({ id: result.rows[0].id });
   } catch (err) {
