@@ -266,6 +266,12 @@
         <thead><tr><th>ID</th><th>Title</th><th>Description</th><th>Status</th><th>Capacity</th><th>Active</th><th>Track Time</th></tr></thead>
         <tbody id="dutyList"></tbody>
       </table>
+      <div class="row">
+        <div class="col">
+          <button id="volDownloadDutiesBtn" class="ghost-btn">Download Duties CSV</button>
+          <div id="volDownloadDutiesError" class="error"></div>
+        </div>
+      </div>
     </div>
 
     <div id="clockTimesWrap">
@@ -755,10 +761,10 @@
     <div class="row" id="superTimeVolunteerRow">
       <div class="col">
         <label>Volunteers to review</label>
-        <select id="superTimeVolunteerSelect" multiple size="6">
+        <select id="superTimeVolunteerSelect">
           <option value="">Select an organization above.</option>
         </select>
-        <div class="hint" id="superTimeVolunteerHint">Select an organization, then choose one or more volunteers.</div>
+        <div class="hint" id="superTimeVolunteerHint">Select an organization, then choose a volunteer.</div>
         <label style="display:flex;align-items:center;gap:6px;margin-top:10px">
           <input type="checkbox" id="superDownloadCsvApprovedOnly" checked />
           Approved entries only
@@ -1232,10 +1238,9 @@
 
     function getSelectedSuperVolunteerIds() {
       const sel = document.getElementById('superTimeVolunteerSelect');
-      if (!sel || sel.disabled) return [];
-      return Array.from(sel.selectedOptions || [])
-        .map(opt => Number(opt.value))
-        .filter(id => Number.isFinite(id));
+      if (!sel || sel.disabled || !sel.value) return [];
+      const val = Number(sel.value);
+      return Number.isFinite(val) ? [val] : [];
     }
 
     async function populateAdminTimeVolunteerSelect() {
@@ -1305,11 +1310,11 @@
         if (hint) hint.textContent = 'Select an organization to load volunteers.';
         return;
       }
-      const previousSelection = new Set(getSelectedSuperVolunteerIds().map(id => String(id)));
+      const previousSelection = sel.value ? String(sel.value) : '';
       sel.disabled = true;
       sel.innerHTML = '<option value="">Loading volunteers…</option>';
       const volunteers = await fetchVolunteers(gid);
-      sel.innerHTML = '';
+      sel.innerHTML = '<option value="">— Select volunteer —</option>';
       if (!volunteers || volunteers.length === 0) {
         sel.innerHTML = '<option value="">No volunteers found.</option>';
         sel.disabled = true;
@@ -1321,7 +1326,7 @@
         const opt = document.createElement('option');
         opt.value = v.id;
         opt.textContent = v.name ? `${v.name}` : v.email;
-        if (previousSelection.has(String(v.id))) opt.selected = true;
+        if (previousSelection && String(v.id) === previousSelection) opt.selected = true;
         sel.appendChild(opt);
       });
       if (!sel._wired) {
@@ -1331,7 +1336,7 @@
         });
         sel._wired = true;
       }
-      if (hint) hint.textContent = 'Hold Cmd/Ctrl (or Shift) to select multiple volunteers.';
+      if (hint) hint.textContent = 'Select a volunteer to view logs.';
       await fetchAdminTimes();
     }
 
@@ -5721,6 +5726,51 @@
         URL.revokeObjectURL(url);
       } catch {
         if (errEl) errEl.textContent = 'Error downloading CSV';
+      }
+    });
+
+    const volDutiesBtn = document.getElementById('volDownloadDutiesBtn');
+    if (volDutiesBtn) volDutiesBtn.addEventListener('click', () => {
+      const errEl = document.getElementById('volDownloadDutiesError');
+      if (errEl) errEl.textContent = '';
+      try {
+        const rows = Array.from(document.querySelectorAll('#dutyList tr'));
+        if (!rows.length) {
+          if (errEl) errEl.textContent = 'No duties available to download.';
+          return;
+        }
+        const header = ['Duty ID','Title','Description','Status','Capacity','Active'];
+        const body = rows.map(tr => {
+          const cells = tr.querySelectorAll('td');
+          if (!cells.length) return null;
+          const [idCell, titleCell, descCell, statusCell, capacityCell, activeCell] = cells;
+          return [
+            (idCell?.textContent || '').trim(),
+            (titleCell?.textContent || '').trim(),
+            (descCell?.textContent || '').trim(),
+            (statusCell?.textContent || '').trim(),
+            (capacityCell?.textContent || '').trim(),
+            (activeCell?.textContent || '').trim()
+          ];
+        }).filter(Boolean);
+        if (!body.length) {
+          if (errEl) errEl.textContent = 'No duties available to download.';
+          return;
+        }
+        const csv = [header, ...body]
+          .map(row => row.map(val => `"${String(val).replace(/"/g, '""')}"`).join(','))
+          .join('\n');
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'my-duties.csv';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      } catch {
+        if (errEl) errEl.textContent = 'Error preparing CSV';
       }
     });
 
