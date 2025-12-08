@@ -1560,42 +1560,129 @@ app.get('/time-tracking', authRequired, async (req, res) => {
 // CSV export
 app.get('/time-tracking.csv', authRequired, async (req, res) => {
   try {
+    const volunteerFilters = []
+      .concat(req.query.volunteer_id ?? [])
+      .concat(req.query.volunteer_ids ?? []);
+    const parsedVolunteerIds = volunteerFilters
+      .flatMap(val => String(val ?? '')
+        .split(',')
+        .map(v => Number(v.trim()))
+      )
+      .filter(id => Number.isFinite(id));
+    const approvedOnly = String(req.query.approved_only || '').toLowerCase() === 'true';
     let rows;
     if (req.user.role === 'superadmin') {
+      const clauses = [];
+      const params = [];
+      if (parsedVolunteerIds.length) {
+        clauses.push(`t.volunteer_id = ANY($${params.length + 1}::int[])`);
+        params.push(parsedVolunteerIds);
+      }
+      if (approvedOnly) clauses.push('t.approved = true');
+      const whereSql = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
       rows = (await pool.query(
-        `SELECT t.*, d.event_id AS duty_event_id
+        `SELECT t.*, d.event_id AS duty_event_id,
+                u.name AS volunteer_name,
+                u.email AS volunteer_email,
+                d.title AS duty_title,
+                ev.title AS event_title
          FROM time_tracking t
          LEFT JOIN duties d ON d.id = t.duty_id
-         ORDER BY t.start_time DESC`
+         LEFT JOIN users u ON u.id = t.volunteer_id
+         LEFT JOIN events ev ON ev.id = COALESCE(t.event_id, d.event_id)
+         ${whereSql}
+         ORDER BY t.start_time DESC`,
+        params
       )).rows;
     } else if (req.user.role === 'admin') {
+      const params = [req.user.group_id];
+      const clauses = ['u.group_id = $1'];
+      if (parsedVolunteerIds.length) {
+        clauses.push(`t.volunteer_id = ANY($${params.length + 1}::int[])`);
+        params.push(parsedVolunteerIds);
+      }
+      if (approvedOnly) clauses.push('t.approved = true');
       rows = (await pool.query(
-        `SELECT t.*, d.event_id AS duty_event_id
+        `SELECT t.*, d.event_id AS duty_event_id,
+                u.name AS volunteer_name,
+                u.email AS volunteer_email,
+                d.title AS duty_title,
+                ev.title AS event_title
          FROM time_tracking t
          JOIN users u ON u.id = t.volunteer_id
          LEFT JOIN duties d ON d.id = t.duty_id
-         WHERE u.group_id = $1
+         LEFT JOIN events ev ON ev.id = COALESCE(t.event_id, d.event_id)
+         WHERE ${clauses.join(' AND ')}
          ORDER BY t.start_time DESC`,
-        [req.user.group_id]
+        params
       )).rows;
     } else {
+      const params = [req.user.id];
+      const clauses = ['t.volunteer_id = $1'];
+      if (approvedOnly) clauses.push('t.approved = true');
       rows = (await pool.query(
-        `SELECT t.*, d.event_id AS duty_event_id
+        `SELECT t.*, d.event_id AS duty_event_id,
+                u.name AS volunteer_name,
+                u.email AS volunteer_email,
+                d.title AS duty_title,
+                ev.title AS event_title
          FROM time_tracking t
          LEFT JOIN duties d ON d.id = t.duty_id
-         WHERE t.volunteer_id=$1
+         LEFT JOIN users u ON u.id = t.volunteer_id
+         LEFT JOIN events ev ON ev.id = COALESCE(t.event_id, d.event_id)
+         WHERE ${clauses.join(' AND ')}
          ORDER BY t.start_time DESC`,
-        [req.user.id]
+        params
       )).rows;
+    }
+    if (req.user.role !== 'superadmin' && parsedVolunteerIds.length) {
+      rows = rows.filter(r => parsedVolunteerIds.includes(Number(r.volunteer_id)));
     }
     rows.forEach(r => {
       if ((r.event_id == null || r.event_id === undefined) && r.duty_event_id != null) {
         r.event_id = r.duty_event_id;
       }
     });
-    const header = ['id','volunteer_id','duty_id','event_id','start_time','end_time','duration_hours','duty_date','approved'];
-    const body = rows.map(r => header.map(h => r[h] == null ? '' : String(r[h]).replaceAll('"', '""')).map(v => `"${v}"`).join(','));
-    const csv = [header.join(','), ...body].join('\n');
+    const format12Hour = iso => {
+      if (!iso) return '';
+      try {
+        return new Intl.DateTimeFormat('en-US', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: true,
+          timeZone: 'UTC'
+        }).format(new Date(iso));
+      } catch { return iso; }
+    };
+    const formatCell = value => {
+      if (value == null) return '';
+      return String(value).replace(/"/g, '""');
+    };
+    const header = ['Log ID','Volunteer','Duty','Event ID','Event Name','Start Time','End Time','Hours','Duty Date','Approved'];
+    const body = rows.map(r => {
+      const volunteerLabel = r.volunteer_name
+        ? `${r.volunteer_name} (${r.volunteer_email || 'no email'})`
+        : (r.volunteer_email || `Volunteer #${r.volunteer_id}`);
+      const dutyLabel = r.duty_title ? `${r.duty_title} (#${r.duty_id || 'N/A'})` : (r.duty_id != null ? `Duty #${r.duty_id}` : '');
+      const eventLabel = r.event_title || '';
+      return [
+        formatCell(r.id),
+        formatCell(volunteerLabel),
+        formatCell(dutyLabel),
+        formatCell(r.event_id ?? ''),
+        formatCell(eventLabel || ''),
+        formatCell(format12Hour(r.start_time)),
+        formatCell(format12Hour(r.end_time)),
+        formatCell(r.duration_hours != null ? Number(r.duration_hours).toFixed(2) : ''),
+        formatCell(r.duty_date || ''),
+        formatCell(r.approved ? 'Yes' : 'No')
+      ].map(v => `"${v}"`).join(',');
+    });
+    const csv = [header.map(v => `"${v}"`).join(','), ...body].join('\n');
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', 'attachment; filename="time-tracking.csv"');
     res.send(csv);
