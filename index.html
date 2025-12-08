@@ -752,15 +752,27 @@
     </div>
 
     <h3>All Time Logs (By Organization)</h3>
+    <div class="row" id="superTimeVolunteerRow">
+      <div class="col">
+        <label>Volunteers to review</label>
+        <select id="superTimeVolunteerSelect" multiple size="6">
+          <option value="">Select an organization above.</option>
+        </select>
+        <div class="hint" id="superTimeVolunteerHint">Select an organization, then choose one or more volunteers.</div>
+        <label style="display:flex;align-items:center;gap:6px;margin-top:10px">
+          <input type="checkbox" id="superDownloadCsvApprovedOnly" checked />
+          Approved entries only
+        </label>
+        <button id="superDownloadCsvBtn">Download Selected CSV</button>
+        <div id="superDownloadCsvError" class="error"></div>
+      </div>
+    </div>
     <table>
       <thead>
         <tr><th>ID</th><th>Volunteer</th><th>Event</th><th>Duty</th><th>Start</th><th>End</th><th>Hours</th><th>Date</th><th>Edit</th><th>Delete</th></tr>
       </thead>
       <tbody id="superAdminTimeList"></tbody>
     </table>
-
-    <h3>Photo Approvals</h3>
-    <div id="superPhotoApprovals"></div>
 
     <h3>Create User (Superadmin)</h3>
     <div class="row">
@@ -1218,28 +1230,26 @@
         .filter(id => Number.isFinite(id));
     }
 
+    function getSelectedSuperVolunteerIds() {
+      const sel = document.getElementById('superTimeVolunteerSelect');
+      if (!sel || sel.disabled) return [];
+      return Array.from(sel.selectedOptions || [])
+        .map(opt => Number(opt.value))
+        .filter(id => Number.isFinite(id));
+    }
+
     async function populateAdminTimeVolunteerSelect() {
       const sel = document.getElementById('adminTimeVolunteerSelect');
       const hint = document.getElementById('adminTimeVolunteerHint');
       if (!sel) return;
-      if (role !== 'admin' && role !== 'superadmin') {
+      if (role !== 'admin') {
         sel.innerHTML = '';
         sel.disabled = true;
         if (hint) hint.textContent = '';
         return;
       }
       let targetGroupId = null;
-      if (role === 'superadmin') {
-        targetGroupId = document.getElementById('superadminOrgPicker')?.value || '';
-        if (!targetGroupId) {
-          sel.innerHTML = '<option value="">Select an organization above.</option>';
-          sel.disabled = true;
-          if (hint) hint.textContent = 'Select an organization to load volunteers.';
-          return;
-        }
-      } else {
-        targetGroupId = groupId != null ? String(groupId) : '';
-      }
+      targetGroupId = groupId != null ? String(groupId) : '';
       if (!targetGroupId) {
         sel.innerHTML = '<option value="">Organization required.</option>';
         sel.disabled = true;
@@ -1266,6 +1276,54 @@
         sel.appendChild(opt);
       });
       sel.dataset.groupId = String(targetGroupId);
+      if (!sel._wired) {
+        sel.addEventListener('change', () => {
+          if (hint) hint.textContent = '';
+          fetchAdminTimes();
+        });
+        sel._wired = true;
+      }
+      if (hint) hint.textContent = 'Hold Cmd/Ctrl (or Shift) to select multiple volunteers.';
+      await fetchAdminTimes();
+    }
+
+    async function populateSuperTimeVolunteerSelect() {
+      const sel = document.getElementById('superTimeVolunteerSelect');
+      const hint = document.getElementById('superTimeVolunteerHint');
+      if (!sel) return;
+      if (role !== 'superadmin') {
+        sel.innerHTML = '';
+        sel.disabled = true;
+        if (hint) hint.textContent = '';
+        return;
+      }
+      const orgPicker = document.getElementById('superadminOrgPicker');
+      const gid = orgPicker?.value;
+      if (!gid) {
+        sel.innerHTML = '<option value="">Select an organization above.</option>';
+        sel.disabled = true;
+        if (hint) hint.textContent = 'Select an organization to load volunteers.';
+        return;
+      }
+      const previousSelection = new Set(getSelectedSuperVolunteerIds().map(id => String(id)));
+      sel.disabled = true;
+      sel.innerHTML = '<option value="">Loading volunteers…</option>';
+      const volunteers = await fetchVolunteers(gid);
+      sel.innerHTML = '';
+      if (!volunteers || volunteers.length === 0) {
+        sel.innerHTML = '<option value="">No volunteers found.</option>';
+        sel.disabled = true;
+        if (hint) hint.textContent = 'No volunteers found for this organization.';
+        return;
+      }
+      sel.disabled = false;
+      volunteers.forEach(v => {
+        const opt = document.createElement('option');
+        opt.value = v.id;
+        opt.textContent = v.name ? `${v.name}` : v.email;
+        if (previousSelection.has(String(v.id))) opt.selected = true;
+        sel.appendChild(opt);
+      });
       if (!sel._wired) {
         sel.addEventListener('change', () => {
           if (hint) hint.textContent = '';
@@ -2501,8 +2559,10 @@
       await fetchConfig();
       await loadBrandingForCurrentGroup({ populateForm: role === 'admin' });
       await fetchGroups();
-      if (role === 'admin' || role === 'superadmin') {
+      if (role === 'admin') {
         await populateAdminTimeVolunteerSelect();
+      } else if (role === 'superadmin') {
+        await populateSuperTimeVolunteerSelect();
       }
       await fetchEvents();
       await fetchDuties();
@@ -4504,15 +4564,18 @@
     // ADMIN TIMES TABLE
     async function fetchAdminTimes() {
       if (role !== 'admin' && role !== 'superadmin') return;
-      const tbody = (role === 'superadmin')
+      const isSuperadmin = role === 'superadmin';
+      const tbody = isSuperadmin
         ? document.getElementById('superAdminTimeList')
         : document.getElementById('adminTimeList');
-      const hint = document.getElementById('adminTimeVolunteerHint');
+      const hint = isSuperadmin
+        ? document.getElementById('superTimeVolunteerHint')
+        : document.getElementById('adminTimeVolunteerHint');
       if (!tbody) return;
       const showTableHint = (message) => {
         tbody.innerHTML = message ? `<tr><td colspan="10" class="hint">${message}</td></tr>` : '';
       };
-      if (role === 'superadmin') {
+      if (isSuperadmin) {
         const orgPicker = document.getElementById('superadminOrgPicker');
         if (!orgPicker?.value) {
           showTableHint('Select an organization to view time logs.');
@@ -4520,7 +4583,7 @@
           return;
         }
       }
-      const selectedIds = getSelectedAdminVolunteerIds();
+      const selectedIds = isSuperadmin ? getSelectedSuperVolunteerIds() : getSelectedAdminVolunteerIds();
       if (selectedIds.length === 0) {
         showTableHint('Select one or more volunteers to view time logs.');
         if (hint) hint.textContent = 'Select one or more volunteers to view logs.';
@@ -5033,7 +5096,7 @@
           // Refresh Volunteer Mgmt scoped to org
           populateVolunteerMgmt();
           refreshVolunteerLogs();
-          populateAdminTimeVolunteerSelect();
+          populateSuperTimeVolunteerSelect();
           fetchApprovals();
         });
         orgPicker._wired = true;
@@ -5652,6 +5715,44 @@
         const a = document.createElement('a');
         a.href = url;
         a.download = 'my-timesheet.csv';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      } catch {
+        if (errEl) errEl.textContent = 'Error downloading CSV';
+      }
+    });
+
+    const superCsvBtn = document.getElementById('superDownloadCsvBtn');
+    if (superCsvBtn) superCsvBtn.addEventListener('click', async () => {
+      const errEl = document.getElementById('superDownloadCsvError');
+      if (errEl) errEl.textContent = '';
+      const orgPicker = document.getElementById('superadminOrgPicker');
+      if (!orgPicker?.value) {
+        if (errEl) errEl.textContent = 'Select an organization first.';
+        return;
+      }
+      const selectedIds = getSelectedSuperVolunteerIds();
+      if (!selectedIds.length) {
+        if (errEl) errEl.textContent = 'Select at least one volunteer first.';
+        return;
+      }
+      try {
+        const params = new URLSearchParams();
+        selectedIds.forEach(id => params.append('volunteer_id', id));
+        const approvedToggle = document.getElementById('superDownloadCsvApprovedOnly');
+        params.set('approved_only', (!approvedToggle || approvedToggle.checked) ? 'true' : 'false');
+        const res = await authed(`/time-tracking.csv?${params.toString()}`);
+        if (!res.ok) {
+          if (errEl) errEl.textContent = 'Failed to download CSV';
+          return;
+        }
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'time-tracking.csv';
         document.body.appendChild(a);
         a.click();
         a.remove();
