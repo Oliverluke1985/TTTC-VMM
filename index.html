@@ -274,6 +274,8 @@
         <thead><tr><th>ID</th><th>Event</th><th>Duty</th><th>Start</th><th>End</th><th>Hours</th><th>Date</th></tr></thead>
         <tbody id="timeList"></tbody>
       </table>
+      <button id="volDownloadCsvBtn" class="ghost-btn">Download My Timesheet CSV</button>
+      <div id="volDownloadCsvError" class="error"></div>
     </div>
     <div id="clockActionMsg" class="ok hidden"></div>
   </section>
@@ -812,8 +814,21 @@
       <tbody id="approvalList"></tbody>
     </table>
 
-    <button id="downloadCsvBtn">Download Timesheet CSV</button>
-    <div id="downloadCsvError" class="error"></div>
+    <div class="row" id="adminTimeVolunteerRow">
+      <div class="col">
+        <label>Volunteers to review</label>
+        <select id="adminTimeVolunteerSelect" multiple size="6">
+          <option value="">Select volunteers to begin.</option>
+        </select>
+        <div class="hint" id="adminTimeVolunteerHint">Select one or more volunteers to view logs.</div>
+        <label style="display:flex;align-items:center;gap:6px;margin-top:10px">
+          <input type="checkbox" id="downloadCsvApprovedOnly" checked />
+          Approved entries only
+        </label>
+        <button id="downloadCsvBtn">Download Selected CSV</button>
+        <div id="downloadCsvError" class="error"></div>
+      </div>
+    </div>
 
     <h3>All Time Logs (Scoped to Org)</h3>
     <table>
@@ -1193,6 +1208,73 @@
       }
       const eventLabel = formatEventLabel(resolvedEventId, eventTitle);
       return { dutyLabel, eventLabel };
+    }
+
+    function getSelectedAdminVolunteerIds() {
+      const sel = document.getElementById('adminTimeVolunteerSelect');
+      if (!sel || sel.disabled) return [];
+      return Array.from(sel.selectedOptions || [])
+        .map(opt => Number(opt.value))
+        .filter(id => Number.isFinite(id));
+    }
+
+    async function populateAdminTimeVolunteerSelect() {
+      const sel = document.getElementById('adminTimeVolunteerSelect');
+      const hint = document.getElementById('adminTimeVolunteerHint');
+      if (!sel) return;
+      if (role !== 'admin' && role !== 'superadmin') {
+        sel.innerHTML = '';
+        sel.disabled = true;
+        if (hint) hint.textContent = '';
+        return;
+      }
+      let targetGroupId = null;
+      if (role === 'superadmin') {
+        targetGroupId = document.getElementById('superadminOrgPicker')?.value || '';
+        if (!targetGroupId) {
+          sel.innerHTML = '<option value="">Select an organization above.</option>';
+          sel.disabled = true;
+          if (hint) hint.textContent = 'Select an organization to load volunteers.';
+          return;
+        }
+      } else {
+        targetGroupId = groupId != null ? String(groupId) : '';
+      }
+      if (!targetGroupId) {
+        sel.innerHTML = '<option value="">Organization required.</option>';
+        sel.disabled = true;
+        if (hint) hint.textContent = 'Organization context missing.';
+        return;
+      }
+      const previousSelection = new Set(getSelectedAdminVolunteerIds().map(id => String(id)));
+      sel.disabled = true;
+      sel.innerHTML = '<option value="">Loading volunteers…</option>';
+      const volunteers = await fetchVolunteers(targetGroupId);
+      sel.innerHTML = '';
+      if (!volunteers || volunteers.length === 0) {
+        sel.innerHTML = '<option value="">No volunteers found.</option>';
+        sel.disabled = true;
+        if (hint) hint.textContent = 'No volunteers found for this organization.';
+        return;
+      }
+      sel.disabled = false;
+      volunteers.forEach(v => {
+        const opt = document.createElement('option');
+        opt.value = v.id;
+        opt.textContent = v.name ? `${v.name}` : v.email;
+        if (previousSelection.has(String(v.id))) opt.selected = true;
+        sel.appendChild(opt);
+      });
+      sel.dataset.groupId = String(targetGroupId);
+      if (!sel._wired) {
+        sel.addEventListener('change', () => {
+          if (hint) hint.textContent = '';
+          fetchAdminTimes();
+        });
+        sel._wired = true;
+      }
+      if (hint) hint.textContent = 'Hold Cmd/Ctrl (or Shift) to select multiple volunteers.';
+      await fetchAdminTimes();
     }
 
     function showCalendarStatus(message = '', isError = false) {
@@ -2419,6 +2501,9 @@
       await fetchConfig();
       await loadBrandingForCurrentGroup({ populateForm: role === 'admin' });
       await fetchGroups();
+      if (role === 'admin' || role === 'superadmin') {
+        await populateAdminTimeVolunteerSelect();
+      }
       await fetchEvents();
       await fetchDuties();
       await loadDutyTemplates();
@@ -4419,54 +4504,67 @@
     // ADMIN TIMES TABLE
     async function fetchAdminTimes() {
       if (role !== 'admin' && role !== 'superadmin') return;
-      try {
-        let path = '/time-tracking';
-        if (role === 'superadmin') {
-          const orgPicker = document.getElementById('superadminOrgPicker');
-          let gid = orgPicker?.value?.trim();
-          const adminTable = document.getElementById('adminTimeList');
-          const superTable = document.getElementById('superAdminTimeList');
-          const tableTargets = [adminTable, superTable];
-          if (!gid) {
-            const fallbackOpt = Array.from(orgPicker?.options || []).find(opt => opt.value);
-            if (fallbackOpt) {
-              if (orgPicker) {
-                orgPicker.value = fallbackOpt.value;
-                try { orgPicker.dispatchEvent(new Event('change')); } catch { /* ignore */ }
-              }
-              return;
-            }
-            tableTargets.forEach(t => {
-              if (t) t.innerHTML = '<tr><td colspan="10" class="hint">Select an organization to view time logs.</td></tr>';
-            });
-            return;
-          }
-          path += `?group_id=${encodeURIComponent(gid)}`;
+      const tbody = (role === 'superadmin')
+        ? document.getElementById('superAdminTimeList')
+        : document.getElementById('adminTimeList');
+      const hint = document.getElementById('adminTimeVolunteerHint');
+      if (!tbody) return;
+      const showTableHint = (message) => {
+        tbody.innerHTML = message ? `<tr><td colspan="10" class="hint">${message}</td></tr>` : '';
+      };
+      if (role === 'superadmin') {
+        const orgPicker = document.getElementById('superadminOrgPicker');
+        if (!orgPicker?.value) {
+          showTableHint('Select an organization to view time logs.');
+          if (hint) hint.textContent = 'Select an organization to load volunteers.';
+          return;
         }
-        const res = await authed(path);
-        const rows = await res.json();
-        const tbody = document.getElementById('superAdminTimeList') || document.getElementById('adminTimeList');
-        if (!tbody) return;
-        tbody.innerHTML = '';
-        timeEntryTimeZoneById = {};
-        rows.forEach(r => {
-          const tr = document.createElement('tr');
-          const hours = (r.duration_hours != null ? Number(r.duration_hours).toFixed(2) : '');
-          const tz = getVolunteerTimeZone(r.volunteer_id);
-          timeEntryTimeZoneById[r.id] = tz;
-          const volunteerLabel = formatVolunteerLabel(r);
-          const assignment = describeAssignment(r);
-          tr.innerHTML =
-            `<td>${r.id}</td><td>${volunteerLabel}</td><td>${assignment.eventLabel || '-'}</td><td>${assignment.dutyLabel || '-'}</td>
-             <td><input type="datetime-local" id="start-${r.id}" value="${formatDateTimeLocal(r.start_time, tz)}"></td>
-             <td><input type="datetime-local" id="end-${r.id}" value="${formatDateTimeLocal(r.end_time, tz)}"></td>
-             <td>${hours}</td>
-             <td><input type="date" id="date-${r.id}" value="${formatDateLocal(r.duty_date)}"></td>
-             <td><button onclick="saveTime(${r.id})">Save</button></td>
-             <td><button onclick="deleteTime(${r.id})">Delete</button></td>`;
-          tbody.appendChild(tr);
-        });
-      } catch (e) { /* silent */ }
+      }
+      const selectedIds = getSelectedAdminVolunteerIds();
+      if (selectedIds.length === 0) {
+        showTableHint('Select one or more volunteers to view time logs.');
+        if (hint) hint.textContent = 'Select one or more volunteers to view logs.';
+        return;
+      }
+      if (hint) hint.textContent = '';
+      showTableHint('Loading time logs…');
+      timeEntryTimeZoneById = {};
+      const rows = [];
+      for (const volunteerId of selectedIds) {
+        try {
+          const res = await authed(`/time-tracking?volunteer_id=${encodeURIComponent(volunteerId)}`);
+          if (!res.ok) continue;
+          const data = await res.json();
+          rows.push(...data);
+        } catch { /* ignore */ }
+      }
+      rows.sort((a, b) => {
+        const aTime = a.start_time ? Date.parse(a.start_time) : 0;
+        const bTime = b.start_time ? Date.parse(b.start_time) : 0;
+        return bTime - aTime;
+      });
+      tbody.innerHTML = '';
+      if (!rows.length) {
+        showTableHint('No time logs found for the selected volunteers.');
+        return;
+      }
+      rows.forEach(r => {
+        const tr = document.createElement('tr');
+        const hours = (r.duration_hours != null ? Number(r.duration_hours).toFixed(2) : '');
+        const tz = getVolunteerTimeZone(r.volunteer_id);
+        timeEntryTimeZoneById[r.id] = tz;
+        const volunteerLabel = formatVolunteerLabel(r);
+        const assignment = describeAssignment(r);
+        tr.innerHTML =
+          `<td>${r.id}</td><td>${volunteerLabel}</td><td>${assignment.eventLabel || '-'}</td><td>${assignment.dutyLabel || '-'}</td>
+           <td><input type="datetime-local" id="start-${r.id}" value="${formatDateTimeLocal(r.start_time, tz)}"></td>
+           <td><input type="datetime-local" id="end-${r.id}" value="${formatDateTimeLocal(r.end_time, tz)}"></td>
+           <td>${hours}</td>
+           <td><input type="date" id="date-${r.id}" value="${formatDateLocal(r.duty_date)}"></td>
+           <td><button onclick="saveTime(${r.id})">Save</button></td>
+           <td><button onclick="deleteTime(${r.id})">Delete</button></td>`;
+        tbody.appendChild(tr);
+      });
     }
 
     function formatDateTimeLocal(iso, tz) {
@@ -4935,7 +5033,7 @@
           // Refresh Volunteer Mgmt scoped to org
           populateVolunteerMgmt();
           refreshVolunteerLogs();
-          fetchAdminTimes();
+          populateAdminTimeVolunteerSelect();
           fetchApprovals();
         });
         orgPicker._wired = true;
@@ -5508,11 +5606,21 @@
     // CSV download (role-scoped)
     const dlBtn = document.getElementById('downloadCsvBtn');
     if (dlBtn) dlBtn.addEventListener('click', async () => {
-      document.getElementById('downloadCsvError').textContent = '';
+      const errEl = document.getElementById('downloadCsvError');
+      if (errEl) errEl.textContent = '';
+      const selectedIds = getSelectedAdminVolunteerIds();
+      if (!selectedIds.length) {
+        if (errEl) errEl.textContent = 'Select at least one volunteer first.';
+        return;
+      }
       try {
-        const res = await authed('/time-tracking.csv');
+        const params = new URLSearchParams();
+        selectedIds.forEach(id => params.append('volunteer_id', id));
+        const approvedToggle = document.getElementById('downloadCsvApprovedOnly');
+        params.set('approved_only', (!approvedToggle || approvedToggle.checked) ? 'true' : 'false');
+        const res = await authed(`/time-tracking.csv?${params.toString()}`);
         if (!res.ok) {
-          document.getElementById('downloadCsvError').textContent = 'Failed to download CSV';
+          if (errEl) errEl.textContent = 'Failed to download CSV';
           return;
         }
         const blob = await res.blob();
@@ -5525,7 +5633,31 @@
         a.remove();
         URL.revokeObjectURL(url);
       } catch {
-        document.getElementById('downloadCsvError').textContent = 'Error downloading CSV';
+        if (errEl) errEl.textContent = 'Error downloading CSV';
+      }
+    });
+
+    const volCsvBtn = document.getElementById('volDownloadCsvBtn');
+    if (volCsvBtn) volCsvBtn.addEventListener('click', async () => {
+      const errEl = document.getElementById('volDownloadCsvError');
+      if (errEl) errEl.textContent = '';
+      try {
+        const res = await authed('/time-tracking.csv');
+        if (!res.ok) {
+          if (errEl) errEl.textContent = 'Failed to download CSV';
+          return;
+        }
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'my-timesheet.csv';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      } catch {
+        if (errEl) errEl.textContent = 'Error downloading CSV';
       }
     });
 
