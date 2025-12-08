@@ -4417,15 +4417,30 @@
     }
 
     // ADMIN TIMES TABLE
-   async function fetchAdminTimes() {
+    async function fetchAdminTimes() {
       if (role !== 'admin' && role !== 'superadmin') return;
       try {
         let path = '/time-tracking';
         if (role === 'superadmin') {
-          const gid = document.getElementById('superadminOrgPicker')?.value;
-          const t1 = document.getElementById('adminTimeList');
-          const t2 = document.getElementById('superAdminTimeList');
-          if (!gid) { [t1, t2].forEach(t => { if (t) t.innerHTML = ''; }); return; }
+          const orgPicker = document.getElementById('superadminOrgPicker');
+          let gid = orgPicker?.value?.trim();
+          const adminTable = document.getElementById('adminTimeList');
+          const superTable = document.getElementById('superAdminTimeList');
+          const tableTargets = [adminTable, superTable];
+          if (!gid) {
+            const fallbackOpt = Array.from(orgPicker?.options || []).find(opt => opt.value);
+            if (fallbackOpt) {
+              if (orgPicker) {
+                orgPicker.value = fallbackOpt.value;
+                try { orgPicker.dispatchEvent(new Event('change')); } catch { /* ignore */ }
+              }
+              return;
+            }
+            tableTargets.forEach(t => {
+              if (t) t.innerHTML = '<tr><td colspan="10" class="hint">Select an organization to view time logs.</td></tr>';
+            });
+            return;
+          }
           path += `?group_id=${encodeURIComponent(gid)}`;
         }
         const res = await authed(path);
@@ -4920,6 +4935,8 @@
           // Refresh Volunteer Mgmt scoped to org
           populateVolunteerMgmt();
           refreshVolunteerLogs();
+          fetchAdminTimes();
+          fetchApprovals();
         });
         orgPicker._wired = true;
       }
