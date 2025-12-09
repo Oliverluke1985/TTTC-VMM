@@ -1604,16 +1604,20 @@
         : null;
       const tz = getGroupTimeZone(eventEntry.group_id);
       const duties = Array.isArray(eventEntry.duties) ? eventEntry.duties : [];
+      const allAssignments = duties.flatMap(d => Array.isArray(d.assignments) ? d.assignments : []);
+      const totalHours = allAssignments.reduce((sum, a) => sum + (Number(a?.duration_hours) || 0), 0);
       const dutiesHtml = duties.length
         ? duties.map(duty => buildScheduleDutyHtml(duty, color, tz)).join('')
         : '<div class="calendar-day-schedule-empty">No duties scheduled.</div>';
       const metaLabel = orgName || eventEntry.address || '';
       const metaHtml = metaLabel ? `<span>${metaLabel}</span>` : '';
+      const hoursHtml = totalHours > 0 ? `<div class="calendar-schedule-hours">Hours logged: ${totalHours.toFixed(2)}</div>` : '';
       const headerStyle = color ? ` style="border-left-color:${color}"` : '';
       return `<div class="${columnClasses.join(' ')}">
         <div class="calendar-schedule-column-header"${headerStyle}>
-          <div>${eventEntry.title || 'Event'}</div>
+          <div>${eventEntry.event_title || eventEntry.title || 'Event'}</div>
           ${metaHtml}
+          ${hoursHtml}
         </div>
         ${dutiesHtml}
       </div>`;
@@ -1677,6 +1681,29 @@
         const res = await authed(`/calendar/assignments?${params.toString()}`);
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.message || 'Failed to load schedule');
+        if (role === 'volunteer') {
+          const dayEvents = (calendarState.eventsByDate || {})[dateKey] || [];
+          const merged = [];
+          const seen = new Set();
+          (Array.isArray(data.events) ? data.events : []).forEach(ev => {
+            const key = ev.event_id != null ? String(ev.event_id) : `evt-${merged.length}`;
+            seen.add(key);
+            merged.push(ev);
+          });
+          dayEvents.forEach(ev => {
+            const key = ev.id != null ? String(ev.id) : '';
+            if (key && !seen.has(key)) {
+              merged.push({
+                event_id: ev.id,
+                event_title: ev.title || 'Event',
+                group_id: ev.group_id,
+                color_hex: ev.color_hex,
+                duties: []
+              });
+            }
+          });
+          data.events = merged;
+        }
         calendarState.scheduleCache[dateKey] = data;
         renderCalendarDaySchedule(dateKey);
       } catch (err) {

@@ -1679,7 +1679,7 @@ app.get('/time-tracking.csv', authRequired, async (req, res) => {
       if (value == null) return '';
       return String(value).replace(/"/g, '""');
     };
-    const header = ['Log ID','Volunteer','Duty','Event ID','Event Name','Start Time','End Time','Hours','Duty Date','Approved'];
+    const header = ['Log ID','Volunteer','Duty','Event ID','Event Name','Start Time','End Time','Hours','Approved'];
     const body = rows.map(r => {
       const volunteerLabel = r.volunteer_name
         ? `${r.volunteer_name} (${r.volunteer_email || 'no email'})`
@@ -1695,7 +1695,6 @@ app.get('/time-tracking.csv', authRequired, async (req, res) => {
         formatCell(format12Hour(r.start_time)),
         formatCell(format12Hour(r.end_time)),
         formatCell(r.duration_hours != null ? Number(r.duration_hours).toFixed(2) : ''),
-        formatCell(r.duty_date || ''),
         formatCell(r.approved ? 'Yes' : 'No')
       ].map(v => `"${v}"`).join(',');
     });
@@ -1754,6 +1753,7 @@ app.get('/calendar/assignments', authRequired, async (req, res) => {
         u.email AS volunteer_email,
         t.start_time,
         t.end_time,
+        t.duration_hours,
         t.duty_date,
         d.id AS duty_id,
         d.title AS duty_title,
