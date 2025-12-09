@@ -3780,6 +3780,10 @@
       if (!(role === 'admin' || role === 'superadmin')) return;
       const select = document.getElementById('dutyTemplateSelect');
       if (!select) return;
+      // clear cache before fetch to avoid stale cross-org entries
+      window.dutyTemplates = [];
+      window.dutyTemplateById = {};
+      populateDutyTemplateSelect();
       try {
         let path = '/duty-templates';
         if (role === 'admin') {
