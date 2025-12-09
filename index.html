@@ -3815,11 +3815,16 @@
         if (!res.ok) throw new Error('Failed to load duty templates');
         const data = await res.json();
         window.dutyTemplates = Array.isArray(data) ? data : [];
+        // Client-side safety: for admins, hard-filter to their org only
+        if (role === 'admin') {
+          const gid = groupId != null ? Number(groupId) : NaN;
+          window.dutyTemplates = window.dutyTemplates.filter(t => Number(t?.group_id) === gid);
+        }
         window.dutyTemplateById = {};
         window.dutyTemplates.forEach(t => {
           if (t && t.id != null) window.dutyTemplateById[t.id] = t;
         });
-        setDutyTemplateStatus('');
+        setDutyTemplateStatus(window.dutyTemplates.length ? '' : 'No saved duties for this organization.', false);
         populateDutyTemplateSelect();
       } catch {
         window.dutyTemplates = [];
