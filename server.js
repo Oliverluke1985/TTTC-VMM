@@ -1516,7 +1516,7 @@ app.get('/time-tracking', authRequired, async (req, res) => {
   const groupFilter = req.query.group_id ? Number(req.query.group_id) : null;
   const baseSelect = `
     SELECT t.*,
-           u.name AS volunteer_name,
+           COALESCE(u.name, u.email, 'Volunteer #' || u.id::text) AS volunteer_name,
            u.email AS volunteer_email,
            d.title AS duty_title,
            d.event_id AS duty_event_id,
@@ -1599,8 +1599,8 @@ app.get('/time-tracking.csv', authRequired, async (req, res) => {
       const whereSql = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
       rows = (await pool.query(
         `SELECT t.*, d.event_id AS duty_event_id,
-                u.name AS volunteer_name,
-                u.email AS volunteer_email,
+                COALESCE(u.name, u.email, 'Volunteer #' || u.id::text) AS volunteer_name,
+           u.email AS volunteer_email,
                 d.title AS duty_title,
                 ev.title AS event_title
          FROM time_tracking t
@@ -1621,8 +1621,8 @@ app.get('/time-tracking.csv', authRequired, async (req, res) => {
       if (approvedOnly) clauses.push('t.approved = true');
       rows = (await pool.query(
         `SELECT t.*, d.event_id AS duty_event_id,
-                u.name AS volunteer_name,
-                u.email AS volunteer_email,
+                COALESCE(u.name, u.email, 'Volunteer #' || u.id::text) AS volunteer_name,
+           u.email AS volunteer_email,
                 d.title AS duty_title,
                 ev.title AS event_title
          FROM time_tracking t
@@ -1639,8 +1639,8 @@ app.get('/time-tracking.csv', authRequired, async (req, res) => {
       if (approvedOnly) clauses.push('t.approved = true');
       rows = (await pool.query(
         `SELECT t.*, d.event_id AS duty_event_id,
-                u.name AS volunteer_name,
-                u.email AS volunteer_email,
+                COALESCE(u.name, u.email, 'Volunteer #' || u.id::text) AS volunteer_name,
+           u.email AS volunteer_email,
                 d.title AS duty_title,
                 ev.title AS event_title
          FROM time_tracking t
