@@ -1697,13 +1697,36 @@ app.get('/time-tracking.csv', authRequired, async (req, res) => {
       if (value == null) return '';
       return String(value).replace(/"/g, '""');
     };
-    const header = ['Log ID','Volunteer','Duty','Event ID','Event Name','Start Time','End Time','Hours','Approved'];
-    const body = rows.map(r => {
+            const header = ['Log ID','Volunteer','Duty','Event ID','Event Name','Start Time','End Time','Hours','Approved','Event Running Hours','Volunteer Running Hours'];
+    // Sort ascending by start time for running totals
+    const sorted = [...rows].sort((a, b) => {
+      const aTime = a.start_time ? Date.parse(a.start_time) : 0;
+      const bTime = b.start_time ? Date.parse(b.start_time) : 0;
+      return aTime - bTime;
+    });
+    const eventRunning = new Map(); // key: volunteer|event
+    const volRunning = new Map();
+    const eventTotals = new Map(); // key: volunteer|event -> total
+    const volTotals = new Map();
+    const volunteerLabels = new Map();
+    const eventLabels = new Map();
+
+    const body = sorted.map(r => {
       const volunteerLabel = r.volunteer_name
         ? `${r.volunteer_name} (${r.volunteer_email || 'no email'})`
         : (r.volunteer_email || `Volunteer #${r.volunteer_id}`);
       const dutyLabel = r.duty_title ? `${r.duty_title} (#${r.duty_id || 'N/A'})` : (r.duty_id != null ? `Duty #${r.duty_id}` : '');
       const eventLabel = r.event_title || '';
+      volunteerLabels.set(r.volunteer_id, volunteerLabel);
+      eventLabels.set(r.event_id, eventLabel);
+      const hoursVal = r.duration_hours != null ? Number(r.duration_hours) : null;
+      const evtKey = `${r.volunteer_id}|${r.event_id ?? 'none'}`;
+      const evRun = (eventRunning.get(evtKey) || 0) + (hoursVal || 0);
+      const volRun = (volRunning.get(r.volunteer_id) || 0) + (hoursVal || 0);
+      eventRunning.set(evtKey, evRun);
+      volRunning.set(r.volunteer_id, volRun);
+      eventTotals.set(evtKey, (eventTotals.get(evtKey) || 0) + (hoursVal || 0));
+      volTotals.set(r.volunteer_id, (volTotals.get(r.volunteer_id) || 0) + (hoursVal || 0));
       return [
         formatCell(r.id),
         formatCell(volunteerLabel),
@@ -1712,12 +1735,47 @@ app.get('/time-tracking.csv', authRequired, async (req, res) => {
         formatCell(eventLabel || ''),
         formatCell(format12Hour(r.start_time)),
         formatCell(format12Hour(r.end_time)),
-        formatCell(r.duration_hours != null ? Number(r.duration_hours).toFixed(2) : ''),
-        formatCell(r.approved ? 'Yes' : 'No')
+        formatCell(hoursVal != null ? hoursVal.toFixed(2) : ''),
+        formatCell(r.approved ? 'Yes' : 'No'),
+        formatCell(hoursVal != null ? evRun.toFixed(2) : ''),
+        formatCell(hoursVal != null ? volRun.toFixed(2) : '')
       ].map(v => `"${v}"`).join(',');
     });
-    const csv = [header.map(v => `"${v}"`).join(','), ...body].join('\n');
+    const summary = [];
+    if (sorted.length) summary.push('');
+    const volIds = Array.from(volTotals.keys());
+    volIds.forEach(vId => {
+      const vLabel = volunteerLabels.get(vId) || `Volunteer #${vId}`;
+      Array.from(eventTotals.entries())
+        .filter(([key]) => key.startsWith(`${vId}|`))
+        .forEach(([key, total]) => {
+          const eventId = key.split('|')[1];
+          const eLabel = eventLabels.get(eventId === 'none' ? null : Number(eventId)) || '';
+          const row = new Array(header.length).fill('');
+          row[1] = formatCell(vLabel);
+          row[3] = formatCell(eventId === 'none' ? '' : eventId);
+          row[4] = formatCell(eLabel);
+          row[7] = formatCell(total.toFixed(2));
+          summary.push(row.map(v => `"${v}"`).join(','));
+        });
+      const volTotal = volTotals.get(vId) || 0;
+      const totRow = new Array(header.length).fill('');
+      totRow[1] = formatCell(`${vLabel} — TOTAL`);
+      totRow[7] = formatCell(volTotal.toFixed(2));
+      summary.push(totRow.map(v => `"${v}"`).join(','));
+      summary.push('');
+    });
+    const grandTotal = Array.from(volTotals.values()).reduce((a, b) => a + b, 0);
+    if (grandTotal > 0) {
+      const gRow = new Array(header.length).fill('');
+      gRow[1] = formatCell('GRAND TOTAL');
+      gRow[7] = formatCell(grandTotal.toFixed(2));
+      summary.push(gRow.map(v => `"${v}"`).join(','));
+    }
+
+        const csv = [header.map(v => `\"${v}\"`).join(','), ...body, ...summary].join('\n');
     res.setHeader('Content-Type', 'text/csv');
+res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', 'attachment; filename="time-tracking.csv"');
     res.send(csv);
   } catch (err) {
