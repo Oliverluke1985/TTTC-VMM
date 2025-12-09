@@ -72,6 +72,10 @@ jobs:
         with:
           timeout_minutes: 10
           max_attempts: 4
-          command: heroku container:release web -a "${{ secrets.HEROKU_APP_NAME }}"
+          command: |
+            set -euo pipefail
+            echo "$HEROKU_API_KEY" | docker login --username=_ --password-stdin registry.heroku.com
+            heroku container:login
+            heroku container:release web -a "${{ secrets.HEROKU_APP_NAME }}"
 
 
