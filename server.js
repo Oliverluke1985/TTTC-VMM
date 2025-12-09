@@ -1687,7 +1687,8 @@ app.get('/time-tracking.csv', authRequired, async (req, res) => {
     res.setHeader('Content-Disposition', 'attachment; filename="time-tracking.csv"');
     res.send(csv);
   } catch (err) {
-    res.status(500).json({ message: 'Failed to export CSV' });
+    console.error('Error generating time-tracking CSV:', err);
+    res.status(500).json({ message: 'Failed to export CSV', error: err?.message || 'Unknown error' });
   }
 });
 
