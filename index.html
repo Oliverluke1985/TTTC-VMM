@@ -1656,6 +1656,7 @@
 
     async function loadCalendarDaySchedule(dateKey, options = {}) {
       const { force = false } = options || {};
+      const effectiveForce = force || role === 'volunteer';
       const wrap = document.getElementById('calendarDaySchedule');
       const body = document.getElementById('calendarDayScheduleBody');
       const title = document.getElementById('calendarDayScheduleTitle');
@@ -1678,7 +1679,7 @@
         body.innerHTML = '<div class="hint">Select an organization above to view volunteers.</div>';
         return;
       }
-      if (!force && calendarState.scheduleCache?.[dateKey]) {
+      if (!effectiveForce && calendarState.scheduleCache?.[dateKey]) {
         renderCalendarDaySchedule(dateKey);
         return;
       }
