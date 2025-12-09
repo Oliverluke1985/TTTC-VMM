@@ -253,7 +253,21 @@
         <div class="col">
           <h3>Volunteer Timesheet</h3>
           <table class="stacked-table">
-            <thead><tr><th>ID</th><th>Event</th><th>Duty</th><th>Start</th><th>End</th><th>Hours</th><th>Date</th><th>Save</th><th>Delete</th></tr></thead>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Event</th>
+                <th>Duty</th>
+                <th>Start</th>
+                <th>End</th>
+                <th>Hours</th>
+                <th>Date</th>
+                <th>Status</th>
+                <th>Approve</th>
+                <th>Save</th>
+                <th>Delete</th>
+              </tr>
+            </thead>
             <tbody id="clockAdminTimeList"></tbody>
           </table>
           <div id="clockAdminEmpty" class="hint"></div>
@@ -775,7 +789,20 @@
     </div>
     <table>
       <thead>
-        <tr><th>ID</th><th>Volunteer</th><th>Event</th><th>Duty</th><th>Start</th><th>End</th><th>Hours</th><th>Date</th><th>Edit</th><th>Delete</th></tr>
+        <tr>
+          <th>ID</th>
+          <th>Volunteer</th>
+          <th>Event</th>
+          <th>Duty</th>
+          <th>Start</th>
+          <th>End</th>
+          <th>Hours</th>
+          <th>Date</th>
+          <th>Status</th>
+          <th>Approve</th>
+          <th>Edit</th>
+          <th>Delete</th>
+        </tr>
       </thead>
       <tbody id="superAdminTimeList"></tbody>
     </table>
@@ -851,7 +878,20 @@
     <h3>All Time Logs (Scoped to Org)</h3>
     <table>
       <thead>
-        <tr><th>ID</th><th>Volunteer</th><th>Event</th><th>Duty</th><th>Start</th><th>End</th><th>Hours</th><th>Date</th><th>Edit</th><th>Delete</th></tr>
+        <tr>
+          <th>ID</th>
+          <th>Volunteer</th>
+          <th>Event</th>
+          <th>Duty</th>
+          <th>Start</th>
+          <th>End</th>
+          <th>Hours</th>
+          <th>Date</th>
+          <th>Status</th>
+          <th>Approve</th>
+          <th>Edit</th>
+          <th>Delete</th>
+        </tr>
       </thead>
       <tbody id="adminTimeList"></tbody>
     </table>
@@ -911,10 +951,21 @@
     <div class="row" id="vmLogsRow">
       <div class="col">
         <h3>Selected Volunteer Logs</h3>
-    <table class="stacked-table">
-      <thead><tr><th>ID</th><th>Duty</th><th>Start</th><th>End</th><th>Hours</th><th>Date</th></tr></thead>
+        <table class="stacked-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Duty</th>
+              <th>Start</th>
+              <th>End</th>
+              <th>Hours</th>
+              <th>Date</th>
+              <th>Status</th>
+              <th>Approve</th>
+            </tr>
+          </thead>
           <tbody id="vmLogList"></tbody>
-    </table>
+        </table>
       </div>
     </div>
     <div class="row" id="vmEditSelectRow">
@@ -3361,6 +3412,10 @@
           const hours = (r.duration_hours != null ? Number(r.duration_hours).toFixed(2) : '');
           timeEntryTimeZoneById[r.id] = tz;
           const assignment = describeAssignment(r);
+          const statusLabel = r.approved ? 'Approved' : 'Pending';
+          const approveCell = r.approved
+            ? '<span>Approved</span>'
+            : `<button data-tid="${r.id}" class="clockApproveBtn">Approve</button>`;
           tr.innerHTML =
             `<td data-label="ID">${r.id}</td>
              <td data-label="Event">${assignment.eventLabel || '-'}</td>
@@ -3369,6 +3424,8 @@
              <td data-label="End"><input type="datetime-local" id="clock-end-${r.id}" value="${formatDateTimeLocal(r.end_time, tz)}"></td>
              <td data-label="Hours">${hours}</td>
              <td data-label="Date"><input type="date" id="clock-date-${r.id}" value="${formatDateLocal(r.duty_date)}"></td>
+             <td data-label="Status">${statusLabel}</td>
+             <td data-label="Approve">${approveCell}</td>
              <td data-label="Save"><button data-tid="${r.id}" class="clockSaveBtn">Save</button></td>
              <td data-label="Delete"><button data-tid="${r.id}" class="clockDeleteBtn" style="color:#b00020">Delete</button></td>`;
           tbody.appendChild(tr);
@@ -3383,6 +3440,12 @@
           btn.addEventListener('click', async (ev) => {
             const id = Number(ev.currentTarget.getAttribute('data-tid'));
             if (Number.isFinite(id)) await deleteClockAdjustTime(id);
+          });
+        });
+        tbody.querySelectorAll('.clockApproveBtn').forEach(btn => {
+          btn.addEventListener('click', async (ev) => {
+            const id = Number(ev.currentTarget.getAttribute('data-tid'));
+            if (Number.isFinite(id)) await approve(id);
           });
         });
       } catch { /* silent */ }
@@ -4509,13 +4572,19 @@
       logs.forEach(r => {
         const tr = document.createElement('tr');
         const hours = (r.duration_hours != null ? Number(r.duration_hours).toFixed(2) : '');
+        const statusLabel = r.approved ? 'Approved' : 'Pending';
+        const approveCell = r.approved
+          ? '<span>Approved</span>'
+          : `<button type="button" class="vmApproveBtn" onclick="approve(${r.id})">Approve</button>`;
         tr.innerHTML =
           `<td data-label="ID">${r.id}</td>
            <td data-label="Duty">${formatDutyLabel(r.duty_id)}</td>
            <td data-label="Start">${formatDisplayDateTime(r.start_time, tz)}</td>
            <td data-label="End">${formatDisplayDateTime(r.end_time, tz)}</td>
            <td data-label="Hours">${hours}</td>
-           <td data-label="Date">${r.duty_date || ''}</td>`;
+           <td data-label="Date">${r.duty_date || ''}</td>
+           <td data-label="Status">${statusLabel}</td>
+           <td data-label="Approve">${approveCell}</td>`;
         tbody.appendChild(tr);
       });
     }
@@ -4544,8 +4613,22 @@
     async function approve(id) {
       try {
         const res = await authed(`/time-tracking/${id}/approve`, { method: 'POST' });
-        if (res.ok) fetchApprovals();
-      } catch (e) { /* silent */ }
+        if (res.ok) {
+          await fetchApprovals();
+          await fetchAdminTimes();
+          await refreshClockAdminTimes();
+          await refreshVolunteerLogs();
+          await fetchTimeTracking();
+          showActionStatus('Time entry approved.');
+        } else {
+          const data = await res.json().catch(() => ({}));
+          alert(data.message || 'Failed to approve time entry');
+          showActionStatus(data.message || 'Failed to approve time entry', true);
+        }
+      } catch (e) {
+        alert('Error approving time entry');
+        showActionStatus('Error approving time entry', true);
+      }
     }
     async function rejectApproval(id) {
       if (!confirm('Delete this pending time log?')) return;
@@ -4578,7 +4661,8 @@
         : document.getElementById('adminTimeVolunteerHint');
       if (!tbody) return;
       const showTableHint = (message) => {
-        tbody.innerHTML = message ? `<tr><td colspan="10" class="hint">${message}</td></tr>` : '';
+        const columns = 12;
+        tbody.innerHTML = message ? `<tr><td colspan="${columns}" class="hint">${message}</td></tr>` : '';
       };
       if (isSuperadmin) {
         const orgPicker = document.getElementById('superadminOrgPicker');
@@ -4623,12 +4707,21 @@
         timeEntryTimeZoneById[r.id] = tz;
         const volunteerLabel = formatVolunteerLabel(r);
         const assignment = describeAssignment(r);
+        const statusLabel = r.approved ? 'Approved' : 'Pending';
+        const approveCell = r.approved
+          ? '<span>Approved</span>'
+          : `<button type="button" class="approve-btn" onclick="approve(${r.id})">Approve</button>`;
         tr.innerHTML =
-          `<td>${r.id}</td><td>${volunteerLabel}</td><td>${assignment.eventLabel || '-'}</td><td>${assignment.dutyLabel || '-'}</td>
+          `<td>${r.id}</td>
+           <td>${volunteerLabel}</td>
+           <td>${assignment.eventLabel || '-'}</td>
+           <td>${assignment.dutyLabel || '-'}</td>
            <td><input type="datetime-local" id="start-${r.id}" value="${formatDateTimeLocal(r.start_time, tz)}"></td>
            <td><input type="datetime-local" id="end-${r.id}" value="${formatDateTimeLocal(r.end_time, tz)}"></td>
            <td>${hours}</td>
            <td><input type="date" id="date-${r.id}" value="${formatDateLocal(r.duty_date)}"></td>
+           <td>${statusLabel}</td>
+           <td>${approveCell}</td>
            <td><button onclick="saveTime(${r.id})">Save</button></td>
            <td><button onclick="deleteTime(${r.id})">Delete</button></td>`;
         tbody.appendChild(tr);
