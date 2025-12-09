@@ -142,6 +142,7 @@ async function ensureTimeTrackingApprovalColumn() {
   if (ensuredTimeTrackingApprovedColumn) return;
   try {
     await pool.query('ALTER TABLE IF EXISTS time_tracking ADD COLUMN IF NOT EXISTS approved BOOLEAN DEFAULT false');
+    await pool.query('UPDATE time_tracking SET approved=false WHERE approved IS NULL');
     ensuredTimeTrackingApprovedColumn = true;
   } catch (err) {
     console.error('Failed ensuring time_tracking.approved column:', err?.message || err);
