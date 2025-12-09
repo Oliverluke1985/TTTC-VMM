@@ -465,6 +465,7 @@
           <option value="open">open</option>
           <option value="closed">closed</option>
         </select>
+        <label>Color</label><input id="dutyColor" type="color" value="#2563eb" />
         <label>Max Volunteers (optional)</label>
         <input id="dutyCapacity" type="number" min="1" placeholder="Unlimited" />
         <div class="optional-field">
@@ -517,6 +518,7 @@
             <option value="open">open</option>
             <option value="closed">closed</option>
           </select>
+          <label>Color</label><input id="templateColor" type="color" value="#2563eb" />
           <label>Max Volunteers (optional)</label>
           <input id="templateCapacity" type="number" min="1" placeholder="Unlimited" />
           <div id="dutyTemplateGroupRow" class="hidden">
@@ -546,6 +548,7 @@
           <option value="in_progress">in_progress</option>
           <option value="completed">completed</option>
         </select>
+        <label>Color</label><input id="editDutyColor" type="color" value="#2563eb" />
         <label>Max Volunteers (optional)</label>
         <input id="editDutyCapacity" type="number" min="1" placeholder="Unlimited" />
         <div class="optional-field">
@@ -1560,10 +1563,13 @@
       }
     }
 
-    function getDutyColor(dutyId) {
-      if (!dutyId && dutyId !== 0) return null;
+    function getDutyColor(dutyLike) {
+      const colorHex = normalizeHexColor(typeof dutyLike === 'string' ? dutyLike : dutyLike?.color_hex);
+      if (colorHex) return colorHex;
+      const id = (typeof dutyLike === 'object' && dutyLike) ? dutyLike.id : dutyLike;
+      if (!Number.isFinite(Number(id))) return null;
       const palette = ['#4F46E5','#DB2777','#059669','#D97706','#2563EB','#7C3AED','#0EA5E9','#EF4444','#10B981','#F59E0B'];
-      const idx = Math.abs(Number(dutyId)) % palette.length;
+      const idx = Math.abs(Number(id)) % palette.length;
       return palette[idx];
     }
 
@@ -1584,10 +1590,11 @@
       return box;
     }
 
-    function renderDutyColorPreview(previewId, dutyId) {
+    function renderDutyColorPreview(previewId, dutyInput) {
       const el = document.getElementById(previewId);
       if (!el) return;
-      const color = Number.isFinite(Number(dutyId)) ? getDutyColor(Number(dutyId)) : null;
+      const direct = normalizeHexColor(typeof dutyInput === 'string' ? dutyInput : null);
+      const color = direct || getDutyColor(dutyInput);
       if (color) {
         el.innerHTML = `<span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${color};"></span><span>${color}</span>`;
         el.classList.remove('hidden');
@@ -1614,7 +1621,7 @@
 
     function buildScheduleDutyHtml(dutyEntry, eventColor, tz) {
       const assignments = Array.isArray(dutyEntry.assignments) ? dutyEntry.assignments : [];
-      const dutyColor = getDutyColor(dutyEntry.id) || eventColor;
+      const dutyColor = getDutyColor(dutyEntry) || eventColor;
       const assignmentsHtml = assignments.length
         ? assignments.map(assign => buildScheduleAssignmentHtml(assign, dutyColor, tz)).join('')
         : '<div class="calendar-day-schedule-empty">No volunteers assigned.</div>';
@@ -3732,7 +3739,7 @@
         });
         if (editSelect) {
           ensureDutyColorPreview('dutyEditSelect', 'dutyEditColorPreview');
-          if (editSelect.value) renderDutyColorPreview('dutyEditColorPreview', Number(editSelect.value));
+          if (editSelect.value) renderDutyColorPreview('dutyEditColorPreview', (window.dutyById && window.dutyById[Number(editSelect.value)])?.color_hex || editSelect.value);
         }
         // wire prefill duty edit
         tbody.querySelectorAll('.prefillDutyEditBtn').forEach(btn => btn.addEventListener('click', (ev) => {
@@ -3748,6 +3755,9 @@
           const stored = (window.dutyById && window.dutyById[id]) ? window.dutyById[id].max_volunteers : null;
           if (capInput) capInput.value = stored != null ? stored : '';
           const storedLocation = (window.dutyById && window.dutyById[id]) ? window.dutyById[id].location : '';
+          const storedColor = (window.dutyById && window.dutyById[id]) ? window.dutyById[id].color_hex : '';
+          const editColorInput = document.getElementById('editDutyColor');
+          if (editColorInput) editColorInput.value = normalizeHexColor(storedColor) || '#2563eb';
           if (optionalFieldControls.editDutyLocation) {
             if (storedLocation) {
               optionalFieldControls.editDutyLocation.show();
@@ -3869,7 +3879,7 @@
         ensureDutyColorPreview('dutyTemplateSelect', 'dutyTemplateColorPreview');
         const templateSel = document.getElementById('dutyTemplateSelect');
         if (templateSel && templateSel.value) {
-          renderDutyColorPreview('dutyTemplateColorPreview', Number(templateSel.value));
+          { const tpl = (window.dutyTemplateById || {})[Number(templateSel.value)]; renderDutyColorPreview('dutyTemplateColorPreview', tpl?.color_hex || templateSel.value); }
         } else {
           renderDutyColorPreview('dutyTemplateColorPreview', null);
         }
@@ -3890,7 +3900,9 @@
     function applyDutyTemplateToForm(template) {
       if (!template) return;
       ensureDutyColorPreview('dutyTemplateSelect', 'dutyTemplateColorPreview');
-      renderDutyColorPreview('dutyTemplateColorPreview', template.id);
+      renderDutyColorPreview('dutyTemplateColorPreview', template.color_hex || template.id);
+      const dutyColorInput = document.getElementById('dutyColor');
+      if (dutyColorInput) dutyColorInput.value = normalizeHexColor(template.color_hex) || dutyColorInput.value || '#2563eb';
       const titleInput = document.getElementById('dutyTitle');
       const descInput = document.getElementById('dutyDesc');
       const statusSel = document.getElementById('dutyStatus');
@@ -3920,7 +3932,7 @@
       ensureDutyColorPreview('dutyEditSelect', 'dutyEditColorPreview');
       if (!sel.value) { renderDutyColorPreview('dutyEditColorPreview', null); return; }
       const id = Number(sel.value);
-      renderDutyColorPreview('dutyEditColorPreview', id);
+      renderDutyColorPreview('dutyEditColorPreview', (window.dutyById && window.dutyById[id])?.color_hex || id);
       const row = Array.from(document.querySelectorAll('#dutyList tr')).find(tr => tr.firstChild?.textContent == String(id));
       if (!row) {
         document.getElementById('dutyEditWrap').classList.remove('hidden');
@@ -3977,7 +3989,8 @@
       ensureDutyColorPreview('dutyTemplateSelect', 'dutyTemplateColorPreview');
       dutyTemplateSelect.addEventListener('change', () => {
         const templateId = Number(dutyTemplateSelect.value);
-        renderDutyColorPreview('dutyTemplateColorPreview', Number.isFinite(templateId) ? templateId : null);
+        const tpl = (window.dutyTemplateById || {})[templateId];
+        renderDutyColorPreview('dutyTemplateColorPreview', tpl?.color_hex || (Number.isFinite(templateId) ? templateId : null));
       });
       dutyTemplateSelect._colorWired = true;
     }
@@ -3998,7 +4011,7 @@
         setDutyTemplateStatus('Saved duty not found.', true);
         return;
       }
-      renderDutyColorPreview('dutyTemplateColorPreview', templateId);
+      renderDutyColorPreview('dutyTemplateColorPreview', template.color_hex || templateId);
       applyDutyTemplateToForm(template);
     });
     document.getElementById('saveDutyTemplateBtn')?.addEventListener('click', async () => {
@@ -4010,6 +4023,7 @@
       const title = titleInput?.value.trim();
       const description = descInput?.value.trim();
       const status = statusSel?.value || 'open';
+      const color_hex = normalizeHexColor(document.getElementById('templateColor')?.value) || null;
       const rawCap = capacityInput?.value?.trim();
       let max_volunteers = null;
       if (rawCap) {
@@ -4048,7 +4062,7 @@
         const res = await authed('/duty-templates', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title, description, status, max_volunteers, group_id: targetGroupId })
+          body: JSON.stringify({ title, description, status, max_volunteers, group_id: targetGroupId, color_hex })
         });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
@@ -4103,7 +4117,7 @@
         const res = await authed('/duties', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title, description, status, group_id, event_id, max_volunteers, location: dutyLocationValue || null })
+          body: JSON.stringify({ title, description, status, group_id, event_id, max_volunteers, location: dutyLocationValue || null, color_hex: normalizeHexColor(document.getElementById('dutyColor')?.value) || null })
         });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
@@ -4115,6 +4129,8 @@
         document.getElementById('dutyDesc').value = '';
         if (capacityInput) capacityInput.value = '';
         if (eventSel) eventSel.value = '';
+        const dutyColorInput = document.getElementById('dutyColor');
+        if (dutyColorInput) dutyColorInput.value = dutyColorInput.defaultValue || '#2563eb';
         optionalFieldControls.dutyLocation?.hide();
         // If superadmin, sync the top org filter to the group used so list shows immediately
         if (role === 'superadmin') {
@@ -4162,7 +4178,7 @@
         const res = await authed(`/duties/${id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title, description, status, max_volunteers, location: location || null })
+          body: JSON.stringify({ title, description, status, max_volunteers, location: location || null, color_hex: normalizeHexColor(document.getElementById('editDutyColor')?.value) || null })
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) { document.getElementById('editDutyError').textContent = data.message || 'Failed to save duty'; return; }

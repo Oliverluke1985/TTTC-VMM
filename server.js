@@ -95,6 +95,18 @@ async function ensureTimeTrackingEventColumn() {
   }
 }
 
+let ensuredDutyColorColumn = false;
+async function ensureDutyColorColumns() {
+  if (ensuredDutyColorColumn) return;
+  try {
+    await pool.query("ALTER TABLE IF EXISTS duties ADD COLUMN IF NOT EXISTS color_hex TEXT");
+    await pool.query("ALTER TABLE IF EXISTS duty_templates ADD COLUMN IF NOT EXISTS color_hex TEXT");
+    ensuredDutyColorColumn = true;
+  } catch (err) {
+    console.error('Failed ensuring duty color columns:', err?.message || err);
+  }
+}
+
 let ensuredTimeTrackingConstraints = false;
 let ensuredTimeTrackingApprovedColumn = false;
 async function ensureTimeTrackingConstraints() {
@@ -1233,6 +1245,7 @@ app.post('/events/:id/leave', authRequired, async (req, res) => {
 
 // Duty templates (saved duty "pool")
 app.get('/duty-templates', authRequired, async (req, res) => {
+  await ensureDutyColorColumns();
   if (!isAdmin(req.user)) return res.status(403).json({ message: 'Admins only' });
   try {
     const clauses = [];
@@ -1266,9 +1279,10 @@ app.get('/duty-templates', authRequired, async (req, res) => {
 });
 
 app.post('/duty-templates', authRequired, async (req, res) => {
+  await ensureDutyColorColumns();
   if (!isAdmin(req.user)) return res.status(403).json({ message: 'Admins only' });
   try {
-    const { title, description, status, max_volunteers, group_id } = req.body || {};
+    const { title, description, status, max_volunteers, group_id, color_hex } = req.body || {};
     if (!title || !String(title).trim()) {
       return res.status(400).json({ message: 'Title is required' });
     }
@@ -1291,10 +1305,10 @@ app.post('/duty-templates', authRequired, async (req, res) => {
       maxVol = Math.floor(maxVol);
     }
     const result = await pool.query(
-      `INSERT INTO duty_templates (title, description, status, max_volunteers, group_id, created_by, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,NOW())
+      `INSERT INTO duty_templates (title, description, status, max_volunteers, group_id, color_hex, created_by, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,NOW())
        RETURNING *`,
-      [String(title).trim(), description ?? null, normalizedStatus, maxVol, targetGroupId, req.user.id]
+      [String(title).trim(), description ?? null, normalizedStatus, maxVol, targetGroupId, color_hex ?? null, req.user.id]
     );
     res.json(result.rows[0]);
   } catch (err) {
@@ -1304,6 +1318,7 @@ app.post('/duty-templates', authRequired, async (req, res) => {
 
 // --- Duties
 app.get('/duties', authRequired, async (req, res) => {
+  await ensureDutyColorColumns();
   const baseSelect = `
     SELECT d.*,
       COALESCE((SELECT COUNT(*) FROM time_tracking t WHERE t.duty_id = d.id AND t.end_time IS NULL), 0) AS active_assignments
@@ -1339,8 +1354,9 @@ app.get('/duties', authRequired, async (req, res) => {
 });
 
 app.post('/duties', authRequired, async (req, res) => {
+  await ensureDutyColorColumns();
   try {
-    const { title, description, status, group_id, event_id, max_volunteers, location } = req.body || {};
+    const { title, description, status, group_id, event_id, max_volunteers, location, color_hex } = req.body || {};
     let targetGroupId = group_id ?? null;
     if (isAdmin(req.user)) {
       targetGroupId = (targetGroupId ?? req.user.group_id ?? null);
@@ -1382,6 +1398,7 @@ app.post('/duties', authRequired, async (req, res) => {
     if (has.has('event_id')) { fields.push('event_id'); params.push(`$${idx++}`); values.push(event_id ?? null); }
     if (has.has('max_volunteers')) { fields.push('max_volunteers'); params.push(`$${idx++}`); values.push(maxVol); }
     if (has.has('location')) { fields.push('location'); params.push(`$${idx++}`); values.push(location ?? null); }
+    if (has.has('color_hex')) { fields.push('color_hex'); params.push(`$${idx++}`); values.push(color_hex ?? null); }
 
     const sql = `INSERT INTO duties (${fields.join(',')}) VALUES (${params.join(',')}) RETURNING id`;
     const result = await pool.query(sql, values);
@@ -1393,10 +1410,11 @@ app.post('/duties', authRequired, async (req, res) => {
 
 // Edit duty
 app.patch('/duties/:id', authRequired, async (req, res) => {
+  await ensureDutyColorColumns();
   try {
     const id = Number(req.params.id);
     if (!Number.isFinite(id)) return res.status(400).json({ message: 'Invalid id' });
-    const { title, description, status, event_id, group_id, max_volunteers, location } = req.body || {};
+    const { title, description, status, event_id, group_id, max_volunteers, location, color_hex } = req.body || {};
     // Only admins/superadmins can edit duties broadly; volunteers can only edit their own created duty's title/description
     const isAdminish = isAdmin(req.user);
     const colsRes = await pool.query("SELECT column_name FROM information_schema.columns WHERE table_name='duties'");
