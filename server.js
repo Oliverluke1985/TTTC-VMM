@@ -96,6 +96,7 @@ async function ensureTimeTrackingEventColumn() {
 }
 
 let ensuredTimeTrackingConstraints = false;
+let ensuredTimeTrackingApprovedColumn = false;
 async function ensureTimeTrackingConstraints() {
   if (ensuredTimeTrackingConstraints) return;
   const client = await pool.connect();
@@ -134,6 +135,16 @@ async function ensureTimeTrackingConstraints() {
     console.error('Failed ensuring time_tracking constraints:', err?.message || err);
   } finally {
     client.release();
+  }
+}
+
+async function ensureTimeTrackingApprovalColumn() {
+  if (ensuredTimeTrackingApprovedColumn) return;
+  try {
+    await pool.query('ALTER TABLE IF EXISTS time_tracking ADD COLUMN IF NOT EXISTS approved BOOLEAN DEFAULT false');
+    ensuredTimeTrackingApprovedColumn = true;
+  } catch (err) {
+    console.error('Failed ensuring time_tracking.approved column:', err?.message || err);
   }
 }
 
@@ -182,6 +193,7 @@ async function ensureTimeTrackingConstraints() {
       'ALTER TABLE IF EXISTS time_tracking ADD COLUMN IF NOT EXISTS event_id INTEGER REFERENCES events(id) ON DELETE SET NULL'
     );
     ensuredTimeTrackingEventColumn = true;
+    await ensureTimeTrackingApprovalColumn();
     // Archive orphan duties that have no event
     try {
       await pool.query("UPDATE duties SET archived_at = COALESCE(archived_at, NOW()) WHERE event_id IS NULL");
@@ -1563,6 +1575,7 @@ app.get('/time-tracking', authRequired, async (req, res) => {
 // CSV export
 app.get('/time-tracking.csv', authRequired, async (req, res) => {
   try {
+    await ensureTimeTrackingApprovalColumn();
     const volunteerFilters = []
       .concat(req.query.volunteer_id ?? [])
       .concat(req.query.volunteer_ids ?? []);
@@ -2070,17 +2083,20 @@ app.post('/milestones', authRequired, async (req, res) => {
 
 // --- Approvals (admins)
 app.get('/approvals', authRequired, adminOnly, async (req, res) => {
+  await ensureTimeTrackingApprovalColumn();
   const rows = await pool.query('SELECT * FROM time_tracking WHERE approved=false');
   res.json(rows.rows);
 });
 
 app.post('/approvals/:id/approve', authRequired, adminOnly, async (req, res) => {
+  await ensureTimeTrackingApprovalColumn();
   await pool.query('UPDATE time_tracking SET approved=true WHERE id=$1', [req.params.id]);
   res.json({ ok: true });
 });
 
 // Alias to match frontend POST /time-tracking/:id/approve
 app.post('/time-tracking/:id/approve', authRequired, adminOnly, async (req, res) => {
+  await ensureTimeTrackingApprovalColumn();
   await pool.query('UPDATE time_tracking SET approved=true WHERE id=$1', [req.params.id]);
   res.json({ ok: true });
 });
