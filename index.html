@@ -1567,6 +1567,36 @@
       return palette[idx];
     }
 
+    function ensureDutyColorPreview(anchorId, previewId) {
+      const anchor = document.getElementById(anchorId);
+      if (!anchor) return null;
+      let box = document.getElementById(previewId);
+      if (!box) {
+        box = document.createElement('div');
+        box.id = previewId;
+        box.className = 'duty-color-preview hint';
+        box.style.display = 'flex';
+        box.style.alignItems = 'center';
+        box.style.gap = '6px';
+        box.style.marginTop = '6px';
+        anchor.insertAdjacentElement('afterend', box);
+      }
+      return box;
+    }
+
+    function renderDutyColorPreview(previewId, dutyId) {
+      const el = document.getElementById(previewId);
+      if (!el) return;
+      const color = Number.isFinite(Number(dutyId)) ? getDutyColor(Number(dutyId)) : null;
+      if (color) {
+        el.innerHTML = `<span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${color};"></span><span>${color}</span>`;
+        el.classList.remove('hidden');
+      } else {
+        el.innerHTML = '';
+        el.classList.add('hidden');
+      }
+    }
+
     function buildScheduleAssignmentHtml(assign, color, tz) {
       const timeLabel = formatScheduleTimeRange(assign.start_time, assign.end_time, tz, assign.duty_date);
       const styleParts = [];
@@ -3680,8 +3710,10 @@
           const activeLabel = d.active_assignments != null ? d.active_assignments : 0;
           const isFull = d.max_volunteers != null && d.max_volunteers !== '' && Number(d.max_volunteers) > 0 && Number(activeLabel) >= Number(d.max_volunteers);
           const clockInDisabled = isFull ? 'disabled title="Duty has reached its volunteer limit"' : '';
+          const dutyColor = getDutyColor(d.id);
+          const dutyDot = dutyColor ? `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${dutyColor};margin-right:6px;"></span>` : '';
           tr.innerHTML =
-            `<td>${d.id}</td><td>${d.title}</td><td>${d.description || ''}</td><td>${d.status}</td>
+            `<td>${d.id}</td><td>${dutyDot}${d.title}</td><td>${d.description || ''}</td><td>${d.status}</td>
              <td>${capacityLabel}</td><td>${activeLabel}</td>
              <td>
                <input type="date" id="dutyDate-${d.id}" required>
@@ -3698,6 +3730,10 @@
             editSelect.appendChild(opt);
           }
         });
+        if (editSelect) {
+          ensureDutyColorPreview('dutyEditSelect', 'dutyEditColorPreview');
+          if (editSelect.value) renderDutyColorPreview('dutyEditColorPreview', Number(editSelect.value));
+        }
         // wire prefill duty edit
         tbody.querySelectorAll('.prefillDutyEditBtn').forEach(btn => btn.addEventListener('click', (ev) => {
           const id = Number(ev.currentTarget.getAttribute('data-did'));
@@ -3830,6 +3866,13 @@
         });
         setDutyTemplateStatus(window.dutyTemplates.length ? '' : 'No saved duties for this organization.', false);
         populateDutyTemplateSelect();
+        ensureDutyColorPreview('dutyTemplateSelect', 'dutyTemplateColorPreview');
+        const templateSel = document.getElementById('dutyTemplateSelect');
+        if (templateSel && templateSel.value) {
+          renderDutyColorPreview('dutyTemplateColorPreview', Number(templateSel.value));
+        } else {
+          renderDutyColorPreview('dutyTemplateColorPreview', null);
+        }
       } catch {
         window.dutyTemplates = [];
         window.dutyTemplateById = {};
@@ -3846,6 +3889,8 @@
 
     function applyDutyTemplateToForm(template) {
       if (!template) return;
+      ensureDutyColorPreview('dutyTemplateSelect', 'dutyTemplateColorPreview');
+      renderDutyColorPreview('dutyTemplateColorPreview', template.id);
       const titleInput = document.getElementById('dutyTitle');
       const descInput = document.getElementById('dutyDesc');
       const statusSel = document.getElementById('dutyStatus');
@@ -3871,8 +3916,11 @@
     // Wire selecting a duty to prefill edit form
     document.getElementById('dutyEditSelect')?.addEventListener('change', () => {
       const sel = document.getElementById('dutyEditSelect');
-      if (!sel || !sel.value) return;
+      if (!sel) return;
+      ensureDutyColorPreview('dutyEditSelect', 'dutyEditColorPreview');
+      if (!sel.value) { renderDutyColorPreview('dutyEditColorPreview', null); return; }
       const id = Number(sel.value);
+      renderDutyColorPreview('dutyEditColorPreview', id);
       const row = Array.from(document.querySelectorAll('#dutyList tr')).find(tr => tr.firstChild?.textContent == String(id));
       if (!row) {
         document.getElementById('dutyEditWrap').classList.remove('hidden');
@@ -3923,6 +3971,17 @@
 
     document.getElementById('dutyTemplateMode')?.addEventListener('change', () => updateDutyTemplateModeUI());
     updateDutyTemplateModeUI();
+
+    const dutyTemplateSelect = document.getElementById('dutyTemplateSelect');
+    if (dutyTemplateSelect && !dutyTemplateSelect._colorWired) {
+      ensureDutyColorPreview('dutyTemplateSelect', 'dutyTemplateColorPreview');
+      dutyTemplateSelect.addEventListener('change', () => {
+        const templateId = Number(dutyTemplateSelect.value);
+        renderDutyColorPreview('dutyTemplateColorPreview', Number.isFinite(templateId) ? templateId : null);
+      });
+      dutyTemplateSelect._colorWired = true;
+    }
+
     document.getElementById('applyDutyTemplateBtn')?.addEventListener('click', () => {
       const sel = document.getElementById('dutyTemplateSelect');
       if (!sel || !sel.value) {
@@ -3939,6 +3998,7 @@
         setDutyTemplateStatus('Saved duty not found.', true);
         return;
       }
+      renderDutyColorPreview('dutyTemplateColorPreview', templateId);
       applyDutyTemplateToForm(template);
     });
     document.getElementById('saveDutyTemplateBtn')?.addEventListener('click', async () => {
