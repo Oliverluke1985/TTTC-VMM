@@ -1645,12 +1645,17 @@
           : 'Showing scheduled volunteers for this day.';
       }
       const data = calendarState.scheduleCache?.[dateKey];
-      if (!data || !Array.isArray(data.events) || data.events.length === 0) {
+      let events = Array.isArray(data?.events) ? data.events : [];
+      const selectedEventId = calendarState.selectedEventId != null ? Number(calendarState.selectedEventId) : null;
+      if (selectedEventId) {
+        events = events.filter(ev => ev.event_id != null && Number(ev.event_id) === selectedEventId);
+      }
+      if (!events || events.length === 0) {
         body.innerHTML = '<div class="calendar-day-schedule-empty">No scheduled duties for this date.</div>';
         return;
       }
       const focusId = calendarState.scheduleFocusEventId || calendarState.selectedEventId || null;
-      const columns = data.events.map(ev => buildScheduleColumnHtml(ev, focusId)).join('');
+      const columns = events.map(ev => buildScheduleColumnHtml(ev, focusId)).join('');
       body.innerHTML = `<div class="calendar-schedule-columns">${columns}</div>`;
     }
 
@@ -2260,10 +2265,13 @@
       const scheduleRefreshBtn = document.getElementById('calendarDayScheduleRefresh');
       if (scheduleRefreshBtn && !scheduleRefreshBtn._wired) {
         scheduleRefreshBtn.addEventListener('click', () => {
+          if (calendarState.scheduleCache && calendarState.activeDateKey) {
+            delete calendarState.scheduleCache[calendarState.activeDateKey];
+          }
           if (calendarState.activeDateKey) {
             loadCalendarDaySchedule(calendarState.activeDateKey, { force: true });
           } else {
-            loadCalendarDaySchedule(null);
+            loadCalendarDaySchedule(null, { force: true });
           }
         });
         scheduleRefreshBtn._wired = true;
