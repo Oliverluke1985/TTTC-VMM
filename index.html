@@ -3782,7 +3782,17 @@
       if (!select) return;
       try {
         let path = '/duty-templates';
-        if (role === 'superadmin') {
+        if (role === 'admin') {
+          const gid = groupId != null ? Number(groupId) : NaN;
+          if (!Number.isFinite(gid)) {
+            setDutyTemplateStatus('Select an organization to use duty templates.', true);
+            window.dutyTemplates = [];
+            window.dutyTemplateById = {};
+            populateDutyTemplateSelect();
+            return;
+          }
+          path = `/duty-templates?group_id=${encodeURIComponent(gid)}`;
+        } else if (role === 'superadmin') {
           let groupFilter = options.group_id;
           if (groupFilter != null && !Number.isFinite(groupFilter)) groupFilter = Number(groupFilter);
           if (groupFilter == null) {
@@ -3809,10 +3819,12 @@
         window.dutyTemplates.forEach(t => {
           if (t && t.id != null) window.dutyTemplateById[t.id] = t;
         });
+        setDutyTemplateStatus('');
         populateDutyTemplateSelect();
       } catch {
         window.dutyTemplates = [];
         window.dutyTemplateById = {};
+        setDutyTemplateStatus('Failed to load duty templates', true);
         populateDutyTemplateSelect();
       }
     }
