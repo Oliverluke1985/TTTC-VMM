@@ -1560,6 +1560,13 @@
       }
     }
 
+    function getDutyColor(dutyId) {
+      if (!dutyId && dutyId !== 0) return null;
+      const palette = ['#4F46E5','#DB2777','#059669','#D97706','#2563EB','#7C3AED','#0EA5E9','#EF4444','#10B981','#F59E0B'];
+      const idx = Math.abs(Number(dutyId)) % palette.length;
+      return palette[idx];
+    }
+
     function buildScheduleAssignmentHtml(assign, color, tz) {
       const timeLabel = formatScheduleTimeRange(assign.start_time, assign.end_time, tz, assign.duty_date);
       const styleParts = [];
@@ -1575,10 +1582,11 @@
       </div>`;
     }
 
-    function buildScheduleDutyHtml(dutyEntry, color, tz) {
+    function buildScheduleDutyHtml(dutyEntry, eventColor, tz) {
       const assignments = Array.isArray(dutyEntry.assignments) ? dutyEntry.assignments : [];
+      const dutyColor = getDutyColor(dutyEntry.id) || eventColor;
       const assignmentsHtml = assignments.length
-        ? assignments.map(assign => buildScheduleAssignmentHtml(assign, color, tz)).join('')
+        ? assignments.map(assign => buildScheduleAssignmentHtml(assign, dutyColor, tz)).join('')
         : '<div class="calendar-day-schedule-empty">No volunteers assigned.</div>';
       const locationRow = dutyEntry.location ? `<div class="calendar-schedule-duty-location">${dutyEntry.location}</div>` : '';
       return `<div class="calendar-schedule-duty">
