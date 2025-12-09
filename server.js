@@ -39,7 +39,10 @@ app.use((req, res, next) => {
 
   // 2) Normalize host to canonical once on HTTPS
   if (CANONICAL_HOST && host && host !== CANONICAL_HOST) {
-    return res.redirect(301, `https://${CANONICAL_HOST}${req.originalUrl}`);
+    const isApiRequest = req.path.startsWith('/time-tracking.csv');
+    if (!isApiRequest) {
+      return res.redirect(301, `https://${CANONICAL_HOST}${req.originalUrl}`);
+    }
   }
 
   // 3) HSTS after we are on HTTPS and canonical host
