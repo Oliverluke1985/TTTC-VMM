@@ -1038,6 +1038,8 @@
       activeDateKey: null,
       scheduleCache: {},
       scheduleFocusEventId: null,
+      zoomLevel: 1.0,
+      zoomedDateKey: null,
     };
     let dutyRestrictionVolunteerCache = {};
     let dutyRestrictionState = { currentDutyId: null };
@@ -1995,11 +1997,6 @@
         cell.addEventListener('click', (event) => {
           if (event.target.closest('.calendar-event')) return;
           if (event.target.classList && event.target.classList.contains('calendar-more')) return;
-          // On mobile, zoom to selected date
-          if (window.innerWidth <= 640) {
-            calendarState.zoomedDateKey = key;
-            adjustCalendarZoom(1.5, key);
-          }
           if (dayEvents.length) {
             showCalendarDayEvents(key);
           } else {
