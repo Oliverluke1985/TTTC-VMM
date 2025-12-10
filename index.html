@@ -8,7 +8,7 @@
   />
   <title>Volunteer Time Tracking</title>
   <style>
-    :root { color-scheme: light dark; --primary: #000000; --text: #ffffff; --accent1: #35b1fb; --accent2: #0289db; --accent3: #054a74; --accent4: #00433a; --accent5: #ffffff; --header-bg-image: url('https://i.postimg.cc/t4S6CDjx/cityscape.jpg'); --footer-bg-image: url('https://i.postimg.cc/8Cfgxn5P/theater-seats.jpg'); --cal-zoom: 0.8; }
+    :root { color-scheme: light dark; --primary: #000000; --text: #ffffff; --accent1: #35b1fb; --accent2: #0289db; --accent3: #054a74; --accent4: #00433a; --accent5: #ffffff; --header-bg-image: url('https://i.postimg.cc/t4S6CDjx/cityscape.jpg'); --footer-bg-image: url('https://i.postimg.cc/8Cfgxn5P/theater-seats.jpg'); --cal-zoom: 0.9; }
     html, body { height: 100%; }
     body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 24px; line-height: 1.35; background-size: cover; background-repeat: no-repeat; color: var(--text); background-color: var(--primary); min-height: 100vh; display: flex; flex-direction: column; }
     header { position: relative; display:flex; justify-content:center; align-items:center; padding: 51px 0; margin-bottom: -32px; overflow: hidden; border-radius: 0; margin-left: -24px; margin-right: -24px; width: calc(100% + 48px); }
@@ -207,28 +207,31 @@
         min-width: 64px;
       }
       .calendar-weekdays {
-        gap: calc(4px * var(--cal-zoom));
-        margin: 10px 0 6px;
+        gap: calc(3px * var(--cal-zoom));
+        margin: 8px 0 6px;
         font-size: calc(12px * var(--cal-zoom));
       }
       .calendar-weekdays div { padding: calc(3px * var(--cal-zoom)) 0; }
       .calendar-grid {
-        gap: calc(4px * var(--cal-zoom));
+        width: 100%;
+        gap: calc(3px * var(--cal-zoom));
         min-height: calc(320px * var(--cal-zoom));
+        grid-template-columns: repeat(7, minmax(48px, 1fr));
+        padding: 0 2px;
       }
       .calendar-day {
         border: 1px solid rgba(5,74,116,0.6);
-        padding: calc(5px * var(--cal-zoom));
-        min-height: calc(110px * var(--cal-zoom));
+        padding: calc(6px * var(--cal-zoom));
+        min-height: calc(120px * var(--cal-zoom));
         background: rgba(0,0,0,0.2);
       }
       .calendar-day-number {
-        font-size: calc(13px * var(--cal-zoom));
+        font-size: calc(13.5px * var(--cal-zoom));
         margin-bottom: calc(4px * var(--cal-zoom));
       }
       .calendar-event {
-        padding: calc(4px * var(--cal-zoom)) calc(6px * var(--cal-zoom));
-        font-size: calc(12px * var(--cal-zoom));
+        padding: calc(5px * var(--cal-zoom)) calc(7px * var(--cal-zoom));
+        font-size: calc(13px * var(--cal-zoom));
       }
       .calendar-more { font-size: calc(11px * var(--cal-zoom)); }
       table {
