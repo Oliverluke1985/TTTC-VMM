@@ -132,6 +132,15 @@
       .col { flex: 1 1 100%; min-width: 0; }
       nav#toolbar { justify-content: flex-start; flex-wrap: wrap; gap: 8px; }
       nav#toolbar button { flex: 1 1 100%; min-width: 0; }
+      /* Mobile calendar: keep desktop look off, but loosen spacing for readability */
+      #calendarSection { width: 100%; }
+      .calendar-weekdays { gap: 4px; margin: 10px 0 6px; font-size: 12px; }
+      .calendar-weekdays div { padding: 3px 0; }
+      .calendar-grid { gap: 4px; min-height: 320px; }
+      .calendar-day { padding: 6px; min-height: 110px; }
+      .calendar-day-number { font-size: 13px; margin-bottom: 4px; }
+      .calendar-event { padding: 4px 6px; font-size: 12px; }
+      .calendar-more { font-size: 11px; }
       table {
         width: 100%;
         max-width: 100%;
