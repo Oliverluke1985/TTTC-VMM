@@ -190,12 +190,32 @@
         max-width: 100%;
         overflow: hidden;
       }
+      .stacked-table td.track-time-cell .date-input-wrap {
+        position: relative;
+      }
+      .stacked-table td.track-time-cell .date-placeholder {
+        position: absolute;
+        left: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--accent2);
+        pointer-events: none;
+        opacity: 0.8;
+        font-size: 14px;
+      }
       .stacked-table td.track-time-cell .duty-date-input {
         width: 100%;
         max-width: 100%;
         min-width: 0;
         box-sizing: border-box;
         margin-bottom: 8px;
+        position: relative;
+        background: transparent;
+      }
+      .stacked-table td.track-time-cell .duty-date-input:not([value=""]) + .date-placeholder,
+      .stacked-table td.track-time-cell .duty-date-input:focus + .date-placeholder {
+        opacity: 0;
+      }
       }
       .stacked-table td.track-time-cell .track-time-label {
         font-weight: 600;
@@ -3771,8 +3791,10 @@
             `<td data-label="ID">${d.id}</td><td data-label="Title">${dutyDot}${d.title}</td><td data-label="Description">${d.description || ''}</td><td data-label="Status">${d.status}</td>
              <td data-label="Capacity">${capacityLabel}</td><td data-label="Active">${activeLabel}</td>
              <td data-label="Track Time" class="track-time-cell">
-               <label for="dutyDate-${d.id}" class="track-time-label">Select date</label>
-               <input type="date" id="dutyDate-${d.id}" required class="duty-date-input">
+               <div class="date-input-wrap">
+                 <input type="date" id="dutyDate-${d.id}" required class="duty-date-input" value="">
+                 <span class="date-placeholder">Select date</span>
+               </div>
                <div class="clock-buttons-wrap">
                  <button onclick="startTime(${d.id})" ${clockInDisabled} class="clock-btn">Clock In</button>
                  <button onclick="stopTime(${d.id})" class="clock-btn">Clock Out</button>
