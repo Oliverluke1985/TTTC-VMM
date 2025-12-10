@@ -82,7 +82,7 @@
     .calendar-weekdays { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; margin: 12px 0 6px; text-align: center; font-weight: 600; color: var(--accent5); }
     .calendar-weekdays div { padding: 4px 0; background: rgba(255,255,255,0.04); border-radius: 6px; }
     .calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; min-height: 360px; }
-    .calendar-day { border: 1px solid var(--accent3); border-radius: 10px; padding: 6px; min-height: 90px; background: rgba(0,0,0,0.25); display: flex; flex-direction: column; }
+    .calendar-day { border: 1px solid var(--accent3); border-radius: 10px; padding: 6px; min-height: 90px; background: rgba(0,0,0,0.25); display: flex; flex-direction: column; aspect-ratio: 1; }
     .calendar-day-number { font-weight: 600; font-size: 14px; margin-bottom: 6px; color: var(--accent5); }
     .calendar-day--muted { opacity: 0.45; }
     .calendar-events { display: flex; flex-direction: column; gap: 4px; }
