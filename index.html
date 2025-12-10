@@ -183,7 +183,55 @@
         display: block;
       }
       .nowrap { white-space: normal; }
-      #calendarGridWrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      .calendar-grid { 
+        gap: 4px;
+        min-height: auto;
+        width: 100%;
+        overflow: visible;
+      }
+      .calendar-day {
+        aspect-ratio: 1 !important;
+        min-height: 0;
+        padding: 4px;
+        overflow: hidden !important;
+        width: 100%;
+        max-width: 100%;
+      }
+      .calendar-day-number {
+        font-size: 12px;
+        margin-bottom: 4px;
+        flex-shrink: 0;
+      }
+      .calendar-events {
+        gap: 2px;
+        flex: 1;
+        min-height: 0;
+        overflow: hidden !important;
+        display: flex;
+        flex-direction: column;
+      }
+      .calendar-event {
+        font-size: 11px;
+        padding: 3px 4px;
+        line-height: 1.2;
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+        white-space: normal;
+        flex-shrink: 1;
+        min-height: 0;
+        overflow: hidden !important;
+        text-overflow: ellipsis;
+        max-width: 100%;
+      }
+      .calendar-more {
+        font-size: 10px;
+        margin-top: 2px;
+        flex-shrink: 0;
+      }
+      #calendarGridWrap { 
+        overflow: visible;
+        -webkit-overflow-scrolling: touch;
+      }
     }
   </style>
 
@@ -1948,15 +1996,12 @@
         cellDate.setDate(gridStart.getDate() + i);
         const key = formatCalendarDateKey(cellDate);
         const dayEvents = calendarState.eventsByDate[key] || [];
-        // Skip dates from previous/next months - only show current month
-        if (cellDate.getMonth() !== monthRef.getMonth()) {
-          continue;
-        }
-        if (dayEvents.length) {
+        if (dayEvents.length && cellDate.getMonth() === monthRef.getMonth()) {
           hasEventsThisMonth = true;
         }
         const cell = document.createElement('div');
         cell.className = 'calendar-day';
+        if (cellDate.getMonth() !== monthRef.getMonth()) cell.classList.add('calendar-day--muted');
         cell.dataset.dateKey = key;
         const number = document.createElement('div');
         number.className = 'calendar-day-number';
