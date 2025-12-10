@@ -1038,8 +1038,6 @@
       activeDateKey: null,
       scheduleCache: {},
       scheduleFocusEventId: null,
-      zoomLevel: 1.0,
-      zoomedDateKey: null,
     };
     let dutyRestrictionVolunteerCache = {};
     let dutyRestrictionState = { currentDutyId: null };
@@ -2005,6 +2003,7 @@
         });
         grid.appendChild(cell);
       }
+      applyCalendarZoom();
       if (!calendarState.lastStatusIsError) {
         if (!calendarState.events.length) {
           showCalendarStatus('No events found for this organization.');
