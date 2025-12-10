@@ -46,15 +46,19 @@
     }
     /* Desktop auth form sizing */
     #authSection {
-      max-width: 720px;
+      max-width: 560px;
+      min-width: 420px;
+      padding: 16px 18px;
       margin: 0 auto 16px;
     }
     #authSection button {
       width: auto;
-      min-width: 110px;
+      min-width: 90px;
       display: inline-block;
-      padding: 6px 12px;
-      font-size: 14px;
+      padding: 6px 10px;
+      font-size: 13px;
+      height: 32px;
+      line-height: 1.2;
     }
     /* Defensive: hide extension popovers/overlays if present */
     *[popover]{display:none!important;visibility:hidden!important;opacity:0!important;}
@@ -160,7 +164,8 @@
         font-size: 13px;
       }
       #authSection { max-width: 100%; margin: 0; }
-      #authSection button { width: 100%; max-width: 100%; display: block; }
+      #authSection { min-width: 0; padding: 12px; }
+      #authSection button { width: 100%; max-width: 100%; min-width: 0; display: block; height: auto; }
       table th, table td {
         padding: 6px 4px;
         overflow-wrap: break-word;
