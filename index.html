@@ -70,8 +70,8 @@
     .org-suggest div mark { background: transparent; color: var(--accent1); font-weight: 600; }
 
     /* Toolbar */
-    nav#toolbar { display:flex; flex-wrap: nowrap; gap: 8px; justify-content: center; margin: 12px 0 16px; background: rgba(0,0,0,0.6); border: 1px solid var(--accent3); border-radius: 8px; padding: 8px; }
-    nav#toolbar button { background: rgba(0,0,0,0.2); flex: 0 0 auto; white-space: nowrap; }
+    nav#toolbar { display:flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 12px 0 16px; background: rgba(0,0,0,0.6); border: 1px solid var(--accent3); border-radius: 8px; padding: 8px; }
+    nav#toolbar button { background: rgba(0,0,0,0.2); flex: 1 1 120px; min-width: 120px; max-width: 220px; white-space: nowrap; }
 
     /* Calendar */
     #calendarSection { width: min(100%, 960px); margin: 0 auto; }
