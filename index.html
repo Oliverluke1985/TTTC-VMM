@@ -82,11 +82,11 @@
     .calendar-weekdays { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; margin: 12px 0 6px; text-align: center; font-weight: 600; color: var(--accent5); }
     .calendar-weekdays div { padding: 4px 0; background: rgba(255,255,255,0.04); border-radius: 6px; }
     .calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; min-height: 360px; }
-    .calendar-day { border: 1px solid var(--accent3); border-radius: 10px; padding: 6px; min-height: 90px; background: rgba(0,0,0,0.25); display: flex; flex-direction: column; }
+    .calendar-day { border: 1px solid var(--accent3); border-radius: 10px; padding: 6px; min-height: 90px; background: rgba(0,0,0,0.25); display: flex; flex-direction: column; } aspect-ratio: 1; overflow: hidden;
     .calendar-day-number { font-weight: 600; font-size: 14px; margin-bottom: 6px; color: var(--accent5); }
     .calendar-day--muted { opacity: 0.45; }
-    .calendar-events { display: flex; flex-direction: column; gap: 4px; }
-    .calendar-event { border: 1px solid rgba(53,177,251,0.4); background: rgba(2,137,219,0.16); border-left: 4px solid var(--accent1); border-radius: 8px; padding: 4px 6px; font-size: 13px; color: var(--text); cursor: pointer; text-align: left; transition: background 0.2s ease, border-color 0.2s ease; }
+    .calendar-events { display: flex; flex-direction: column; gap: 4px; } overflow: hidden; flex: 1; min-height: 0;
+    .calendar-event { border: 1px solid rgba(53,177,251,0.4); background: rgba(2,137,219,0.16); border-left: 4px solid var(--accent1); border-radius: 8px; padding: 4px 6px; font-size: 13px; color: var(--text); cursor: pointer; text-align: left; transition: background 0.2s ease, border-color 0.2s ease; } overflow: hidden; text-overflow: ellipsis; word-wrap: break-word; overflow-wrap: break-word; max-width: 100%; white-space: normal;
     .calendar-event:hover { background: rgba(2,137,219,0.32); }
     .calendar-more { font-size: 12px; color: var(--accent1); margin-top: 2px; }
     #calendarEventPanel .col { flex: 1 1 100%; }
@@ -183,7 +183,75 @@
         display: block;
       }
       .nowrap { white-space: normal; }
-      #calendarGridWrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      .calendar-zoom-controls {
+        display: flex !important;
+        justify-content: center;
+        gap: 8px;
+        margin-top: 8px;
+      }
+      .calendar-grid { 
+        gap: 4px;
+        min-height: auto;
+        width: 100%;
+        overflow: visible;
+        transform-origin: center center;
+        transition: transform 0.3s ease;
+      }
+      .calendar-day {
+        aspect-ratio: 1 !important;
+        min-height: 0;
+        padding: 4px;
+        overflow: hidden !important;
+        width: 100%;
+        max-width: 100%;
+      }
+      .calendar-day-number {
+        font-size: 12px;
+        margin-bottom: 4px;
+        flex-shrink: 0;
+      }
+      .calendar-events {
+        gap: 2px;
+        flex: 1;
+        min-height: 0;
+        overflow: hidden !important;
+        display: flex;
+        flex-direction: column;
+      }
+      .calendar-event {
+        font-size: 11px;
+        padding: 3px 4px;
+        line-height: 1.2;
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+        white-space: normal;
+        flex-shrink: 1;
+        min-height: 0;
+        overflow: hidden !important;
+        text-overflow: ellipsis;
+        max-width: 100%;
+      }
+      .calendar-more {
+        font-size: 10px;
+        margin-top: 2px;
+        flex-shrink: 0;
+      }
+      .stacked-table td button,
+      .stacked-table td input[type="date"],
+      .stacked-table td input[type="time"],
+      .stacked-table td input[type="datetime-local"] {
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+        margin: 4px 0 !important;
+        white-space: normal !important;
+        word-wrap: break-word !important;
+        display: block !important;
+      }
+      #calendarGridWrap { 
+        overflow: visible;
+        -webkit-overflow-scrolling: touch;
+      }
     }
   </style>
 
@@ -368,6 +436,9 @@
           <button id="calendarPrevMonth" type="button">&lt; Prev</button>
           <div id="calendarMonthLabel" class="calendar-month-label"></div>
           <button id="calendarNextMonth" type="button">Next &gt;</button>
+                <div class="calendar-zoom-controls" style="display:none;">
+          <button id="calendarZoomOut" type="button">Zoom -</button>
+          <button id="calendarZoomIn" type="button">Zoom +</button>
         </div>
       </div>
     </div>
@@ -1038,7 +1109,9 @@
       activeDateKey: null,
       scheduleCache: {},
       scheduleFocusEventId: null,
-    };
+      zoomLevel: 1.0,
+      zoomedDateKey: null,
+    };;
     let dutyRestrictionVolunteerCache = {};
     let dutyRestrictionState = { currentDutyId: null };
     const optionalFieldControls = {};
@@ -1995,11 +2068,6 @@
         cell.addEventListener('click', (event) => {
           if (event.target.closest('.calendar-event')) return;
           if (event.target.classList && event.target.classList.contains('calendar-more')) return;
-          // On mobile, zoom to selected date
-          if (window.innerWidth <= 640) {
-            calendarState.zoomedDateKey = key;
-            adjustCalendarZoom(1.5, key);
-          }
           if (dayEvents.length) {
             showCalendarDayEvents(key);
           } else {
@@ -2008,6 +2076,7 @@
         });
         grid.appendChild(cell);
       }
+      applyCalendarZoom();
       if (!calendarState.lastStatusIsError) {
         if (!calendarState.events.length) {
           showCalendarStatus('No events found for this organization.');
@@ -2249,7 +2318,32 @@
     function shiftCalendarMonth(delta) {
       const base = calendarState.currentMonth;
       calendarState.currentMonth = new Date(base.getFullYear(), base.getMonth() + delta, 1);
+      calendarState.zoomLevel = 1.0;
+      calendarState.zoomedDateKey = null;
       renderCalendar();
+      applyCalendarZoom();
+    }
+    function adjustCalendarZoom(factor, dateKey = null) {
+      calendarState.zoomLevel = Math.max(0.5, Math.min(3.0, calendarState.zoomLevel * factor));
+      if (dateKey) calendarState.zoomedDateKey = dateKey;
+      applyCalendarZoom();
+    }
+
+    function applyCalendarZoom() {
+      const grid = document.getElementById('calendarGrid');
+      if (!grid) return;
+      grid.style.transform = `scale(${calendarState.zoomLevel})`;
+      if (calendarState.zoomedDateKey && calendarState.zoomLevel > 1.0) {
+        const targetCell = grid.querySelector(`[data-date-key="${calendarState.zoomedDateKey}"]`);
+        if (targetCell) {
+          const rect = targetCell.getBoundingClientRect();
+          const gridRect = grid.getBoundingClientRect();
+          const scrollX = rect.left - gridRect.left - (gridRect.width / 2) + (rect.width / 2);
+          const scrollY = rect.top - gridRect.top - (gridRect.height / 2) + (rect.height / 2);
+          grid.scrollLeft = scrollX;
+          grid.scrollTop = scrollY;
+        }
+      }
     }
 
     function prepareCalendarSection() {
