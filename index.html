@@ -183,67 +183,7 @@
         display: block;
       }
       .nowrap { white-space: normal; }
-      .calendar-grid { 
-        gap: 4px;
-        min-height: auto;
-        width: 100%;
-        overflow: visible;
-      }
-      .calendar-day {
-        aspect-ratio: 1 !important;
-        min-height: 0;
-        padding: 4px;
-        overflow: hidden !important;
-        width: 100%;
-        max-width: 100%;
-      }
-      .calendar-day-number {
-        font-size: 12px;
-        margin-bottom: 4px;
-        flex-shrink: 0;
-      }
-      .calendar-events {
-        gap: 2px;
-        flex: 1;
-        min-height: 0;
-        overflow: hidden !important;
-        display: flex;
-        flex-direction: column;
-      }
-      .calendar-event {
-        font-size: 11px;
-        padding: 3px 4px;
-        line-height: 1.2;
-        word-wrap: break-word;
-        overflow-wrap: break-word;
-        white-space: normal;
-        flex-shrink: 1;
-        min-height: 0;
-        overflow: hidden !important;
-        text-overflow: ellipsis;
-        max-width: 100%;
-      }
-      .calendar-more {
-        font-size: 10px;
-        margin-top: 2px;
-        flex-shrink: 0;
-      }
-      .stacked-table td button,
-      .stacked-table td input[type="date"],
-      .stacked-table td input[type="time"],
-      .stacked-table td input[type="datetime-local"] {
-        width: 100% !important;
-        max-width: 100% !important;
-        box-sizing: border-box !important;
-        margin: 4px 0 !important;
-        white-space: normal !important;
-        word-wrap: break-word !important;
-        display: block !important;
-      }
-      #calendarGridWrap { 
-        overflow: visible;
-        -webkit-overflow-scrolling: touch;
-      }
+      #calendarGridWrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
     }
   </style>
 
@@ -2055,6 +1995,11 @@
         cell.addEventListener('click', (event) => {
           if (event.target.closest('.calendar-event')) return;
           if (event.target.classList && event.target.classList.contains('calendar-more')) return;
+          // On mobile, zoom to selected date
+          if (window.innerWidth <= 640) {
+            calendarState.zoomedDateKey = key;
+            adjustCalendarZoom(1.5, key);
+          }
           if (dayEvents.length) {
             showCalendarDayEvents(key);
           } else {
