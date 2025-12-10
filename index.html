@@ -145,7 +145,12 @@
         hyphens: auto;
       }
       .stacked-table {
-        border: none;
+        border: 1px solid var(--accent3);
+        border-radius: 10px;
+        padding: 8px;
+        box-sizing: border-box;
+        overflow: hidden;
+        margin: 0;
       }
       .stacked-table thead {
         display: none;
@@ -158,11 +163,12 @@
         width: 100%;
       }
       .stacked-table tr {
-        border: 1px solid var(--accent3);
-        border-radius: 10px;
+        border: none;
+        border-radius: 8px;
         padding: 10px;
-        margin-bottom: 12px;
+        margin: 0 0 10px 0;
         background: rgba(0,0,0,0.35);
+        box-sizing: border-box;
       }
       .stacked-table td {
         border: none;
