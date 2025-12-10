@@ -8,7 +8,7 @@
   />
   <title>Volunteer Time Tracking</title>
   <style>
-    :root { color-scheme: light dark; --primary: #000000; --text: #ffffff; --accent1: #35b1fb; --accent2: #0289db; --accent3: #054a74; --accent4: #00433a; --accent5: #ffffff; --header-bg-image: url('https://i.postimg.cc/t4S6CDjx/cityscape.jpg'); --footer-bg-image: url('https://i.postimg.cc/8Cfgxn5P/theater-seats.jpg'); --calendar-zoom: 1; }
+    :root { color-scheme: light dark; --primary: #000000; --text: #ffffff; --accent1: #35b1fb; --accent2: #0289db; --accent3: #054a74; --accent4: #00433a; --accent5: #ffffff; --header-bg-image: url('https://i.postimg.cc/t4S6CDjx/cityscape.jpg'); --footer-bg-image: url('https://i.postimg.cc/8Cfgxn5P/theater-seats.jpg'); }
     html, body { height: 100%; }
     body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 24px; line-height: 1.35; background-size: cover; background-repeat: no-repeat; color: var(--text); background-color: var(--primary); min-height: 100vh; display: flex; flex-direction: column; }
     header { position: relative; display:flex; justify-content:center; align-items:center; padding: 51px 0; margin-bottom: -32px; overflow: hidden; border-radius: 0; margin-left: -24px; margin-right: -24px; width: calc(100% + 48px); }
@@ -76,22 +76,19 @@
     /* Calendar */
     #calendarSection { width: min(100%, 960px); margin: 0 auto; }
     #calendarFilterRow .col { min-width: 200px; }
-    .calendar-month-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .calendar-month-controls { display: flex; align-items: center; gap: 8px; }
     .calendar-month-controls button { margin: 0; }
     .calendar-month-label { font-weight: 600; font-size: 16px; min-width: 140px; text-align: center; }
-    .calendar-zoom-controls { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
-    .calendar-zoom-controls button { margin: 0; padding: 6px 10px; }
-    .calendar-zoom-label { font-size: 13px; color: var(--accent5); min-width: 44px; text-align: center; }
-    .calendar-weekdays { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: calc(6px * var(--calendar-zoom)); margin: 12px 0 6px; text-align: center; font-weight: 600; color: var(--accent5); font-size: calc(14px * var(--calendar-zoom)); }
-    .calendar-weekdays div { padding: calc(4px * var(--calendar-zoom)) 0; background: rgba(255,255,255,0.04); border-radius: 6px; }
-    .calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: calc(6px * var(--calendar-zoom)); min-height: calc(360px * var(--calendar-zoom)); }
-    .calendar-day { border: 1px solid var(--accent3); border-radius: 10px; padding: calc(6px * var(--calendar-zoom)); min-height: calc(90px * var(--calendar-zoom)); background: rgba(0,0,0,0.25); display: flex; flex-direction: column; }
-    .calendar-day-number { font-weight: 600; font-size: calc(14px * var(--calendar-zoom)); margin-bottom: calc(6px * var(--calendar-zoom)); color: var(--accent5); }
+    .calendar-weekdays { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; margin: 12px 0 6px; text-align: center; font-weight: 600; color: var(--accent5); }
+    .calendar-weekdays div { padding: 4px 0; background: rgba(255,255,255,0.04); border-radius: 6px; }
+    .calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; min-height: 360px; }
+    .calendar-day { border: 1px solid var(--accent3); border-radius: 10px; padding: 6px; min-height: 90px; background: rgba(0,0,0,0.25); display: flex; flex-direction: column; }
+    .calendar-day-number { font-weight: 600; font-size: 14px; margin-bottom: 6px; color: var(--accent5); }
     .calendar-day--muted { opacity: 0.45; }
-    .calendar-events { display: flex; flex-direction: column; gap: calc(4px * var(--calendar-zoom)); }
-    .calendar-event { border: 1px solid rgba(53,177,251,0.4); background: rgba(2,137,219,0.16); border-left: 4px solid var(--accent1); border-radius: 8px; padding: calc(4px * var(--calendar-zoom)) calc(6px * var(--calendar-zoom)); font-size: calc(13px * var(--calendar-zoom)); color: var(--text); cursor: pointer; text-align: left; transition: background 0.2s ease, border-color 0.2s ease; }
+    .calendar-events { display: flex; flex-direction: column; gap: 4px; }
+    .calendar-event { border: 1px solid rgba(53,177,251,0.4); background: rgba(2,137,219,0.16); border-left: 4px solid var(--accent1); border-radius: 8px; padding: 4px 6px; font-size: 13px; color: var(--text); cursor: pointer; text-align: left; transition: background 0.2s ease, border-color 0.2s ease; }
     .calendar-event:hover { background: rgba(2,137,219,0.32); }
-    .calendar-more { font-size: calc(12px * var(--calendar-zoom)); color: var(--accent1); margin-top: 2px; }
+    .calendar-more { font-size: 12px; color: var(--accent1); margin-top: 2px; }
     #calendarEventPanel .col { flex: 1 1 100%; }
     #calendarEventSummary div { margin-bottom: 4px; }
     #calendarStatus.error { color: #ff8a80; }
@@ -126,7 +123,7 @@
     /* Footer background image */
     footer#footer { position: relative; height: 288px; margin-top: auto; border-radius: 0; overflow: hidden; pointer-events: none; margin-left: -24px; margin-right: -24px; width: calc(100% + 48px); }
     footer#footer::before { content: ""; position: absolute; inset: 0; background-image: var(--footer-bg-image); background-position: 50% 78%; background-size: cover; background-repeat: no-repeat; opacity: 0.75; pointer-events: none; }
-    @media (max-width: 900px) {
+    @media (max-width: 640px) {
       body { margin: 0; padding: 12px; overflow-x: hidden; }
       header, footer#footer { margin: 0 !important; width: 100% !important; }
       nav#toolbar, section, .col { width: 100%; max-width: 100%; box-sizing: border-box; }
@@ -439,11 +436,6 @@
           <button id="calendarPrevMonth" type="button">&lt; Prev</button>
           <div id="calendarMonthLabel" class="calendar-month-label"></div>
           <button id="calendarNextMonth" type="button">Next &gt;</button>
-        </div>
-        <div class="calendar-zoom-controls">
-          <button id="calendarZoomOut" type="button">Zoom -</button>
-          <span id="calendarZoomLabel" class="calendar-zoom-label"></span>
-          <button id="calendarZoomIn" type="button">Zoom +</button>
         </div>
       </div>
     </div>
