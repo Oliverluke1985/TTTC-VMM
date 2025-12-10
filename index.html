@@ -369,10 +369,6 @@
           <div id="calendarMonthLabel" class="calendar-month-label"></div>
           <button id="calendarNextMonth" type="button">Next &gt;</button>
         </div>
-        <div class="calendar-zoom-controls" style="display:none;">
-          <button id="calendarZoomOut" type="button">Zoom -</button>
-          <button id="calendarZoomIn" type="button">Zoom +</button>
-        </div>
       </div>
     </div>
     <div class="calendar-weekdays">
@@ -1038,8 +1034,6 @@
       eventsByDate: {},
       selectedEventId: null,
       lastStatusIsError: false,
-      zoomLevel: 1.0,
-      zoomedDateKey: null,
       needsRefresh: true,
       activeDateKey: null,
       scheduleCache: {},
