@@ -197,6 +197,11 @@
         box-sizing: border-box;
         margin-bottom: 8px;
       }
+      .stacked-table td.track-time-cell .track-time-label {
+        font-weight: 600;
+        color: var(--accent2);
+        margin-bottom: 6px;
+      }
       .stacked-table td.track-time-cell .clock-buttons-wrap {
         display: flex;
         flex-direction: column;
@@ -3766,6 +3771,7 @@
             `<td data-label="ID">${d.id}</td><td data-label="Title">${dutyDot}${d.title}</td><td data-label="Description">${d.description || ''}</td><td data-label="Status">${d.status}</td>
              <td data-label="Capacity">${capacityLabel}</td><td data-label="Active">${activeLabel}</td>
              <td data-label="Track Time" class="track-time-cell">
+               <label for="dutyDate-${d.id}" class="track-time-label">Select date</label>
                <input type="date" id="dutyDate-${d.id}" required class="duty-date-input">
                <div class="clock-buttons-wrap">
                  <button onclick="startTime(${d.id})" ${clockInDisabled} class="clock-btn">Clock In</button>
