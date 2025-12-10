@@ -82,11 +82,11 @@
     .calendar-weekdays { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; margin: 12px 0 6px; text-align: center; font-weight: 600; color: var(--accent5); }
     .calendar-weekdays div { padding: 4px 0; background: rgba(255,255,255,0.04); border-radius: 6px; }
     .calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; min-height: 360px; }
-    .calendar-day { border: 1px solid var(--accent3); border-radius: 10px; padding: 6px; min-height: 90px; background: rgba(0,0,0,0.25); display: flex; flex-direction: column; aspect-ratio: 1; overflow: hidden; }
+    .calendar-day { border: 1px solid var(--accent3); border-radius: 10px; padding: 6px; min-height: 90px; background: rgba(0,0,0,0.25); display: flex; flex-direction: column; }
     .calendar-day-number { font-weight: 600; font-size: 14px; margin-bottom: 6px; color: var(--accent5); }
     .calendar-day--muted { opacity: 0.45; }
-    .calendar-events { display: flex; flex-direction: column; gap: 4px; overflow: hidden; flex: 1; min-height: 0; }
-    .calendar-event { border: 1px solid rgba(53,177,251,0.4); background: rgba(2,137,219,0.16); border-left: 4px solid var(--accent1); border-radius: 8px; padding: 4px 6px; font-size: 13px; color: var(--text); cursor: pointer; text-align: left; transition: background 0.2s ease, border-color 0.2s ease; overflow: hidden; text-overflow: ellipsis; word-wrap: break-word; overflow-wrap: break-word; max-width: 100%; white-space: normal; }
+    .calendar-events { display: flex; flex-direction: column; gap: 4px; }
+    .calendar-event { border: 1px solid rgba(53,177,251,0.4); background: rgba(2,137,219,0.16); border-left: 4px solid var(--accent1); border-radius: 8px; padding: 4px 6px; font-size: 13px; color: var(--text); cursor: pointer; text-align: left; transition: background 0.2s ease, border-color 0.2s ease; }
     .calendar-event:hover { background: rgba(2,137,219,0.32); }
     .calendar-more { font-size: 12px; color: var(--accent1); margin-top: 2px; }
     #calendarEventPanel .col { flex: 1 1 100%; }
@@ -2003,6 +2003,7 @@
         });
         grid.appendChild(cell);
       }
+      applyCalendarZoom();
       if (!calendarState.lastStatusIsError) {
         if (!calendarState.events.length) {
           showCalendarStatus('No events found for this organization.');
