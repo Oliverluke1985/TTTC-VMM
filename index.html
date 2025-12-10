@@ -132,6 +132,14 @@
       .col { flex: 1 1 100%; min-width: 0; }
       nav#toolbar { justify-content: flex-start; flex-wrap: wrap; gap: 8px; }
       nav#toolbar button { flex: 1 1 100%; min-width: 0; }
+      /* Calendar mobile: enforce readable day width with horizontal scroll */
+      #calendarSection { overflow-x: auto; }
+      .calendar-weekdays,
+      .calendar-grid {
+        min-width: 840px; /* 7 * 120px */
+        grid-template-columns: repeat(7, minmax(120px, 1fr));
+      }
+      .calendar-day { min-height: 120px; }
       table {
         width: 100%;
         max-width: 100%;
