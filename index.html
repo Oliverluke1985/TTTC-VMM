@@ -1038,8 +1038,6 @@
       activeDateKey: null,
       scheduleCache: {},
       scheduleFocusEventId: null,
-      zoomLevel: 1.0,
-      zoomedDateKey: null,
     };
     let dutyRestrictionVolunteerCache = {};
     let dutyRestrictionState = { currentDutyId: null };
@@ -2246,7 +2244,33 @@
     function shiftCalendarMonth(delta) {
       const base = calendarState.currentMonth;
       calendarState.currentMonth = new Date(base.getFullYear(), base.getMonth() + delta, 1);
+      calendarState.zoomLevel = 1.0;
+      calendarState.zoomedDateKey = null;
       renderCalendar();
+      applyCalendarZoom();
+    }
+
+    function adjustCalendarZoom(factor, dateKey = null) {
+      calendarState.zoomLevel = Math.max(0.5, Math.min(3.0, calendarState.zoomLevel * factor));
+      if (dateKey) calendarState.zoomedDateKey = dateKey;
+      applyCalendarZoom();
+    }
+
+    function applyCalendarZoom() {
+      const grid = document.getElementById('calendarGrid');
+      if (!grid) return;
+      grid.style.transform = `scale(${calendarState.zoomLevel})`;
+      if (calendarState.zoomedDateKey && calendarState.zoomLevel > 1.0) {
+        const targetCell = grid.querySelector(`[data-date-key="${calendarState.zoomedDateKey}"]`);
+        if (targetCell) {
+          const rect = targetCell.getBoundingClientRect();
+          const gridRect = grid.getBoundingClientRect();
+          const scrollX = rect.left - gridRect.left - (gridRect.width / 2) + (rect.width / 2);
+          const scrollY = rect.top - gridRect.top - (gridRect.height / 2) + (rect.height / 2);
+          grid.scrollLeft = scrollX;
+          grid.scrollTop = scrollY;
+        }
+      }
     }
 
     function prepareCalendarSection() {
