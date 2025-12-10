@@ -1946,17 +1946,14 @@
       for (let i = 0; i < 42; i += 1) {
         const cellDate = new Date(gridStart);
         cellDate.setDate(gridStart.getDate() + i);
-        // Skip dates from previous/next months - only show current month
-        if (cellDate.getMonth() !== monthRef.getMonth()) {
-          continue;
-        }
         const key = formatCalendarDateKey(cellDate);
         const dayEvents = calendarState.eventsByDate[key] || [];
-        if (dayEvents.length) {
+        if (dayEvents.length && cellDate.getMonth() === monthRef.getMonth()) {
           hasEventsThisMonth = true;
         }
         const cell = document.createElement('div');
         cell.className = 'calendar-day';
+        if (cellDate.getMonth() !== monthRef.getMonth()) cell.classList.add('calendar-day--muted');
         cell.dataset.dateKey = key;
         const number = document.createElement('div');
         number.className = 'calendar-day-number';
@@ -2006,6 +2003,7 @@
         });
         grid.appendChild(cell);
       }
+      applyCalendarZoom();
       if (!calendarState.lastStatusIsError) {
         if (!calendarState.events.length) {
           showCalendarStatus('No events found for this organization.');
