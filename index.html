@@ -1995,11 +1995,6 @@
         cell.addEventListener('click', (event) => {
           if (event.target.closest('.calendar-event')) return;
           if (event.target.classList && event.target.classList.contains('calendar-more')) return;
-          // On mobile, zoom to selected date
-          if (window.innerWidth <= 640) {
-            calendarState.zoomedDateKey = key;
-            adjustCalendarZoom(1.5, key);
-          }
           if (dayEvents.length) {
             showCalendarDayEvents(key);
           } else {
@@ -2262,6 +2257,21 @@
       if (nextBtn && !nextBtn._wired) {
         nextBtn.addEventListener('click', () => shiftCalendarMonth(1));
         nextBtn._wired = true;
+      }
+      const zoomInBtn = document.getElementById('calendarZoomIn');
+      const zoomOutBtn = document.getElementById('calendarZoomOut');
+      if (zoomInBtn && !zoomInBtn._wired) {
+        zoomInBtn.addEventListener('click', () => adjustCalendarZoom(1.2));
+        zoomInBtn._wired = true;
+      }
+      if (zoomOutBtn && !zoomOutBtn._wired) {
+        zoomOutBtn.addEventListener('click', () => adjustCalendarZoom(0.8));
+        zoomOutBtn._wired = true;
+      }
+      // Show zoom controls on mobile only
+      if (window.innerWidth <= 640) {
+        const zoomControls = document.querySelector('.calendar-zoom-controls');
+        if (zoomControls) zoomControls.style.display = 'flex';
       }
       const groupSel = document.getElementById('calendarGroupFilter');
       if (groupSel && !groupSel._wired) {
