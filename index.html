@@ -49,20 +49,28 @@
       width: 100%;
       max-width: none;
       min-width: 0;
-      padding: 16px 24px;
+      padding: 16px 24px 32px;
       margin: 0 auto 24px;
       box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      border: none;
+      background: transparent;
     }
+    #authSection h2 { width: 100%; max-width: 520px; margin: 0 auto 14px; }
     #authSection label,
     #authSection input,
     #authSection button {
-      max-width: 480px;
+      width: 100%;
+      max-width: 520px;
       margin-left: auto;
       margin-right: auto;
       display: block;
     }
     #authSection input {
       width: 100%;
+      margin-bottom: 10px;
     }
     #authSection button {
       width: auto;
@@ -71,6 +79,8 @@
       font-size: 13px;
       height: 32px;
       line-height: 1.2;
+      margin-top: 8px;
+      align-self: center;
     }
     /* Defensive: hide extension popovers/overlays if present */
     *[popover]{display:none!important;visibility:hidden!important;opacity:0!important;}
