@@ -1995,6 +1995,11 @@
         cell.addEventListener('click', (event) => {
           if (event.target.closest('.calendar-event')) return;
           if (event.target.classList && event.target.classList.contains('calendar-more')) return;
+          // On mobile, zoom to selected date
+          if (window.innerWidth <= 640) {
+            calendarState.zoomedDateKey = key;
+            adjustCalendarZoom(1.5, key);
+          }
           if (dayEvents.length) {
             showCalendarDayEvents(key);
           } else {
@@ -2003,7 +2008,6 @@
         });
         grid.appendChild(cell);
       }
-      applyCalendarZoom();
       if (!calendarState.lastStatusIsError) {
         if (!calendarState.events.length) {
           showCalendarStatus('No events found for this organization.');
