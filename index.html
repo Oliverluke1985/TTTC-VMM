@@ -182,13 +182,6 @@
         width: 100%;
         display: block;
       }
-      button {
-        white-space: normal;
-        word-wrap: break-word;
-        overflow-wrap: break-word;
-        text-align: center;
-        padding: 8px 12px;
-      }
       .nowrap { white-space: normal; }
       #calendarGridWrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
     }
@@ -3727,13 +3720,15 @@
           const dutyColor = getDutyColor(d.id);
           const dutyDot = dutyColor ? `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${dutyColor};margin-right:6px;"></span>` : '';
           tr.innerHTML =
-            `<td>${d.id}</td><td>${dutyDot}${d.title}</td><td>${d.description || ''}</td><td>${d.status}</td>
-             <td>${capacityLabel}</td><td>${activeLabel}</td>
-             <td>
-               <input type="date" id="dutyDate-${d.id}" required>
-               <button onclick="startTime(${d.id})" ${clockInDisabled}>Clock In</button>
-               <button onclick="stopTime(${d.id})">Clock Out</button>
-               ${isFull ? '<div class="hint" style="margin-top:4px">Duty is full</div>' : ''}
+            `<td data-label="ID">${d.id}</td><td data-label="Title">${dutyDot}${d.title}</td><td data-label="Description">${d.description || ''}</td><td data-label="Status">${d.status}</td>
+             <td data-label="Capacity">${capacityLabel}</td><td data-label="Active">${activeLabel}</td>
+             <td data-label="Track Time" class="track-time-cell">
+               <input type="date" id="dutyDate-${d.id}" required class="duty-date-input">
+               <div class="clock-buttons-wrap">
+                 <button onclick="startTime(${d.id})" ${clockInDisabled} class="clock-btn">Clock In</button>
+                 <button onclick="stopTime(${d.id})" class="clock-btn">Clock Out</button>
+               </div>
+               ${isFull ? '<div class="hint" style="margin-top:6px">Duty is full</div>' : ''}
                ${adminActions}
              </td>`;
           tbody.appendChild(tr);
