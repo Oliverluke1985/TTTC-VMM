@@ -8,7 +8,7 @@
   />
   <title>Volunteer Time Tracking</title>
   <style>
-    :root { color-scheme: light dark; --primary: #000000; --text: #ffffff; --accent1: #35b1fb; --accent2: #0289db; --accent3: #054a74; --accent4: #00433a; --accent5: #ffffff; --header-bg-image: url('https://i.postimg.cc/t4S6CDjx/cityscape.jpg'); --footer-bg-image: url('https://i.postimg.cc/8Cfgxn5P/theater-seats.jpg'); }
+    :root { color-scheme: light dark; --primary: #000000; --text: #ffffff; --accent1: #35b1fb; --accent2: #0289db; --accent3: #054a74; --accent4: #00433a; --accent5: #ffffff; --header-bg-image: url('https://i.postimg.cc/t4S6CDjx/cityscape.jpg'); --footer-bg-image: url('https://i.postimg.cc/8Cfgxn5P/theater-seats.jpg'); --cal-zoom: 1; }
     html, body { height: 100%; }
     body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 24px; line-height: 1.35; background-size: cover; background-repeat: no-repeat; color: var(--text); background-color: var(--primary); min-height: 100vh; display: flex; flex-direction: column; }
     header { position: relative; display:flex; justify-content:center; align-items:center; padding: 51px 0; margin-bottom: -32px; overflow: hidden; border-radius: 0; margin-left: -24px; margin-right: -24px; width: calc(100% + 48px); }
@@ -131,7 +131,62 @@
       .row { flex-direction: column; gap: 12px; }
       .col { flex: 1 1 100%; min-width: 0; }
       nav#toolbar { justify-content: flex-start; flex-wrap: wrap; gap: 8px; }
+<<<<<<< HEAD
       nav#toolbar button { flex: 1 1 100%; min-width: 0; }
+=======
+      nav#toolbar button { flex: 1 1 48%; min-width: 0; max-width: 48%; }
+      /* Mobile calendar readability */
+      #calendarSection { width: 100%; border: none; padding: 0; background: transparent; }
+      .calendar-month-controls { justify-content: space-between; flex-wrap: nowrap; }
+      .calendar-zoom-mobile {
+        display: flex;
+        gap: 10px;
+        margin: 10px 0 6px;
+        justify-content: space-between;
+      }
+      .calendar-zoom-mobile button {
+        padding: 6px 10px;
+        font-size: 14px;
+        min-width: 64px;
+      }
+      .calendar-weekdays {
+        gap: calc(4px * var(--cal-zoom));
+        margin: 10px 0 6px;
+        font-size: calc(12.5px * var(--cal-zoom));
+      }
+      .calendar-weekdays div { padding: calc(3.5px * var(--cal-zoom)) 0; }
+      .calendar-grid {
+        width: 100%;
+        gap: calc(4px * var(--cal-zoom));
+        min-height: calc(340px * var(--cal-zoom));
+        grid-template-columns: repeat(7, minmax(52px, 1fr));
+        padding: 0 4px;
+      }
+      .calendar-day {
+        border: 1px solid rgba(5,74,116,0.6);
+        padding: calc(7px * var(--cal-zoom));
+        min-height: calc(130px * var(--cal-zoom));
+        background: rgba(0,0,0,0.2);
+      }
+      .calendar-day-number {
+        font-size: calc(14px * var(--cal-zoom));
+        margin-bottom: calc(5px * var(--cal-zoom));
+      }
+      .calendar-event {
+        padding: calc(6px * var(--cal-zoom)) calc(8px * var(--cal-zoom));
+        font-size: calc(13.5px * var(--cal-zoom));
+      }
+      .calendar-more { font-size: calc(11px * var(--cal-zoom)); }
+
+      /* Time clock track time stack/readable */
+      #clockDutiesWrap table { width: 100%; }
+      #clockDutiesWrap td.track-time-cell { display: block; width: 100%; border-left: none; border-right: none; }
+      #clockDutiesWrap .date-input-wrap,
+      #clockDutiesWrap .clock-buttons-wrap { width: 100%; }
+      #clockDutiesWrap .clock-buttons-wrap { flex-direction: column; gap: 8px; }
+      #clockDutiesWrap .clock-btn { width: 100%; }
+      #clockDutiesWrap .duty-date-input { width: 100%; }
+>>>>>>> ae652bc (Widen mobile calendar cells and stack time clock controls)
       table {
         width: 100%;
         max-width: 100%;
