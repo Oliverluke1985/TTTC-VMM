@@ -44,6 +44,17 @@
     .ghost-btn:hover {
       background: rgba(255,255,255,0.08);
     }
+    /* Desktop auth form sizing */
+    #authSection {
+      max-width: 720px;
+      margin: 0 auto 16px;
+    }
+    #authSection button {
+      width: auto;
+      min-width: 140px;
+      display: inline-block;
+      padding: 10px 16px;
+    }
     /* Defensive: hide extension popovers/overlays if present */
     *[popover]{display:none!important;visibility:hidden!important;opacity:0!important;}
     #top-layer{display:none!important}
@@ -147,6 +158,8 @@
         table-layout: auto;
         font-size: 13px;
       }
+      #authSection { max-width: 100%; margin: 0; }
+      #authSection button { width: 100%; max-width: 100%; display: block; }
       table th, table td {
         padding: 6px 4px;
         overflow-wrap: break-word;
