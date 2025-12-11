@@ -1649,9 +1649,13 @@
       </div>`;
     }
 
-    function buildScheduleDutyHtml(dutyEntry, eventColor, tz) {
+    function buildScheduleDutyHtml(dutyEntry, eventColor, tz, dateKey) {
       const assignments = Array.isArray(dutyEntry.assignments) ? dutyEntry.assignments : [];
       const dutyColor = getDutyColor(dutyEntry) || eventColor;
+      const isAssignedToUser = assignments.some(assign => assign?.volunteer_id != null && Number(assign.volunteer_id) === Number(userId));
+      const clockBtn = (role === 'volunteer' && isAssignedToUser)
+        ? `<div style="margin-top:6px;"><button class="calendar-duty-clock-btn" onclick="goToDutyClockForDuty(${dutyEntry.id}, '${dateKey || ''}')">Go to Time Clock</button></div>`
+        : '';
       const assignmentsHtml = assignments.length
         ? assignments.map(assign => buildScheduleAssignmentHtml(assign, dutyColor, tz)).join('')
         : '<div class="calendar-day-schedule-empty">No volunteers assigned.</div>';
@@ -1660,10 +1664,11 @@
         <h4>${dutyEntry.title || 'Duty'}</h4>
         ${locationRow}
         ${assignmentsHtml}
+        ${clockBtn}
       </div>`;
     }
 
-    function buildScheduleColumnHtml(eventEntry, focusEventId) {
+    function buildScheduleColumnHtml(eventEntry, focusEventId, dateKey) {
       const firstDutyId = eventEntry?.duties?.[0]?.id;
       const color = getEventColor({
         id: eventEntry.event_id || (firstDutyId ? `duty-${firstDutyId}` : undefined),
@@ -1722,7 +1727,7 @@
         return;
       }
       const focusId = calendarState.scheduleFocusEventId || calendarState.selectedEventId || null;
-      const columns = events.map(ev => buildScheduleColumnHtml(ev, focusId)).join('');
+      const columns = events.map(ev => buildScheduleColumnHtml(ev, focusId, dateKey)).join('');
       body.innerHTML = `<div class="calendar-schedule-columns">${columns}</div>`;
     }
 
@@ -1890,10 +1895,13 @@
           btn.addEventListener('click', (event) => {
             event.stopPropagation();
             if (role === 'volunteer') {
-              goToDutyClockForVolunteer(ev);
-              return;
+              calendarState.selectedEventId = Number(ev.id);
+              calendarState.scheduleFocusEventId = Number(ev.id);
+              calendarState.activeDateKey = key;
+              loadCalendarDaySchedule(key, { force: true });
+            } else {
+              openCalendarEvent(ev.id);
             }
-            openCalendarEvent(ev.id);
           });
           list.appendChild(btn);
         });
@@ -1967,28 +1975,21 @@
       label.textContent = d.toLocaleString(undefined, { month: 'long', year: 'numeric' });
     }
 
-    async function goToDutyClockForVolunteer(eventEntry) {
-      const duties = Object.values(window.dutyById || {})
-        .filter(d => d && d.event_id != null && Number(d.event_id) === Number(eventEntry?.id));
-      if (!duties.length) {
-        openCalendarEvent(eventEntry?.id);
-        return;
-      }
-      const duty = duties[0];
+    async function goToDutyClockForDuty(dutyId, dateKey) {
+      if (!dutyId) return;
       navigateTo('clockSection');
       try { await fetchDuties(); } catch {}
-      const dutyDate = extractDatePart(eventEntry?.start_date || eventEntry?.event_date || eventEntry?.end_date);
       requestAnimationFrame(() => {
-        const input = document.getElementById(`dutyDate-${duty.id}`);
+        const input = document.getElementById(`dutyDate-${dutyId}`);
         if (input) {
-          if (dutyDate) input.value = dutyDate;
+          if (dateKey) input.value = dateKey;
           const evt = new Event('input', { bubbles: true });
           input.dispatchEvent(evt);
           input.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
-        const btn = document.getElementById('clockSection');
-        if (btn && typeof btn.scrollIntoView === 'function') {
-          btn.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        const dutyRow = document.getElementById(`dutyDate-${dutyId}`)?.closest('tr');
+        if (dutyRow && typeof dutyRow.scrollIntoView === 'function') {
+          dutyRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
       });
     }
