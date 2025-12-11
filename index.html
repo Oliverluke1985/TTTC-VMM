@@ -952,14 +952,7 @@
         <select id="vmVolunteer"><option value="">— Select volunteer —</option></select>
         <label style="margin-top:10px">Duty</label>
         <select id="vmDuty"><option value="">— Select duty —</option></select>
-        <label>Start Time</label>
-        <input id="vmStart" type="datetime-local" />
-        <label>End Time (optional)</label>
-        <input id="vmEnd" type="datetime-local" />
-        
-        <button id="vmAddBtn">Add Time Entry</button>
-        <div id="vmErr" class="error"></div>
-        <div id="vmTimeStatus" class="ok hidden"></div>
+        <div class="hint" style="margin-top:10px">Assign the volunteer to the duty here. Clock in/out is done by the volunteer from Time Clock.</div>
       </div>
     </div>
     <div id="vmEditPanel" class="row hidden">
@@ -5726,39 +5719,6 @@
             document.getElementById('vmEditAddress').value = v.address || '';
           });
           volSel._wired = true;
-        }
-        const addBtn = document.getElementById('vmAddBtn');
-        if (addBtn && !addBtn._wired) {
-          addBtn.addEventListener('click', async () => {
-            const err = document.getElementById('vmErr');
-            if (err) err.textContent = '';
-            updateStatusMessage('vmTimeStatus', '');
-            const volunteer_id = Number(document.getElementById('vmVolunteer').value);
-            const duty_id = Number(document.getElementById('vmDuty').value);
-            const start_time = document.getElementById('vmStart').value;
-            const end_time = document.getElementById('vmEnd').value || null;
-            const duty_date = start_time ? String(start_time).split('T')[0] : null;
-            try {
-              const startUtc = convertLocalInputToUtc(start_time, activeTimeZone);
-              const endUtc = end_time ? convertLocalInputToUtc(end_time, activeTimeZone) : null;
-              if (!startUtc) { if (err) err.textContent = 'Invalid start time'; return; }
-              const res = await authed('/admin/time-tracking', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ volunteer_id, duty_id, start_time: startUtc, end_time: endUtc, duty_date })
-              });
-              const data = await res.json().catch(() => ({}));
-              if (!res.ok) { if (err) err.textContent = data.message || 'Failed to add time'; updateStatusMessage('vmTimeStatus','',false); return; }
-              await fetchTimeTracking();
-              await refreshVolunteerLogs();
-        if (duty_date) invalidateCalendarSchedule(duty_date, { refresh: true });
-              updateStatusMessage('vmTimeStatus', 'Clocked in.');
-            } catch {
-              if (err) err.textContent = 'Error adding time';
-              updateStatusMessage('vmTimeStatus','',false);
-            }
-          });
-          addBtn._wired = true;
         }
         const saveUserBtn = document.getElementById('vmSaveUserBtn');
         if (saveUserBtn && !saveUserBtn._wired) {
