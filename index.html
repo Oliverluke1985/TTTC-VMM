@@ -954,6 +954,9 @@
         <select id="vmVolunteer"><option value="">— Select volunteer —</option></select>
         <label style="margin-top:10px">Duty</label>
         <select id="vmDuty"><option value="">— Select duty —</option></select>
+        <button id="vmAssignBtn" type="button" style="margin-top:10px">Assign Volunteer to Duty</button>
+        <div id="vmAssignStatus" class="ok hidden" style="margin-top:6px"></div>
+        <div id="vmAssignErr" class="error"></div>
         <div class="hint" style="margin-top:10px">Assign the volunteer to the duty here. Clock in/out is done by the volunteer from Time Clock.</div>
       </div>
     </div>
@@ -5735,6 +5738,43 @@
             document.getElementById('vmEditAddress').value = v.address || '';
           });
           volSel._wired = true;
+        }
+        const assignBtn = document.getElementById('vmAssignBtn');
+        if (assignBtn && !assignBtn._wired) {
+          assignBtn.addEventListener('click', async () => {
+            const errEl = document.getElementById('vmAssignErr');
+            const statusEl = document.getElementById('vmAssignStatus');
+            if (errEl) errEl.textContent = '';
+            if (statusEl) { statusEl.textContent = ''; statusEl.classList.add('hidden'); }
+            const volunteer_id = Number(document.getElementById('vmVolunteer')?.value);
+            const duty_id = Number(document.getElementById('vmDuty')?.value);
+            if (!volunteer_id || !duty_id) {
+              if (errEl) errEl.textContent = 'Volunteer and duty are required.';
+              return;
+            }
+            try {
+              const res = await authed(`/duties/${duty_id}/assign`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ volunteer_id })
+              });
+              const data = await res.json().catch(() => ({}));
+              if (!res.ok) {
+                if (errEl) errEl.textContent = data.message || 'Failed to assign volunteer';
+                return;
+              }
+              if (statusEl) {
+                statusEl.textContent = 'Volunteer assigned to duty.';
+                statusEl.classList.remove('hidden');
+              }
+              await refreshVolunteerLogs();
+              await fetchDuties();
+              await refreshCalendarIfVisible();
+            } catch {
+              if (errEl) errEl.textContent = 'Error assigning volunteer';
+            }
+          });
+          assignBtn._wired = true;
         }
         const saveUserBtn = document.getElementById('vmSaveUserBtn');
         if (saveUserBtn && !saveUserBtn._wired) {
