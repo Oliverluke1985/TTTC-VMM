@@ -237,7 +237,7 @@
     <button id="navEventsBtn">Events</button>
     <button id="navCreateDutyBtn">Create Duty</button>
     <button id="navVolunteerMgmtBtn" class="hidden">Volunteer Management</button>
-    <button id="navDutiesBtn" class="hidden">Duties</button>
+    <button id="navDutiesBtn">Duties</button>
     <button id="navCalendarBtn">Calendar</button>
     <button id="navClockBtn">Time Clock</button>
     <button id="navLogoutBtn">Logout</button>
@@ -5383,12 +5383,19 @@
         setDutyTemplateStatus('');
         resetCalendarView();
       }
-      document.getElementById('navAdminBtn').classList.toggle('hidden', !isAdminish);
-      document.getElementById('navVolunteerMgmtBtn').classList.toggle('hidden', !isAdminish);
-      document.getElementById('navCreateDutyBtn').classList.toggle('hidden', !isAdminish);
-      // Show Time Clock and Photos for volunteers AND admins/superadmins
-      document.getElementById('navClockBtn').classList.toggle('hidden', !(isVolunteer || isAdminish));
-      document.getElementById('navDutiesBtn').classList.toggle('hidden', !(isVolunteer));
+      const navDuties = document.getElementById('navDutiesBtn');
+      const navAdmin = document.getElementById('navAdminBtn');
+      const navVM = document.getElementById('navVolunteerMgmtBtn');
+      const navCreateDuty = document.getElementById('navCreateDutyBtn');
+      const navClock = document.getElementById('navClockBtn');
+      if (navAdmin) navAdmin.classList.toggle('hidden', !isAdminish);
+      if (navVM) navVM.classList.toggle('hidden', !isAdminish);
+      if (navCreateDuty) navCreateDuty.classList.toggle('hidden', !isAdminish);
+      // Show Time Clock for volunteers AND admins/superadmins
+      if (navClock) navClock.classList.toggle('hidden', !(isVolunteer || isAdminish));
+      if (navDuties) {
+        navDuties.classList.toggle('hidden', currentRole !== 'volunteer');
+      }
       document.getElementById('navHomeBtn').onclick = () => { resetGlobalFilters(); navigateTo('homeSection'); };
       function resetVolunteerMgmtUI() {
         const orgRow = document.getElementById('vmSuperOrgRow');
