@@ -681,7 +681,10 @@
             <input id="editDutyLocation" type="text" placeholder="Backstage, Hall B" />
           </div>
         </div>
-        <button id="saveDutyBtn">Save Duty</button>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px">
+          <button id="saveDutyBtn">Save Duty</button>
+          <button id="deleteDutyBtn" type="button" style="color:#b00020;border-color:#b00020">Delete Duty</button>
+        </div>
         <div id="editDutyError" class="error"></div>
         <div id="dutyRestrictionsWrap" class="hidden" style="margin-top:16px">
           <h4>Restrict Volunteers From This Duty</h4>
@@ -4316,6 +4319,26 @@
         clearDutyRestrictionUI();
         await fetchDuties();
       } catch { document.getElementById('editDutyError').textContent = 'Error saving duty'; }
+    });
+    document.getElementById('deleteDutyBtn')?.addEventListener('click', async () => {
+      if (role !== 'admin' && role !== 'superadmin') return;
+      const id = Number(document.getElementById('editDutyId').value);
+      if (!id) { document.getElementById('editDutyError').textContent = 'Select a duty first.'; return; }
+      if (!confirm('Delete this duty?')) return;
+      try {
+        const res = await authed(`/duties/${id}`, { method: 'DELETE' });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          document.getElementById('editDutyError').textContent = data.message || 'Failed to delete duty';
+          return;
+        }
+        document.getElementById('editDutyError').textContent = '';
+        document.getElementById('dutyEditWrap').classList.add('hidden');
+        clearDutyRestrictionUI();
+        await fetchDuties();
+      } catch {
+        document.getElementById('editDutyError').textContent = 'Error deleting duty';
+      }
     });
     document.getElementById('addDutyRestrictionBtn')?.addEventListener('click', async () => {
       if (role !== 'admin' && role !== 'superadmin') return;
