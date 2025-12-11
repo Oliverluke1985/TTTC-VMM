@@ -37,13 +37,8 @@
     .optional-field { margin-top: 10px; }
     .optional-field button { margin: 6px 0; }
     .optional-field-body { margin-top: 6px; }
-    .ghost-btn {
-      background: transparent;
-      border-style: dashed;
-    }
-    .ghost-btn:hover {
-      background: rgba(255,255,255,0.08);
-    }
+    .ghost-btn { background: transparent; border-style: dashed; }
+    .ghost-btn:hover { background: rgba(255,255,255,0.08); }
     /* Defensive: hide extension popovers/overlays if present */
     *[popover]{display:none!important;visibility:hidden!important;opacity:0!important;}
     #top-layer{display:none!important}
@@ -124,6 +119,8 @@
     /* Footer background image */
     footer#footer { position: relative; height: 288px; margin-top: auto; border-radius: 0; overflow: hidden; pointer-events: none; margin-left: -24px; margin-right: -24px; width: calc(100% + 48px); }
     footer#footer::before { content: ""; position: absolute; inset: 0; background-image: var(--footer-bg-image); background-position: 50% 78%; background-size: cover; background-repeat: no-repeat; opacity: 0.75; pointer-events: none; }
+
+    /* Mobile-only overrides (single block) */
     @media (max-width: 640px) {
       body { margin: 0; padding: 12px; overflow-x: hidden; }
       header, footer#footer { margin: 0 !important; width: 100% !important; }
@@ -131,65 +128,7 @@
       section { margin: 12px 0; padding: 12px; }
       .row { flex-direction: column; gap: 12px; }
       .col { flex: 1 1 100%; min-width: 0; }
-      nav#toolbar { justify-content: flex-start; flex-wrap: wrap; gap: 8px; }
-      nav#toolbar button { flex: 1 1 48%; min-width: 0; max-width: 48%; }
-      table {
-        width: 100%;
-        max-width: 100%;
-        table-layout: fixed;
-        font-size: 13px;
-      }
-      table th, table td {
-        padding: 6px 4px;
-        word-break: break-word;
-      }
-      .stacked-table {
-        border: none;
-      }
-      .stacked-table thead {
-        display: none;
-      }
-      .stacked-table,
-      .stacked-table tbody,
-      .stacked-table tr,
-      .stacked-table td {
-        display: block;
-        width: 100%;
-      }
-      .stacked-table tr {
-        border: 1px solid var(--accent3);
-        border-radius: 10px;
-        padding: 10px;
-        margin-bottom: 12px;
-        background: rgba(0,0,0,0.35);
-      }
-    .stacked-table td {
-      border: none;
-      padding: 6px 0;
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      overflow-wrap: break-word;
-      word-break: break-word;
-    }
-      .stacked-table td::before {
-        content: attr(data-label);
-        font-weight: 600;
-        color: var(--accent2);
-      }
-      form, select, input, button, textarea { width: 100%; max-width: 100%; box-sizing: border-box; }
-      input[type="date"],
-      input[type="time"],
-      input[type="datetime-local"] {
-        min-width: 0;
-        width: 100%;
-        display: block;
-      }
-      .nowrap { white-space: normal; }
-    #calendarGridWrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
-    /* Mobile-only overrides (desktop untouched) */
-    @media (max-width: 640px) {
       /* Toolbar 2-up */
       nav#toolbar { justify-content: flex-start; flex-wrap: wrap; gap: 8px; border: none; background: transparent; padding: 0; width: 100%; max-width: 100%; }
       nav#toolbar button { flex: 1 1 48%; min-width: 0; max-width: 48%; background: rgba(0,0,0,0.25); }
@@ -227,90 +166,8 @@
       #clockDutiesWrap .clock-buttons-wrap { display: flex; flex-direction: column; gap: 8px; }
       #clockDutiesWrap .clock-btn { width: 100%; }
       #clockDutiesWrap .duty-date-input { width: 100%; }
-    }
 
-    /* Mobile-only consolidated overrides (desktop untouched) */
-    @media (max-width: 640px) {
-      /* Toolbar 2-up */
-      nav#toolbar { justify-content: flex-start; flex-wrap: wrap; gap: 8px; border: none; background: transparent; padding: 0; width: 100%; max-width: 100%; }
-      nav#toolbar button { flex: 1 1 48%; min-width: 0; max-width: 48%; background: rgba(0,0,0,0.25); }
-
-      /* Calendar */
-      #calendarSection { width: 100%; border: none; padding: 0; background: transparent; }
-      .calendar-month-controls { justify-content: space-between; flex-wrap: nowrap; }
-      .calendar-zoom-mobile { display: flex; gap: 10px; margin: 10px 0 6px; justify-content: space-between; }
-      .calendar-zoom-mobile button { padding: 6px 10px; font-size: 14px; min-width: 64px; }
-      .calendar-weekdays { gap: 4px; margin: 10px 0 6px; font-size: 12px; }
-      .calendar-weekdays div { padding: 3px 0; }
-      .calendar-grid {
-        width: 100%;
-        gap: 4px;
-        grid-template-columns: repeat(7, 1fr);
-        grid-auto-rows: calc(((100vw - 24px) / 7));
-        padding: 0 6px;
-      }
-      .calendar-day {
-        padding: 8px;
-        background: rgba(0,0,0,0.2);
-        border: 1px solid rgba(5,74,116,0.6);
-        overflow: hidden;
-      }
-      .calendar-day-number { font-size: 14px; margin-bottom: 5px; }
-      .calendar-event { padding: 6px 8px; font-size: 13px; border-radius: 10px; overflow-wrap: anywhere; max-width: 100%; }
-      .calendar-more { font-size: 11px; }
-
-      /* Time clock: stack date + buttons inside cell */
-      #clockDutiesWrap td.track-time-cell { display: flex; flex-direction: column; gap: 8px; width: 100%; border-left: none; border-right: none; }
-      #clockDutiesWrap .date-input-wrap,
-      #clockDutiesWrap .clock-buttons-wrap { width: 100%; }
-      #clockDutiesWrap .date-input-wrap { margin-bottom: 4px; position: relative; }
-      #clockDutiesWrap .date-input-wrap .date-placeholder { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--accent2); opacity: 0.8; pointer-events: none; }
-      #clockDutiesWrap .clock-buttons-wrap { display: flex; flex-direction: column; gap: 8px; }
-      #clockDutiesWrap .clock-btn { width: 100%; }
-      #clockDutiesWrap .duty-date-input { width: 100%; }
-    }
-
-    /* Mobile-only overrides (replaces old conflicting rules; desktop untouched) */
-    @media (max-width: 640px) {
-      /* Toolbar 2-up */
-      nav#toolbar { justify-content: flex-start; flex-wrap: wrap; gap: 8px; border: none; background: transparent; padding: 0; width: 100%; max-width: 100%; }
-      nav#toolbar button { flex: 1 1 48%; min-width: 0; max-width: 48%; background: rgba(0,0,0,0.25); }
-
-      /* Calendar */
-      #calendarSection { width: 100%; border: none; padding: 0; background: transparent; }
-      .calendar-month-controls { justify-content: space-between; flex-wrap: nowrap; }
-      .calendar-zoom-mobile { display: flex; gap: 10px; margin: 10px 0 6px; justify-content: space-between; }
-      .calendar-zoom-mobile button { padding: 6px 10px; font-size: 14px; min-width: 64px; }
-      .calendar-weekdays { gap: 4px; margin: 10px 0 6px; font-size: 12px; }
-      .calendar-weekdays div { padding: 3px 0; }
-      .calendar-grid {
-        width: 100%;
-        gap: 4px;
-        grid-template-columns: repeat(7, 1fr);
-        grid-auto-rows: calc(((100vw - 24px) / 7));
-        padding: 0 6px;
-      }
-      .calendar-day {
-        padding: 8px;
-        background: rgba(0,0,0,0.2);
-        border: 1px solid rgba(5,74,116,0.6);
-        overflow: hidden;
-      }
-      .calendar-day-number { font-size: 14px; margin-bottom: 5px; }
-      .calendar-event { padding: 6px 8px; font-size: 13px; border-radius: 10px; overflow-wrap: anywhere; max-width: 100%; }
-      .calendar-more { font-size: 11px; }
-
-      /* Time clock Track Time stacking */
-      #clockDutiesWrap td.track-time-cell { display: block; width: 100%; border-left: none; border-right: none; }
-      #clockDutiesWrap .date-input-wrap,
-      #clockDutiesWrap .clock-buttons-wrap { width: 100%; }
-      #clockDutiesWrap .date-input-wrap { margin-bottom: 8px; position: relative; }
-      #clockDutiesWrap .date-input-wrap .date-placeholder { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--accent2); opacity: 0.8; pointer-events: none; }
-      #clockDutiesWrap .clock-buttons-wrap { display: flex; flex-direction: column; gap: 8px; }
-      #clockDutiesWrap .clock-btn { width: 100%; }
-      #clockDutiesWrap .duty-date-input { width: 100%; }
-
-      /* Keep base stacked table styles */
+      /* Base stacked table/forms */
       table { width: 100%; max-width: 100%; table-layout: fixed; font-size: 13px; }
       table th, table td { padding: 6px 4px; word-break: break-word; }
       .stacked-table { border: none; }
@@ -322,177 +179,7 @@
       form, select, input, button, textarea { width: 100%; max-width: 100%; box-sizing: border-box; }
       input[type="date"], input[type="time"], input[type="datetime-local"] { min-width: 0; width: 100%; display: block; }
       .nowrap { white-space: normal; }
-    }
-
-    /* Mobile-only overrides: toolbar, calendar, time-clock (desktop untouched) */
-    @media (max-width: 640px) {
-      /* Toolbar 2-up */
-      nav#toolbar { justify-content: flex-start; flex-wrap: wrap; gap: 8px; border: none; background: transparent; padding: 0; width: 100%; max-width: 100%; }
-      nav#toolbar button { flex: 1 1 48%; min-width: 0; max-width: 48%; background: rgba(0,0,0,0.25); }
-
-      /* Calendar layout */
-      #calendarSection { width: 100%; border: none; padding: 0; background: transparent; }
-      .calendar-month-controls { justify-content: space-between; flex-wrap: nowrap; }
-      .calendar-zoom-mobile { display: flex; gap: 10px; margin: 10px 0 6px; justify-content: space-between; }
-      .calendar-zoom-mobile button { padding: 6px 10px; font-size: 14px; min-width: 64px; }
-      .calendar-weekdays { gap: 4px; margin: 10px 0 6px; font-size: 12px; }
-      .calendar-weekdays div { padding: 3px 0; }
-      .calendar-grid {
-        width: 100%;
-        gap: 4px;
-        grid-template-columns: repeat(7, 1fr);
-        grid-auto-rows: calc(((100vw - 24px) / 7));
-        padding: 0 6px;
-      }
-      .calendar-day {
-        padding: 8px;
-        background: rgba(0,0,0,0.2);
-        border: 1px solid rgba(5,74,116,0.6);
-        overflow: hidden;
-      }
-      .calendar-day-number { font-size: 14px; margin-bottom: 5px; }
-      .calendar-event { padding: 6px 8px; font-size: 13px; border-radius: 10px; overflow-wrap: anywhere; max-width: 100%; }
-      .calendar-more { font-size: 11px; }
-
-      /* Time clock: stack date + buttons */
-      #clockDutiesWrap td.track-time-cell { display: block; width: 100%; border-left: none; border-right: none; }
-      #clockDutiesWrap .date-input-wrap,
-      #clockDutiesWrap .clock-buttons-wrap { width: 100%; }
-      #clockDutiesWrap .date-input-wrap { margin-bottom: 8px; position: relative; }
-      #clockDutiesWrap .date-input-wrap .date-placeholder { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--accent2); opacity: 0.8; pointer-events: none; }
-      #clockDutiesWrap .clock-buttons-wrap { display: flex; flex-direction: column; gap: 8px; }
-      #clockDutiesWrap .clock-btn { width: 100%; }
-      #clockDutiesWrap .duty-date-input { width: 100%; }
-    }
-    /* Mobile-only overrides (additive, does not touch desktop) */
-    @media (max-width: 640px) {
-      /* Toolbar 2-up */
-      nav#toolbar { justify-content: flex-start; flex-wrap: wrap; gap: 8px; border: none; background: transparent; padding: 0; width: 100%; max-width: 100%; }
-      nav#toolbar button { flex: 1 1 48%; min-width: 0; max-width: 48%; background: rgba(0,0,0,0.25); }
-
-      /* Calendar layout & readability */
-      #calendarSection { width: 100%; border: none; padding: 0; background: transparent; }
-      .calendar-month-controls { justify-content: space-between; flex-wrap: nowrap; }
-      .calendar-zoom-mobile { display: flex; gap: 10px; margin: 10px 0 6px; justify-content: space-between; }
-      .calendar-zoom-mobile button { padding: 6px 10px; font-size: 14px; min-width: 64px; }
-      .calendar-weekdays { gap: 4px; margin: 10px 0 6px; font-size: 12px; }
-      .calendar-weekdays div { padding: 3px 0; }
-      .calendar-grid {
-        width: 100%;
-        gap: 4px;
-        grid-template-columns: repeat(7, 1fr);
-        grid-auto-rows: calc(((100vw - 24px) / 7));
-        padding: 0 6px;
-      }
-      .calendar-day {
-        padding: 8px;
-        background: rgba(0,0,0,0.2);
-        border: 1px solid rgba(5,74,116,0.6);
-        overflow: hidden;
-      }
-      .calendar-day-number { font-size: 14px; margin-bottom: 5px; }
-      .calendar-event {
-        padding: 6px 8px;
-        font-size: 13px;
-        border-radius: 10px;
-        overflow-wrap: anywhere;
-        max-width: 100%;
-      }
-      .calendar-more { font-size: 11px; }
-
-      /* Time clock Track Time stacking */
-      #clockDutiesWrap td.track-time-cell { display: block; width: 100%; border-left: none; border-right: none; }
-      #clockDutiesWrap .date-input-wrap,
-      #clockDutiesWrap .clock-buttons-wrap { width: 100%; }
-      #clockDutiesWrap .date-input-wrap { margin-bottom: 8px; position: relative; }
-      #clockDutiesWrap .date-input-wrap .date-placeholder { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--accent2); opacity: 0.8; pointer-events: none; }
-      #clockDutiesWrap .clock-buttons-wrap { flex-direction: column; gap: 8px; }
-      #clockDutiesWrap .clock-btn { width: 100%; }
-      #clockDutiesWrap .duty-date-input { width: 100%; }
-    }
-
-    /* Mobile-only overrides (does not affect desktop) */
-    @media (max-width: 640px) {
-      /* Toolbar */
-      nav#toolbar { justify-content: flex-start; flex-wrap: wrap; gap: 8px; width: 100%; max-width: 100%; border: none; background: transparent; padding: 0; }
-      nav#toolbar button { flex: 1 1 48%; min-width: 0; max-width: 48%; background: rgba(0,0,0,0.25); }
-
-      /* Calendar */
-      #calendarSection { width: 100%; border: none; padding: 0; background: transparent; }
-      .calendar-month-controls { justify-content: space-between; flex-wrap: nowrap; }
-      .calendar-zoom-mobile { display: flex; gap: 10px; margin: 10px 0 6px; justify-content: space-between; }
-      .calendar-zoom-mobile button { padding: 6px 10px; font-size: 14px; min-width: 64px; }
-      .calendar-weekdays { gap: 4px; margin: 10px 0 6px; font-size: 12px; }
-      .calendar-weekdays div { padding: 3px 0; }
-      .calendar-grid {
-        width: 100%;
-        gap: 4px;
-        grid-template-columns: repeat(7, 1fr);
-        grid-auto-rows: calc(((100vw - 24px) / 7));
-        padding: 0 6px;
-      }
-      .calendar-day {
-        padding: 8px;
-        background: rgba(0,0,0,0.2);
-        border: 1px solid rgba(5,74,116,0.6);
-        overflow: hidden;
-      }
-      .calendar-day-number { font-size: 14px; margin-bottom: 5px; }
-      .calendar-event { padding: 6px 8px; font-size: 13px; border-radius: 10px; overflow-wrap: anywhere; max-width: 100%; }
-      .calendar-more { font-size: 11px; }
-
-      /* Time clock Track Time column */
-      #clockDutiesWrap td.track-time-cell { display: block; width: 100%; border-left: none; border-right: none; }
-      #clockDutiesWrap .date-input-wrap,
-      #clockDutiesWrap .clock-buttons-wrap { width: 100%; }
-      #clockDutiesWrap .date-input-wrap { margin-bottom: 8px; position: relative; }
-      #clockDutiesWrap .date-input-wrap .date-placeholder { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--accent2); opacity: 0.8; pointer-events: none; }
-      #clockDutiesWrap .clock-buttons-wrap { flex-direction: column; gap: 8px; }
-      #clockDutiesWrap .clock-btn { width: 100%; }
-      #clockDutiesWrap .duty-date-input { width: 100%; }
-    }
-
-    /* Mobile-only overrides */
-    @media (max-width: 640px) {
-      /* Toolbar spacing */
-      nav#toolbar { justify-content: flex-start; flex-wrap: wrap; gap: 8px; width: 100%; max-width: 100%; border: none; background: transparent; padding: 0; }
-      nav#toolbar button { flex: 1 1 48%; min-width: 0; max-width: 48%; background: rgba(0,0,0,0.25); }
-
-      /* Calendar layout */
-      #calendarSection { width: 100%; border: none; padding: 0; background: transparent; }
-      .calendar-month-controls { justify-content: space-between; flex-wrap: nowrap; }
-      .calendar-zoom-mobile { display: flex; gap: 10px; margin: 10px 0 6px; justify-content: space-between; }
-      .calendar-zoom-mobile button { padding: 6px 10px; font-size: 14px; min-width: 64px; }
-      .calendar-weekdays { gap: 4px; margin: 10px 0 6px; font-size: 12px; }
-      .calendar-weekdays div { padding: 3px 0; }
-      .calendar-grid {
-        width: 100%;
-        gap: 4px;
-        grid-template-columns: repeat(7, 1fr);
-        grid-auto-rows: calc(((100vw - 24px) / 7));
-        padding: 0 6px;
-      }
-      .calendar-day {
-        padding: 8px;
-        background: rgba(0,0,0,0.2);
-        border: 1px solid rgba(5,74,116,0.6);
-        overflow: hidden;
-      }
-      .calendar-day-number { font-size: 14px; margin-bottom: 5px; }
-      .calendar-event { padding: 6px 8px; font-size: 13px; border-radius: 10px; overflow-wrap: anywhere; max-width: 100%; }
-      .calendar-more { font-size: 11px; }
-
-      /* Time clock: stack date + buttons */
-      #clockDutiesWrap table { width: 100%; }
-      #clockDutiesWrap td.track-time-cell { display: block; width: 100%; border-left: none; border-right: none; }
-      #clockDutiesWrap .date-input-wrap,
-      #clockDutiesWrap .clock-buttons-wrap { width: 100%; }
-      #clockDutiesWrap .date-input-wrap { margin-bottom: 8px; position: relative; }
-      #clockDutiesWrap .date-input-wrap .date-placeholder { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--accent2); opacity: 0.8; pointer-events: none; }
-      #clockDutiesWrap .clock-buttons-wrap { flex-direction: column; gap: 8px; }
-      #clockDutiesWrap .clock-btn { width: 100%; }
-      #clockDutiesWrap .duty-date-input { width: 100%; }
-    }
+      #calendarGridWrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
     }
   </style>
 
