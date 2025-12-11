@@ -1371,12 +1371,6 @@
       scheduleCache: {},
       scheduleFocusEventId: null,
     };
-    let calendarZoom = 1;
-    function applyCalendarZoom(next = 1) {
-      calendarZoom = Math.min(1.4, Math.max(0.8, next));
-      document.documentElement.style.setProperty('--cal-zoom', calendarZoom);
-      try { renderCalendar(); } catch {}
-    }
     let dutyRestrictionVolunteerCache = {};
     let dutyRestrictionState = { currentDutyId: null };
     const optionalFieldControls = {};
