@@ -291,7 +291,7 @@
     </div>
     <div id="clockDutiesWrap">
       <h3>My Duties</h3>
-      <table>
+      <table class="stacked-table">
         <thead><tr><th>ID</th><th>Title</th><th>Description</th><th>Status</th><th>Capacity</th><th>Active</th><th>Track Time</th></tr></thead>
         <tbody id="dutyList"></tbody>
       </table>
@@ -3744,9 +3744,9 @@
           const dutyColor = getDutyColor(d.id);
           const dutyDot = dutyColor ? `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${dutyColor};margin-right:6px;"></span>` : '';
           tr.innerHTML =
-            `<td>${d.id}</td><td>${dutyDot}${d.title}</td><td>${d.description || ''}</td><td>${d.status}</td>
-             <td>${capacityLabel}</td><td>${activeLabel}</td>
-             <td class="track-time-cell">
+            `<td data-label="ID">${d.id}</td><td data-label="Title">${dutyDot}${d.title}</td><td data-label="Description">${d.description || ''}</td><td data-label="Status">${d.status}</td>
+             <td data-label="Capacity">${capacityLabel}</td><td data-label="Active">${activeLabel}</td>
+             <td class="track-time-cell" data-label="Track Time">
                <div class="date-input-wrap">
                  <input type="date" id="dutyDate-${d.id}" required class="duty-date-input">
                  <span class="date-placeholder">Select date</span>
