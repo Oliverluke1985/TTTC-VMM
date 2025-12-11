@@ -300,6 +300,87 @@
         </div>
       </div>
     </div>
+
+    <div id="clockAdminTimeWrap" class="hidden">
+      <h3>Pending Approvals</h3>
+      <table>
+        <thead><tr><th>Log ID</th><th>Volunteer</th><th>Hours</th><th>Date</th><th>Approve</th><th>Delete</th></tr></thead>
+        <tbody id="approvalList"></tbody>
+      </table>
+
+      <div class="row" id="adminTimeVolunteerRow">
+        <div class="col">
+          <label>Volunteers to review</label>
+          <select id="adminTimeVolunteerSelect" multiple size="6">
+            <option value="">Select volunteers to begin.</option>
+          </select>
+          <div class="hint" id="adminTimeVolunteerHint">Select one or more volunteers to view logs.</div>
+          <label style="display:flex;align-items:center;gap:6px;margin-top:10px">
+            <input type="checkbox" id="downloadCsvApprovedOnly" />
+            Approved entries only
+          </label>
+          <button id="downloadCsvBtn">Download Selected CSV</button>
+          <div id="downloadCsvError" class="error"></div>
+        </div>
+      </div>
+
+      <h3>All Time Logs (Scoped to Org)</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Volunteer</th>
+            <th>Event</th>
+            <th>Duty</th>
+            <th>Start</th>
+            <th>End</th>
+            <th>Hours</th>
+            <th>Date</th>
+            <th>Status</th>
+            <th>Approve</th>
+            <th>Edit</th>
+            <th>Delete</th>
+          </tr>
+        </thead>
+        <tbody id="adminTimeList"></tbody>
+      </table>
+
+      <h3>All Time Logs (By Organization)</h3>
+      <div class="row" id="superTimeVolunteerRow">
+        <div class="col">
+          <label>Volunteers to review</label>
+          <select id="superTimeVolunteerSelect">
+            <option value="">Select an organization above.</option>
+          </select>
+          <div class="hint" id="superTimeVolunteerHint">Select an organization, then choose a volunteer.</div>
+          <label style="display:flex;align-items:center;gap:6px;margin-top:10px">
+            <input type="checkbox" id="superDownloadCsvApprovedOnly" />
+            Approved entries only
+          </label>
+          <button id="superDownloadCsvBtn">Download Selected CSV</button>
+          <div id="superDownloadCsvError" class="error"></div>
+        </div>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Volunteer</th>
+            <th>Event</th>
+            <th>Duty</th>
+            <th>Start</th>
+            <th>End</th>
+            <th>Hours</th>
+            <th>Date</th>
+            <th>Status</th>
+            <th>Approve</th>
+            <th>Edit</th>
+            <th>Delete</th>
+          </tr>
+        </thead>
+        <tbody id="superAdminTimeList"></tbody>
+      </table>
+    </div>
     <div id="clockDutiesWrap">
       <h3>My Duties</h3>
       <table class="stacked-table">
@@ -804,42 +885,6 @@
       </div>
     </div>
 
-    <h3>All Time Logs (By Organization)</h3>
-    <div class="row" id="superTimeVolunteerRow">
-      <div class="col">
-        <label>Volunteers to review</label>
-        <select id="superTimeVolunteerSelect">
-          <option value="">Select an organization above.</option>
-        </select>
-        <div class="hint" id="superTimeVolunteerHint">Select an organization, then choose a volunteer.</div>
-        <label style="display:flex;align-items:center;gap:6px;margin-top:10px">
-          <input type="checkbox" id="superDownloadCsvApprovedOnly" />
-          Approved entries only
-        </label>
-        <button id="superDownloadCsvBtn">Download Selected CSV</button>
-        <div id="superDownloadCsvError" class="error"></div>
-      </div>
-    </div>
-    <table>
-      <thead>
-        <tr>
-          <th>ID</th>
-          <th>Volunteer</th>
-          <th>Event</th>
-          <th>Duty</th>
-          <th>Start</th>
-          <th>End</th>
-          <th>Hours</th>
-          <th>Date</th>
-          <th>Status</th>
-          <th>Approve</th>
-          <th>Edit</th>
-          <th>Delete</th>
-        </tr>
-      </thead>
-      <tbody id="superAdminTimeList"></tbody>
-    </table>
-
     <h3>Create User (Superadmin)</h3>
     <div class="row">
       <div class="col">
@@ -885,49 +930,6 @@
     
 
     
-
-    <h3>Pending Approvals</h3>
-    <table>
-      <thead><tr><th>Log ID</th><th>Volunteer</th><th>Hours</th><th>Date</th><th>Approve</th><th>Delete</th></tr></thead>
-      <tbody id="approvalList"></tbody>
-    </table>
-
-    <div class="row" id="adminTimeVolunteerRow">
-      <div class="col">
-        <label>Volunteers to review</label>
-        <select id="adminTimeVolunteerSelect" multiple size="6">
-          <option value="">Select volunteers to begin.</option>
-        </select>
-        <div class="hint" id="adminTimeVolunteerHint">Select one or more volunteers to view logs.</div>
-        <label style="display:flex;align-items:center;gap:6px;margin-top:10px">
-          <input type="checkbox" id="downloadCsvApprovedOnly" />
-          Approved entries only
-        </label>
-        <button id="downloadCsvBtn">Download Selected CSV</button>
-        <div id="downloadCsvError" class="error"></div>
-      </div>
-    </div>
-
-    <h3>All Time Logs (Scoped to Org)</h3>
-    <table>
-      <thead>
-        <tr>
-          <th>ID</th>
-          <th>Volunteer</th>
-          <th>Event</th>
-          <th>Duty</th>
-          <th>Start</th>
-          <th>End</th>
-          <th>Hours</th>
-          <th>Date</th>
-          <th>Status</th>
-          <th>Approve</th>
-          <th>Edit</th>
-          <th>Delete</th>
-        </tr>
-      </thead>
-      <tbody id="adminTimeList"></tbody>
-    </table>
 
   </section>
 
@@ -5569,9 +5571,19 @@
           const dutiesWrap = document.getElementById('clockDutiesWrap');
           const timesWrap = document.getElementById('clockTimesWrap');
         const adjustWrap = document.getElementById('clockAdminAdjustWrap');
+        const adminTimeWrap = document.getElementById('clockAdminTimeWrap');
+        const superTimeRow = document.getElementById('superTimeVolunteerRow');
+        const superAdminTable = document.getElementById('superAdminTimeList')?.closest('table');
+        const adminTimeRow = document.getElementById('adminTimeVolunteerRow');
+        const adminTimeTable = document.getElementById('adminTimeList')?.closest('table');
         if (dutiesWrap) dutiesWrap.classList.toggle('hidden', isAdminishClock);
         if (timesWrap) timesWrap.classList.toggle('hidden', isAdminishClock);
         if (adjustWrap) adjustWrap.classList.toggle('hidden', !isAdminishClock);
+        if (adminTimeWrap) adminTimeWrap.classList.toggle('hidden', !isAdminishClock);
+        if (superTimeRow) superTimeRow.classList.toggle('hidden', currentRole !== 'superadmin');
+        if (superAdminTable) superAdminTable.classList.toggle('hidden', currentRole !== 'superadmin');
+        if (adminTimeRow) adminTimeRow.classList.toggle('hidden', currentRole === 'superadmin');
+        if (adminTimeTable) adminTimeTable.classList.toggle('hidden', currentRole === 'superadmin');
         const note = document.getElementById('clockSuperNote');
         if (note) note.textContent = '';
         if (isAdminishClock) {
@@ -5582,6 +5594,10 @@
           } else {
             await populateClockAdminVolunteersByOrg(groupId != null ? String(groupId) : '');
           }
+          await populateAdminTimeVolunteerSelect();
+          await populateSuperTimeVolunteerSelect();
+          await fetchApprovals();
+          await fetchAdminTimes();
           return;
         }
         await fetchDuties();
