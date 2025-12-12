@@ -344,6 +344,10 @@
       document.documentElement.style.setProperty('--cal-zoom', calendarZoom);
       try { renderCalendar(); } catch {}
     }
+    // Back-compat: some handlers call adjustCalendarZoom()
+    function adjustCalendarZoom(next = 1) {
+      applyCalendarZoom(next);
+    }
     document.addEventListener('DOMContentLoaded', () => {
       const hookCalendarZoom = () => {
         const zin = document.getElementById('calendarZoomIn');
