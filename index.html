@@ -3903,20 +3903,11 @@
           }
           const capacityLabel = (d.max_volunteers != null && d.max_volunteers !== '') ? d.max_volunteers : '—';
           const activeLabel = d.active_assignments != null ? d.active_assignments : 0;
-          const isFull = d.max_volunteers != null && d.max_volunteers !== '' && Number(d.max_volunteers) > 0 && Number(activeLabel) >= Number(d.max_volunteers);
-          const clockInDisabled = isFull ? 'disabled title="Duty has reached its volunteer limit"' : '';
           const dutyColor = getDutyColor(d.id);
           const dutyDot = dutyColor ? `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${dutyColor};margin-right:6px;"></span>` : '';
           tr.innerHTML =
             `<td>${d.id}</td><td>${dutyDot}${d.title}</td><td>${d.description || ''}</td><td>${d.status}</td>
-             <td>${capacityLabel}</td><td>${activeLabel}</td>
-             <td>
-               <input type="date" id="dutyDate-${d.id}" required>
-               <button onclick="startTime(${d.id})" ${clockInDisabled}>Clock In</button>
-               <button onclick="stopTime(${d.id})">Clock Out</button>
-               ${isFull ? '<div class="hint" style="margin-top:4px">Duty is full</div>' : ''}
-               ${adminActions}
-             </td>`;
+             <td>${capacityLabel}</td><td>${activeLabel}</td>`;
           tbody.appendChild(tr);
           if (editSelect) {
             const opt = document.createElement('option');
