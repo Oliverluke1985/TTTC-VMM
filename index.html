@@ -243,6 +243,8 @@
         overflow: hidden;
         aspect-ratio: 1 / 1;
         min-width: 0;
+        min-height: 0; /* override desktop min-height so aspect-ratio can make true squares */
+        border-radius: 0; /* sharp 90° corners on mobile */
       }
       .calendar-day-number { font-size: 14px; margin-bottom: 5px; }
       .calendar-events { display: flex; flex-direction: column; gap: 3px; overflow: hidden; flex: 1 1 auto; min-height: 0; min-width: 0; }
@@ -258,6 +260,15 @@
         max-width: 100%;
         overflow: hidden;
         text-overflow: ellipsis;
+      }
+      /* Mobile calendar Option B: compact event bars (no titles in-grid) */
+      .calendar-event.calendar-event--bar {
+        padding: 0;
+        height: 10px;
+        border-radius: 0;
+        border-left-width: 0;
+        font-size: 0;
+        line-height: 0;
       }
       .calendar-more { font-size: 11px; }
 
@@ -2278,6 +2289,7 @@
       if (!grid) return;
       grid.innerHTML = '';
       updateCalendarMonthLabel();
+      const isMobile = !!(window.matchMedia && window.matchMedia('(max-width: 640px)').matches);
       const monthRef = calendarState.currentMonth;
       const startOfMonth = new Date(monthRef.getFullYear(), monthRef.getMonth(), 1);
       const gridStart = new Date(startOfMonth);
@@ -2301,10 +2313,11 @@
         cell.appendChild(number);
         const list = document.createElement('div');
         list.className = 'calendar-events';
-        dayEvents.slice(0, 3).forEach(ev => {
+        const maxInlineEvents = isMobile ? 2 : 3;
+        dayEvents.slice(0, maxInlineEvents).forEach(ev => {
           const btn = document.createElement('button');
           btn.type = 'button';
-          btn.className = 'calendar-event';
+          btn.className = 'calendar-event' + (isMobile ? ' calendar-event--bar' : '');
           const pieces = [];
           const startTime = formatTime12((ev.start_time || '').slice(0, 5));
           if (startTime) pieces.push(startTime);
@@ -2313,7 +2326,14 @@
             const gName = groupNameById[ev.group_id];
             if (gName) pieces.push(`(${gName})`);
           }
-          btn.textContent = pieces.join(' ');
+          const label = pieces.join(' ');
+          // Option B on mobile: show color only in-grid; details appear in the panel below
+          if (!isMobile) {
+            btn.textContent = label;
+          } else {
+            btn.setAttribute('aria-label', label);
+            btn.title = label;
+          }
           applyEventColorStyles(btn, ev);
           btn.addEventListener('click', (event) => {
             event.stopPropagation();
@@ -2321,10 +2341,10 @@
           });
           list.appendChild(btn);
         });
-        if (dayEvents.length > 3) {
+        if (dayEvents.length > maxInlineEvents) {
           const more = document.createElement('div');
           more.className = 'calendar-more';
-          more.textContent = `+${dayEvents.length - 3} more`;
+          more.textContent = `+${dayEvents.length - maxInlineEvents} more`;
           more.addEventListener('click', (event) => {
             event.stopPropagation();
             showCalendarDayEvents(key);
