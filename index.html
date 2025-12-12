@@ -39,9 +39,7 @@
     .optional-field-body { margin-top: 6px; }
     .ghost-btn { background: transparent; border-style: dashed; }
     .ghost-btn:hover { background: rgba(255,255,255,0.08); }
-    /* Defensive: hide extension popovers/overlays if present */
-    *[popover]{display:none!important;visibility:hidden!important;opacity:0!important;}
-    #top-layer{display:none!important}
+    /* NOTE: do not disable [popover]/top-layer globally; it breaks native <select> dropdowns */
 
     /* Predictive org suggestions (site-styled blue panel) */
     .org-suggest-wrap { position: relative; }
