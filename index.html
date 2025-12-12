@@ -4070,17 +4070,18 @@
         tbody.querySelectorAll('.prefillDutyEditBtn').forEach(btn => btn.addEventListener('click', (ev) => {
           const id = Number(ev.currentTarget.getAttribute('data-did'));
           const row = ev.currentTarget.closest('tr').children;
+          const storedDuty = (window.dutyById && window.dutyById[id]) ? window.dutyById[id] : null;
           const wrap = document.getElementById('dutyEditWrap');
           if (wrap) wrap.classList.remove('hidden');
           document.getElementById('editDutyId').value = String(id);
-          document.getElementById('editDutyTitle').value = row[1].textContent || '';
-          document.getElementById('editDutyDesc').value = row[2].textContent || '';
-          document.getElementById('editDutyStatus').value = (row[3].textContent || 'pending');
+          document.getElementById('editDutyTitle').value = storedDuty?.title || (row[1].textContent || '');
+          document.getElementById('editDutyDesc').value = storedDuty?.description || (row[2].textContent || '');
+          document.getElementById('editDutyStatus').value = storedDuty?.status || 'pending';
           const capInput = document.getElementById('editDutyCapacity');
-          const stored = (window.dutyById && window.dutyById[id]) ? window.dutyById[id].max_volunteers : null;
+          const stored = storedDuty ? storedDuty.max_volunteers : null;
           if (capInput) capInput.value = stored != null ? stored : '';
-          const storedLocation = (window.dutyById && window.dutyById[id]) ? window.dutyById[id].location : '';
-          const storedColor = (window.dutyById && window.dutyById[id]) ? window.dutyById[id].color_hex : '';
+          const storedLocation = storedDuty ? storedDuty.location : '';
+          const storedColor = storedDuty ? storedDuty.color_hex : '';
           const editColorInput = document.getElementById('editDutyColor');
           if (editColorInput) editColorInput.value = normalizeHexColor(storedColor) || '#2563eb';
           if (optionalFieldControls.editDutyLocation) {
@@ -4258,14 +4259,18 @@
       if (!sel.value) { renderDutyColorPreview('dutyEditColorPreview', null); return; }
       const id = Number(sel.value);
       renderDutyColorPreview('dutyEditColorPreview', (window.dutyById && window.dutyById[id])?.color_hex || id);
+      const storedDuty = (window.dutyById && window.dutyById[id]) ? window.dutyById[id] : null;
       const row = Array.from(document.querySelectorAll('#dutyList tr')).find(tr => tr.firstChild?.textContent == String(id));
       if (!row) {
         document.getElementById('dutyEditWrap').classList.remove('hidden');
         document.getElementById('editDutyId').value = String(id);
+        document.getElementById('editDutyTitle').value = storedDuty?.title || '';
+        document.getElementById('editDutyDesc').value = storedDuty?.description || '';
+        document.getElementById('editDutyStatus').value = storedDuty?.status || 'pending';
         const capInput = document.getElementById('editDutyCapacity');
-        const stored = (window.dutyById && window.dutyById[id]) ? window.dutyById[id].max_volunteers : null;
+        const stored = storedDuty ? storedDuty.max_volunteers : null;
         if (capInput) capInput.value = stored != null ? stored : '';
-        const storedLocation = (window.dutyById && window.dutyById[id]) ? window.dutyById[id].location : '';
+        const storedLocation = storedDuty ? storedDuty.location : '';
         if (optionalFieldControls.editDutyLocation) {
           if (storedLocation) {
             optionalFieldControls.editDutyLocation.show();
@@ -4284,13 +4289,13 @@
       const cells = row.children;
       document.getElementById('dutyEditWrap').classList.remove('hidden');
       document.getElementById('editDutyId').value = String(id);
-      document.getElementById('editDutyTitle').value = cells[1].textContent || '';
-      document.getElementById('editDutyDesc').value = cells[2].textContent || '';
-      document.getElementById('editDutyStatus').value = (cells[3].textContent || 'pending');
+      document.getElementById('editDutyTitle').value = storedDuty?.title || (cells[1].textContent || '');
+      document.getElementById('editDutyDesc').value = storedDuty?.description || (cells[2].textContent || '');
+      document.getElementById('editDutyStatus').value = storedDuty?.status || 'pending';
       const capInput = document.getElementById('editDutyCapacity');
-      const stored = (window.dutyById && window.dutyById[id]) ? window.dutyById[id].max_volunteers : null;
+      const stored = storedDuty ? storedDuty.max_volunteers : null;
       if (capInput) capInput.value = stored != null ? stored : '';
-      const storedLocation = (window.dutyById && window.dutyById[id]) ? window.dutyById[id].location : '';
+      const storedLocation = storedDuty ? storedDuty.location : '';
       if (optionalFieldControls.editDutyLocation) {
         if (storedLocation) {
           optionalFieldControls.editDutyLocation.show();
