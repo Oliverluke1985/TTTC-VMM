@@ -2227,7 +2227,7 @@
       }
       const rows = [];
       duties.forEach(d => {
-        const status = d.status || 'open';
+        const status = (d && (d.is_closed === true || String(d.status || '').toLowerCase() === 'closed')) ? 'closed' : 'open';
         const dutyLabel = `${d.id} — ${d.title || 'Duty'}`;
         const dateKey = d.duty_date || d.next_date || d.event_date || '';
         rows.push(`
@@ -4035,8 +4035,9 @@
           const activeLabel = d.active_assignments != null ? d.active_assignments : 0;
           const dutyColor = getDutyColor(d.id);
           const dutyDot = dutyColor ? `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${dutyColor};margin-right:6px;"></span>` : '';
+          const accessStatus = (d && (d.is_closed === true || String(d.status || '').toLowerCase() === 'closed')) ? 'closed' : 'open';
           tr.innerHTML =
-            `<td>${d.id}</td><td>${dutyDot}${d.title}</td><td>${d.description || ''}</td><td>${d.status}</td>
+            `<td>${d.id}</td><td>${dutyDot}${d.title}</td><td>${d.description || ''}</td><td>${accessStatus}</td>
              <td>${capacityLabel}</td><td>${activeLabel}</td>`;
           tbody.appendChild(tr);
           if (editSelect) {

@@ -291,6 +291,16 @@ async function ensureTimeTrackingApprovalColumn() {
          PRIMARY KEY (duty_id, volunteer_id)
        )`
     );
+    // Duty assignments: which volunteers are allowed for "closed" duties
+    await pool.query(
+      `CREATE TABLE IF NOT EXISTS duty_assignments (
+         duty_id INTEGER NOT NULL REFERENCES duties(id) ON DELETE CASCADE,
+         volunteer_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+         assigned_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+         created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+         PRIMARY KEY (duty_id, volunteer_id)
+       )`
+    );
     await pool.query(
       `CREATE TABLE IF NOT EXISTS duty_templates (
          id SERIAL PRIMARY KEY,
@@ -298,12 +308,24 @@ async function ensureTimeTrackingApprovalColumn() {
          title TEXT NOT NULL,
          description TEXT,
          status TEXT DEFAULT 'pending',
+         is_closed BOOLEAN DEFAULT false,
          max_volunteers INTEGER,
          created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
          created_at TIMESTAMP NOT NULL DEFAULT NOW(),
          updated_at TIMESTAMP NOT NULL DEFAULT NOW()
        )`
     );
+    await pool.query('ALTER TABLE IF EXISTS duties ADD COLUMN IF NOT EXISTS is_closed BOOLEAN DEFAULT false');
+    await pool.query('ALTER TABLE IF EXISTS duty_templates ADD COLUMN IF NOT EXISTS is_closed BOOLEAN DEFAULT false');
+    // Back-compat: older schemas used status=open/closed. Convert to pending + is_closed flag.
+    try {
+      await pool.query(`UPDATE duties SET is_closed=true WHERE LOWER(status)='closed' AND COALESCE(is_closed,false)=false`);
+      await pool.query(`UPDATE duties SET status='pending' WHERE LOWER(status) IN ('open','closed')`);
+    } catch (_) {}
+    try {
+      await pool.query(`UPDATE duty_templates SET is_closed=true WHERE LOWER(status)='closed' AND COALESCE(is_closed,false)=false`);
+      await pool.query(`UPDATE duty_templates SET status='pending' WHERE LOWER(status) IN ('open','closed')`);
+    } catch (_) {}
   } catch (e) {
     console.error('Schema ensure failed (duties.event_id):', e?.message || e);
   }
@@ -1291,11 +1313,10 @@ app.post('/duty-templates', authRequired, async (req, res) => {
     if (!Number.isFinite(targetGroupId)) {
       return res.status(400).json({ message: 'Organization is required for saved duties' });
     }
-    const statusMap = { open: 'pending', closed: 'completed', complete: 'completed', completed: 'completed' };
-    let normalizedStatus = String(status ?? '').toLowerCase();
-    normalizedStatus = normalizedStatus || 'pending';
-    normalizedStatus = statusMap[normalizedStatus] || normalizedStatus;
-    if (!['pending','in_progress','completed'].includes(normalizedStatus)) normalizedStatus = 'pending';
+    const rawStatus = String(status ?? '').toLowerCase() || 'open';
+    const isClosed = rawStatus === 'closed';
+    // "open"/"closed" here is access control, not completion state
+    let normalizedStatus = 'pending';
     let maxVol = null;
     if (max_volunteers !== undefined && max_volunteers !== null && max_volunteers !== '') {
       maxVol = Number(max_volunteers);
@@ -1305,10 +1326,10 @@ app.post('/duty-templates', authRequired, async (req, res) => {
       maxVol = Math.floor(maxVol);
     }
     const result = await pool.query(
-      `INSERT INTO duty_templates (title, description, status, max_volunteers, group_id, color_hex, created_by, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,NOW())
+      `INSERT INTO duty_templates (title, description, status, is_closed, max_volunteers, group_id, color_hex, created_by, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW())
        RETURNING *`,
-      [String(title).trim(), description ?? null, normalizedStatus, maxVol, targetGroupId, color_hex ?? null, req.user.id]
+      [String(title).trim(), description ?? null, normalizedStatus, isClosed, maxVol, targetGroupId, color_hex ?? null, req.user.id]
     );
     res.json(result.rows[0]);
   } catch (err) {
@@ -1343,6 +1364,10 @@ app.get('/duties', authRequired, async (req, res) => {
   const duties = await pool.query(
     `${baseSelect}
      WHERE d.group_id=$1 AND d.archived_at IS NULL
+       AND (COALESCE(d.is_closed, false) = false OR EXISTS (
+         SELECT 1 FROM duty_assignments da
+         WHERE da.duty_id = d.id AND da.volunteer_id = $2
+       ))
        AND NOT EXISTS (
          SELECT 1 FROM duty_restrictions dr
          WHERE dr.duty_id = d.id AND dr.volunteer_id = $2
@@ -1382,11 +1407,10 @@ app.post('/duties', authRequired, async (req, res) => {
     // Build insert compatible with varying schemas
     const colsRes = await pool.query("SELECT column_name FROM information_schema.columns WHERE table_name='duties'");
     const has = new Set(colsRes.rows.map(r => r.column_name));
-    // Normalize status to match stricter schemas (e.g., pending/in_progress/completed)
-    const statusMap = { open: 'pending', closed: 'completed', complete: 'completed', completed: 'completed' };
-    let normalizedStatus = (status || 'pending').toLowerCase();
-    normalizedStatus = statusMap[normalizedStatus] || normalizedStatus;
-    if (!['pending','in_progress','completed'].includes(normalizedStatus)) normalizedStatus = 'pending';
+    // "open"/"closed" here is access control, not completion state
+    const rawStatus = String(status || 'open').toLowerCase();
+    const isClosed = rawStatus === 'closed';
+    let normalizedStatus = 'pending';
     const fields = [];
     const params = [];
     const values = [];
@@ -1394,6 +1418,7 @@ app.post('/duties', authRequired, async (req, res) => {
     fields.push('title'); params.push(`$${idx++}`); values.push(title);
     fields.push('description'); params.push(`$${idx++}`); values.push(description ?? null);
     if (has.has('status')) { fields.push('status'); params.push(`$${idx++}`); values.push(normalizedStatus); }
+    if (has.has('is_closed')) { fields.push('is_closed'); params.push(`$${idx++}`); values.push(isClosed); }
     if (has.has('group_id')) { fields.push('group_id'); params.push(`$${idx++}`); values.push(targetGroupId); }
     if (has.has('event_id')) { fields.push('event_id'); params.push(`$${idx++}`); values.push(event_id ?? null); }
     if (has.has('max_volunteers')) { fields.push('max_volunteers'); params.push(`$${idx++}`); values.push(maxVol); }
@@ -1478,6 +1503,47 @@ app.patch('/duties/:id', authRequired, async (req, res) => {
   }
 });
 
+// Assign a volunteer to a duty (used for "closed" duties)
+app.post('/duties/:id/assign', authRequired, async (req, res) => {
+  if (!isAdmin(req.user)) return res.status(403).json({ message: 'Admins only' });
+  try {
+    const dutyId = Number(req.params.id);
+    if (!Number.isFinite(dutyId)) return res.status(400).json({ message: 'Invalid duty id' });
+    const { volunteer_id } = req.body || {};
+    const volunteerIdNum = Number(volunteer_id);
+    if (!Number.isFinite(volunteerIdNum)) return res.status(400).json({ message: 'Invalid volunteer_id' });
+
+    const dutyRes = await pool.query('SELECT id, group_id FROM duties WHERE id=$1 AND archived_at IS NULL', [dutyId]);
+    if (dutyRes.rowCount === 0) return res.status(404).json({ message: 'Duty not found' });
+    const dutyGroup = dutyRes.rows[0].group_id;
+    if (req.user.role === 'admin' && dutyGroup !== req.user.group_id) {
+      return res.status(403).json({ message: 'Admins can only assign volunteers to duties in their organization.' });
+    }
+
+    const volunteerRes = await pool.query('SELECT id, role, group_id FROM users WHERE id=$1', [volunteerIdNum]);
+    if (volunteerRes.rowCount === 0 || String(volunteerRes.rows[0].role || '').toLowerCase() !== 'volunteer') {
+      return res.status(404).json({ message: 'Volunteer not found' });
+    }
+    const volunteerGroup = volunteerRes.rows[0].group_id;
+    if (req.user.role === 'admin' && volunteerGroup !== req.user.group_id) {
+      return res.status(403).json({ message: 'Admins can only assign volunteers in their organization.' });
+    }
+    if (req.user.role === 'superadmin') {
+      if (dutyGroup != null && volunteerGroup != null && dutyGroup !== volunteerGroup) {
+        return res.status(400).json({ message: 'Volunteer must belong to the same organization as the duty.' });
+      }
+    }
+
+    await pool.query(
+      'INSERT INTO duty_assignments (duty_id, volunteer_id, assigned_by) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING',
+      [dutyId, volunteerIdNum, req.user.id]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ message: err?.message || 'Failed to assign volunteer' });
+  }
+});
+
 // --- Time tracking
 app.post('/duties/:id/time/start', authRequired, async (req, res) => {
   try {
@@ -1487,10 +1553,20 @@ app.post('/duties/:id/time/start', authRequired, async (req, res) => {
     await ensureTimeTrackingEventColumn();
     const dutyId = Number(req.params.id);
     if (!Number.isFinite(dutyId)) return res.status(400).json({ message: 'Invalid duty id' });
-    const dutyRes = await pool.query('SELECT max_volunteers, event_id FROM duties WHERE id=$1 AND archived_at IS NULL', [dutyId]);
+    const dutyRes = await pool.query('SELECT max_volunteers, event_id, COALESCE(is_closed,false) AS is_closed FROM duties WHERE id=$1 AND archived_at IS NULL', [dutyId]);
     if (dutyRes.rowCount === 0) return res.status(404).json({ message: 'Duty not found' });
     const maxVol = dutyRes.rows[0].max_volunteers;
     const dutyEventId = dutyRes.rows[0].event_id || null;
+    const isClosed = !!dutyRes.rows[0].is_closed;
+    if (String(req.user.role || '').toLowerCase() === 'volunteer' && isClosed) {
+      const assigned = await pool.query(
+        'SELECT 1 FROM duty_assignments WHERE duty_id=$1 AND volunteer_id=$2',
+        [dutyId, req.user.id]
+      );
+      if (assigned.rowCount === 0) {
+        return res.status(403).json({ message: 'This duty is closed and can only be worked by an assigned volunteer.' });
+      }
+    }
     if (maxVol != null && Number.isFinite(Number(maxVol)) && Number(maxVol) > 0) {
       const activeRes = await pool.query('SELECT COUNT(*) FROM time_tracking WHERE duty_id=$1 AND end_time IS NULL', [dutyId]);
       const activeCount = Number(activeRes.rows[0].count || 0);
