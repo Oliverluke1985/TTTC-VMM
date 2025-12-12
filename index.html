@@ -200,7 +200,7 @@
 
     /* Mobile-only overrides (single block) */
     @media (max-width: 640px) {
-      body { margin: 0; padding: 12px; overflow-x: hidden; }
+      body { margin: 0; padding: 6px; overflow-x: hidden; }
       header, footer#footer { margin: 0 !important; width: 100% !important; }
       nav#toolbar, section, .col { width: 100%; max-width: 100%; box-sizing: border-box; }
       section { margin: 12px 0; padding: 12px; }
@@ -232,22 +232,22 @@
       /* Let the calendar use more horizontal room on mobile (bigger squares) */
       .calendar-weekdays,
       #calendarGridWrap {
-        margin-left: -12px;
-        margin-right: -12px;
-        padding-left: 12px;
-        padding-right: 12px;
+        margin-left: -6px;
+        margin-right: -6px;
+        padding-left: 6px;
+        padding-right: 6px;
         box-sizing: border-box;
       }
       .calendar-grid {
         width: 100%;
         box-sizing: border-box;
-        gap: 2px;
+        gap: 1px;
         grid-template-columns: repeat(7, 1fr);
         padding: 0;
       }
       .calendar-day {
         position: relative;
-        padding: 8px;
+        padding: 6px;
         background: rgba(0,0,0,0.2);
         border: 1px solid rgba(5,74,116,0.6);
         overflow: hidden;
@@ -273,8 +273,10 @@
       }
       /* Mobile calendar Option B: compact event bars (no titles in-grid) */
       .calendar-event.calendar-event--bar {
+        display: block;
+        width: 100%;
         padding: 0;
-        height: 14px;
+        height: 18px;
         border-radius: 0;
         border-left-width: 0;
         font-size: 0;
@@ -324,7 +326,7 @@
       #calendarGridWrap {
         overflow-x: hidden;
         overflow-y: auto;
-        max-height: 65vh;
+        max-height: 75vh;
         -webkit-overflow-scrolling: touch;
       }
     }
@@ -2170,8 +2172,8 @@
             if (role === 'volunteer') {
               calendarState.selectedEventId = Number(ev.id);
               calendarState.scheduleFocusEventId = Number(ev.id);
-              calendarState.activeDateKey = key;
-              loadCalendarDaySchedule(key, { force: true });
+              calendarState.activeDateKey = dateKey;
+              loadCalendarDaySchedule(dateKey, { force: true });
             } else {
               openCalendarEvent(ev.id);
             }
@@ -2349,7 +2351,7 @@
         }
         const list = document.createElement('div');
         list.className = 'calendar-events';
-        const maxInlineEvents = isMobile ? 2 : 3;
+        const maxInlineEvents = isMobile ? 3 : 3;
         dayEvents.slice(0, maxInlineEvents).forEach(ev => {
           const btn = document.createElement('button');
           btn.type = 'button';
