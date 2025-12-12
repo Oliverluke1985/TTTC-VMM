@@ -118,9 +118,6 @@
     .track-time-buttons button { width: 100%; }
     .track-time-bar select, .track-time-bar input { width: 100%; box-sizing: border-box; min-height: 42px; }
     .track-time-select { position: relative; }
-    .track-time-select { display: none !important; }
-    .track-time-options { display: none !important; }
-    #trackTimeSelectBtn { display: none !important; }
     #trackTimeDutySelect {
       display: block;
       width: 100%;
@@ -432,10 +429,6 @@
         <div class="track-time-main">
           <div class="track-time-group">
             <label for="trackTimeDutySelect">Select Duty</label>
-            <div class="track-time-select" id="trackTimeSelectWrap">
-              <button type="button" id="trackTimeSelectBtn">— Select duty —</button>
-              <ul id="trackTimeOptions" class="track-time-options hidden"></ul>
-            </div>
             <select id="trackTimeDutySelect"><option value="">— Select duty —</option></select>
           </div>
           <div class="track-time-group">
