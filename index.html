@@ -231,6 +231,7 @@
       .calendar-weekdays div { padding: 3px 0; }
       .calendar-grid {
         width: 100%;
+        box-sizing: border-box;
         gap: 4px;
         grid-template-columns: repeat(7, 1fr);
         padding: 0 6px;
@@ -705,7 +706,9 @@
       <div>Fri</div>
       <div>Sat</div>
     </div>
-    <div id="calendarGrid" class="calendar-grid"></div>
+    <div id="calendarGridWrap">
+      <div id="calendarGrid" class="calendar-grid"></div>
+    </div>
     <div id="calendarStatus" class="hint"></div>
     <div id="calendarEventPanel" class="row hidden">
       <div class="col">
