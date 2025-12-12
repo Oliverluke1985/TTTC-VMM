@@ -3955,68 +3955,6 @@
               trackBtn.textContent = '— Select duty —';
             }
           }
-        }
-          tbody.appendChild(tr);
-          if (editSelect) {
-            const opt = document.createElement('option');
-            opt.value = d.id;
-            opt.textContent = `${d.id} — ${d.title}`;
-            editSelect.appendChild(opt);
-          }
-        });
-          const dutyColor = getDutyColor(d.id);
-          const dutyDot = dutyColor ? `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${dutyColor};margin-right:6px;"></span>` : '';
-          tr.innerHTML =
-            `<td>${d.id}</td><td>${dutyDot}${d.title}</td><td>${d.description || ''}</td><td>${d.status}</td>
-             <td>${capacityLabel}</td><td>${activeLabel}</td>`;
-          tbody.appendChild(tr);
-          if (editSelect) {
-            const opt = document.createElement('option');
-            opt.value = d.id;
-            opt.textContent = `${d.id} — ${d.title}`;
-            editSelect.appendChild(opt);
-          }
-        });
-        renderVolunteerDutyCards(duties);
-        const trackSel = document.getElementById('trackTimeDutySelect');
-        const trackOptions = document.getElementById('trackTimeOptions');
-        const trackBtn = document.getElementById('trackTimeSelectBtn');
-        if (trackSel) {
-          const prev = trackSel.value;
-          trackSel.innerHTML = '<option value="">— Select duty —</option>';
-          duties.forEach(d => {
-            const opt = document.createElement('option');
-            opt.value = d.id;
-            opt.textContent = `${d.id} — ${d.title}`;
-            trackSel.appendChild(opt);
-          });
-          if (prev && trackSel.querySelector(`option[value="${prev}"]`)) {
-            trackSel.value = prev;
-          }
-          if (trackOptions && trackBtn) {
-            trackOptions.innerHTML = '';
-            const addLi = (val, label) => {
-              const li = document.createElement('li');
-              li.setAttribute('data-value', val);
-              li.textContent = label;
-              if (trackSel.value === val) li.classList.add('active');
-              li.addEventListener('click', () => {
-                trackSel.value = val;
-                trackBtn.textContent = label;
-                trackOptions.classList.add('hidden');
-                trackOptions.querySelectorAll('li').forEach(el => el.classList.toggle('active', el === li));
-              });
-              trackOptions.appendChild(li);
-            };
-            addLi('', '— Select duty —');
-            duties.forEach(d => addLi(String(d.id), `${d.id} — ${d.title}`));
-            if (trackSel.value) {
-              trackBtn.textContent = `${trackSel.value} — ${(window.dutyById && window.dutyById[Number(trackSel.value)])?.title || 'Selected'}`;
-            } else {
-              trackBtn.textContent = '— Select duty —';
-            }
-          }
-        }
         if (editSelect) {
           ensureDutyColorPreview('dutyEditSelect', 'dutyEditColorPreview');
           if (editSelect.value) renderDutyColorPreview('dutyEditColorPreview', (window.dutyById && window.dutyById[Number(editSelect.value)])?.color_hex || editSelect.value);
