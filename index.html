@@ -20,10 +20,10 @@
     h2 { margin: 14px 0 10px; font-size: 18px; color: var(--accent2); }
     h3 { margin: 12px 0 8px; font-size: 16px; color: var(--accent3); }
     a { color: var(--accent1); }
-    .row { display: flex; gap: 16px; flex-wrap: wrap; }
-    .col { flex: 1 1 360px; border: 1px solid var(--accent3); padding: 12px; border-radius: 10px; background: rgba(255,255,255,0.04); }
+    .row { display: flex; gap: 16px; flex-wrap: wrap; overflow: visible; }
+    .col { flex: 1 1 360px; border: 1px solid var(--accent3); padding: 12px; border-radius: 10px; background: rgba(255,255,255,0.04); overflow: visible; }
     label { display:block; margin-top: 6px; font-size: 14px; color: var(--accent5); }
-    input, select { margin: 4px 0 8px; padding: 8px; width: 100%; box-sizing: border-box; border-radius: 8px; border: 1px solid var(--accent3); background: rgba(0,0,0,0.25); color: var(--text); }
+    input, select { margin: 4px 0 8px; padding: 8px; width: 100%; box-sizing: border-box; border-radius: 8px; border: 1px solid var(--accent3); background: rgba(0,0,0,0.25); color: var(--text); -webkit-appearance: menulist; appearance: menulist; position: relative; z-index: 1; }
     button { padding: 8px 12px; margin: 6px 6px 0 0; border-radius: 10px; border: 1px solid var(--accent2); background: var(--primary); color: var(--text); cursor: pointer; }
     button:hover { background: var(--accent2); }
     table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 14px; }
