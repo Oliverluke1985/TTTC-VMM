@@ -247,12 +247,12 @@
       }
       .calendar-day {
         position: relative;
-        padding: 6px;
+        padding: 4px;
         background: rgba(0,0,0,0.2);
         border: 1px solid rgba(5,74,116,0.6);
         overflow: hidden;
         /* Max out size on mobile (still 7 columns, no horizontal scroll) */
-        aspect-ratio: 1 / 1.2;
+        aspect-ratio: 1 / 1.6;
         min-width: 0;
         min-height: 0; /* override desktop min-height so aspect-ratio can make true squares */
         border-radius: 0; /* sharp 90° corners on mobile */
@@ -277,7 +277,7 @@
         display: block;
         width: 100%;
         padding: 0;
-        height: 22px;
+        height: 26px;
         border-radius: 0;
         border-left-width: 0;
         font-size: 0;
@@ -327,7 +327,7 @@
       #calendarGridWrap {
         overflow-x: hidden;
         overflow-y: auto;
-        max-height: 85vh;
+        max-height: 92vh;
         -webkit-overflow-scrolling: touch;
       }
     }
@@ -5941,11 +5941,6 @@
         }
         updateCalendarMonthLabel();
         renderCalendar();
-        applyCalendarZoom(calendarZoom);
-        const calendarZoomInBtn = document.getElementById('calendarZoomIn');
-        const calendarZoomOutBtn = document.getElementById('calendarZoomOut');
-        if (calendarZoomInBtn) calendarZoomInBtn.onclick = () => applyCalendarZoom(calendarZoom + 0.1);
-        if (calendarZoomOutBtn) calendarZoomOutBtn.onclick = () => applyCalendarZoom(calendarZoom - 0.1);
         if (calendarState.needsRefresh) {
           await refreshCalendarEvents();
         } else {
