@@ -128,12 +128,12 @@
     #clockSection, #clockSection .row, #clockSection .col, #clockDutiesWrap { overflow: visible; }
     #clockDutiesWrap table { table-layout: fixed; width: 100%; max-width: 100%; }
     #clockDutiesWrap table th { white-space: nowrap; }
-    #clockDutiesWrap th:nth-child(1), #clockDutiesWrap td:nth-child(1) { width: 28px; }
-    #clockDutiesWrap th:nth-child(2), #clockDutiesWrap td:nth-child(2) { width: 70px; }
-    #clockDutiesWrap th:nth-child(3), #clockDutiesWrap td:nth-child(3) { width: 108px; min-width: 98px; max-width: 116px; white-space: normal; word-break: break-word; }
-    #clockDutiesWrap th:nth-child(4), #clockDutiesWrap td:nth-child(4) { width: 46px; }
-    #clockDutiesWrap th:nth-child(5), #clockDutiesWrap td:nth-child(5) { width: 48px; }
-    #clockDutiesWrap th:nth-child(6), #clockDutiesWrap td:nth-child(6) { width: 38px; }
+    #clockDutiesWrap th:nth-child(1), #clockDutiesWrap td:nth-child(1) { width: 32px; }
+    #clockDutiesWrap th:nth-child(2), #clockDutiesWrap td:nth-child(2) { width: 86px; }
+    #clockDutiesWrap th:nth-child(3), #clockDutiesWrap td:nth-child(3) { width: 140px; min-width: 120px; max-width: 160px; white-space: normal; word-break: break-word; }
+    #clockDutiesWrap th:nth-child(4), #clockDutiesWrap td:nth-child(4) { width: 70px; }
+    #clockDutiesWrap th:nth-child(5), #clockDutiesWrap td:nth-child(5) { width: 60px; }
+    #clockDutiesWrap th:nth-child(6), #clockDutiesWrap td:nth-child(6) { width: 50px; }
     #clockDutiesWrap th, #clockDutiesWrap td { white-space: normal; word-break: break-word; padding: 2px 4px; font-size: 11px; }
     @media (max-width: 640px) {
       .track-time-main { flex-direction: column; }
@@ -416,7 +416,7 @@
     <div id="clockDutiesWrap">
       <h3>My Duties</h3>
       <table>
-        <thead><tr><th>ID</th><th>Title</th><th>Description</th><th>Status</th><th>Capacity</th><th>Active</th><th>Track Time</th></tr></thead>
+        <thead><tr><th>ID</th><th>Title</th><th>Description</th><th>Status</th><th>Capacity</th><th>Active</th></tr></thead>
         <tbody id="dutyList"></tbody>
       </table>
       <div class="track-time-bar">
