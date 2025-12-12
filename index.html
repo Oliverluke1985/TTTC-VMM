@@ -3955,7 +3955,6 @@
               trackBtn.textContent = '— Select duty —';
             }
           }
-        if (editSelect) {
           ensureDutyColorPreview('dutyEditSelect', 'dutyEditColorPreview');
           if (editSelect.value) renderDutyColorPreview('dutyEditColorPreview', (window.dutyById && window.dutyById[Number(editSelect.value)])?.color_hex || editSelect.value);
         }
