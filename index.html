@@ -847,6 +847,11 @@
         <label>Duty ID</label><input id="editDutyId" type="number" />
         <label>Title</label><input id="editDutyTitle" type="text" />
         <label>Description</label><input id="editDutyDesc" type="text" />
+        <label>Access</label>
+        <select id="editDutyAccess">
+          <option value="open">open</option>
+          <option value="closed">closed</option>
+        </select>
         <label>Status</label>
         <select id="editDutyStatus">
           <option value="pending">pending</option>
@@ -4076,6 +4081,11 @@
           document.getElementById('editDutyId').value = String(id);
           document.getElementById('editDutyTitle').value = storedDuty?.title || (row[1].textContent || '');
           document.getElementById('editDutyDesc').value = storedDuty?.description || (row[2].textContent || '');
+          const accessSel = document.getElementById('editDutyAccess');
+          if (accessSel) {
+            const isClosed = storedDuty ? (storedDuty.is_closed === true || String(storedDuty.status || '').toLowerCase() === 'closed') : false;
+            accessSel.value = isClosed ? 'closed' : 'open';
+          }
           document.getElementById('editDutyStatus').value = storedDuty?.status || 'pending';
           const capInput = document.getElementById('editDutyCapacity');
           const stored = storedDuty ? storedDuty.max_volunteers : null;
@@ -4219,7 +4229,14 @@
 
     function mapTemplateStatusToCreateOption(stored) {
       if (!stored) return 'open';
-      const map = { pending: 'open', in_progress: 'open', completed: 'closed' };
+      // Back-compat: old templates used workflow status, new templates use is_closed boolean
+      if (typeof stored === 'object' && stored != null) {
+        if (stored.is_closed === true) return 'closed';
+        if (stored.is_closed === false) return 'open';
+        const s = String(stored.status || '').toLowerCase();
+        return (s === 'closed' || s === 'completed') ? 'closed' : 'open';
+      }
+      const map = { pending: 'open', in_progress: 'open', completed: 'closed', closed: 'closed', open: 'open' };
       return map[String(stored).toLowerCase()] || 'open';
     }
 
@@ -4235,7 +4252,7 @@
       const capacityInput = document.getElementById('dutyCapacity');
       if (titleInput) titleInput.value = template.title || '';
       if (descInput) descInput.value = template.description || '';
-      if (statusSel) statusSel.value = mapTemplateStatusToCreateOption(template.status);
+      if (statusSel) statusSel.value = mapTemplateStatusToCreateOption(template);
       if (capacityInput) capacityInput.value = template.max_volunteers != null ? template.max_volunteers : '';
       if (template.group_id != null) {
         const dutyGroupSel = document.getElementById('dutyGroup');
@@ -4266,6 +4283,11 @@
         document.getElementById('editDutyId').value = String(id);
         document.getElementById('editDutyTitle').value = storedDuty?.title || '';
         document.getElementById('editDutyDesc').value = storedDuty?.description || '';
+        const accessSel = document.getElementById('editDutyAccess');
+        if (accessSel) {
+          const isClosed = storedDuty ? (storedDuty.is_closed === true || String(storedDuty.status || '').toLowerCase() === 'closed') : false;
+          accessSel.value = isClosed ? 'closed' : 'open';
+        }
         document.getElementById('editDutyStatus').value = storedDuty?.status || 'pending';
         const capInput = document.getElementById('editDutyCapacity');
         const stored = storedDuty ? storedDuty.max_volunteers : null;
@@ -4291,6 +4313,11 @@
       document.getElementById('editDutyId').value = String(id);
       document.getElementById('editDutyTitle').value = storedDuty?.title || (cells[1].textContent || '');
       document.getElementById('editDutyDesc').value = storedDuty?.description || (cells[2].textContent || '');
+      const accessSel = document.getElementById('editDutyAccess');
+      if (accessSel) {
+        const isClosed = storedDuty ? (storedDuty.is_closed === true || String(storedDuty.status || '').toLowerCase() === 'closed') : false;
+        accessSel.value = isClosed ? 'closed' : 'open';
+      }
       document.getElementById('editDutyStatus').value = storedDuty?.status || 'pending';
       const capInput = document.getElementById('editDutyCapacity');
       const stored = storedDuty ? storedDuty.max_volunteers : null;
@@ -4487,6 +4514,7 @@
       const title = document.getElementById('editDutyTitle').value.trim();
       const description = document.getElementById('editDutyDesc').value.trim();
       const status = document.getElementById('editDutyStatus').value;
+      const access = document.getElementById('editDutyAccess')?.value || 'open';
       const capacityInput = document.getElementById('editDutyCapacity');
       const rawCapacity = capacityInput?.value?.trim();
       const editLocationInput = document.getElementById('editDutyLocation');
@@ -4508,7 +4536,15 @@
         const res = await authed(`/duties/${id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title, description, status, max_volunteers, location: location || null, color_hex: normalizeHexColor(document.getElementById('editDutyColor')?.value) || null })
+          body: JSON.stringify({
+            title,
+            description,
+            status,
+            is_closed: String(access).toLowerCase() === 'closed',
+            max_volunteers,
+            location: location || null,
+            color_hex: normalizeHexColor(document.getElementById('editDutyColor')?.value) || null
+          })
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) { document.getElementById('editDutyError').textContent = data.message || 'Failed to save duty'; return; }

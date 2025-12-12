@@ -1439,7 +1439,7 @@ app.patch('/duties/:id', authRequired, async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (!Number.isFinite(id)) return res.status(400).json({ message: 'Invalid id' });
-    const { title, description, status, event_id, group_id, max_volunteers, location, color_hex } = req.body || {};
+    const { title, description, status, is_closed, event_id, group_id, max_volunteers, location, color_hex } = req.body || {};
     // Only admins/superadmins can edit duties broadly; volunteers can only edit their own created duty's title/description
     const isAdminish = isAdmin(req.user);
     const colsRes = await pool.query("SELECT column_name FROM information_schema.columns WHERE table_name='duties'");
@@ -1456,6 +1456,10 @@ app.patch('/duties/:id', authRequired, async (req, res) => {
       s = map[s] || s;
       if (!['pending','in_progress','completed'].includes(s)) s = 'pending';
       setClauses.push(`status=$${idx++}`); params.push(s);
+    }
+    // Access control: open vs closed duties
+    if (isAdminish && is_closed !== undefined && has.has('is_closed')) {
+      setClauses.push(`is_closed=$${idx++}`); params.push(Boolean(is_closed));
     }
     if (event_id !== undefined && has.has('event_id')) {
       if (event_id == null) return res.status(400).json({ message: 'Event cannot be cleared from a duty' });
