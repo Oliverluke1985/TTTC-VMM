@@ -251,7 +251,8 @@
         background: rgba(0,0,0,0.2);
         border: 1px solid rgba(5,74,116,0.6);
         overflow: hidden;
-        aspect-ratio: 1 / 1;
+        /* Mobile: make cells ~20% larger without horizontal scroll by increasing height */
+        aspect-ratio: 1 / 1.2;
         min-width: 0;
         min-height: 0; /* override desktop min-height so aspect-ratio can make true squares */
         border-radius: 0; /* sharp 90° corners on mobile */
@@ -276,7 +277,7 @@
         display: block;
         width: 100%;
         padding: 0;
-        height: 18px;
+        height: 22px;
         border-radius: 0;
         border-left-width: 0;
         font-size: 0;
@@ -2360,7 +2361,7 @@
         }
         const list = document.createElement('div');
         list.className = 'calendar-events';
-        const maxInlineEvents = isMobile ? 3 : 3;
+        const maxInlineEvents = isMobile ? 4 : 3;
         dayEvents.slice(0, maxInlineEvents).forEach(ev => {
           const btn = document.createElement('button');
           btn.type = 'button';
