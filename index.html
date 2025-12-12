@@ -118,9 +118,21 @@
     .track-time-buttons button { width: 100%; }
     .track-time-bar select, .track-time-bar input { width: 100%; box-sizing: border-box; min-height: 42px; }
     .track-time-select { position: relative; }
-    .track-time-select button { display: none; }
+    .track-time-select { display: none !important; }
     .track-time-options { display: none !important; }
-    #trackTimeDutySelect { display: block; min-height: 38px; }
+    #trackTimeSelectBtn { display: none !important; }
+    #trackTimeDutySelect {
+      display: block;
+      width: 100%;
+      min-height: 40px;
+      padding: 8px 10px;
+      background: rgba(0,0,0,0.35);
+      color: var(--text);
+      border: 1px solid var(--accent3);
+      border-radius: 8px;
+      font-size: 14px;
+      box-sizing: border-box;
+    }
     #clockSection, #clockSection .row, #clockSection .col, #clockDutiesWrap { overflow: visible; }
     #clockDutiesWrap { overflow-x: hidden; }
     #clockDutiesWrap table { table-layout: fixed; width: 100%; min-width: 0; max-width: 100%; }
