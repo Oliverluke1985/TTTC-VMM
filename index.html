@@ -233,7 +233,6 @@
         width: 100%;
         gap: 4px;
         grid-template-columns: repeat(7, 1fr);
-        grid-auto-rows: calc(((100vw - 24px) / 7));
         padding: 0 6px;
       }
       .calendar-day {
@@ -241,16 +240,20 @@
         background: rgba(0,0,0,0.2);
         border: 1px solid rgba(5,74,116,0.6);
         overflow: hidden;
+        aspect-ratio: 1 / 1;
+        min-width: 0;
       }
       .calendar-day-number { font-size: 14px; margin-bottom: 5px; }
-      .calendar-events { display: flex; flex-direction: column; gap: 3px; overflow: hidden; }
+      .calendar-events { display: flex; flex-direction: column; gap: 3px; overflow: hidden; flex: 1 1 auto; min-height: 0; min-width: 0; }
       .calendar-event {
         display: block;
         padding: 6px 8px;
         font-size: 13px;
         border-radius: 10px;
-        overflow-wrap: anywhere;
-        word-break: break-word;
+        min-width: 0;
+        white-space: nowrap;
+        overflow-wrap: normal;
+        word-break: normal;
         max-width: 100%;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -279,7 +282,13 @@
       form, select, input, button, textarea { width: 100%; max-width: 100%; box-sizing: border-box; }
       input[type="date"], input[type="time"], input[type="datetime-local"] { min-width: 0; width: 100%; display: block; }
       .nowrap { white-space: normal; }
-      #calendarGridWrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      /* Calendar grid should never scroll horizontally on mobile */
+      #calendarGridWrap {
+        overflow-x: hidden;
+        overflow-y: auto;
+        max-height: 65vh;
+        -webkit-overflow-scrolling: touch;
+      }
     }
   </style>
 
