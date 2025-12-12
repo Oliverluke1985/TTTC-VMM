@@ -118,13 +118,9 @@
     .track-time-buttons button { width: 100%; }
     .track-time-bar select, .track-time-bar input { width: 100%; box-sizing: border-box; min-height: 42px; }
     .track-time-select { position: relative; }
-    .track-time-select button { width: 100%; min-height: 40px; text-align: left; padding: 6px 10px; background: rgba(0,0,0,0.35); color: var(--text); border: 1px solid var(--accent3); border-radius: 8px; font-size: 13px; }
-    .track-time-options { position: absolute; top: 100%; left: 0; right: 0; background: #0f172a; border: 1px solid var(--accent3); border-radius: 8px; margin-top: 6px; max-height: 240px; overflow-y: auto; z-index: 50; box-shadow: 0 10px 25px rgba(0,0,0,0.35); }
-    .track-time-options.hidden { display: none; }
-    .track-time-options li { list-style: none; padding: 6px 10px; border-bottom: 1px solid rgba(255,255,255,0.06); cursor: pointer; font-size: 13px; }
-    .track-time-options li:last-child { border-bottom: none; }
-    .track-time-options li:hover { background: rgba(53,177,251,0.15); }
-    .track-time-options li.active { background: rgba(53,177,251,0.25); }
+    .track-time-select button { display: none; }
+    .track-time-options { display: none !important; }
+    #trackTimeDutySelect { display: block; min-height: 38px; }
     #clockSection, #clockSection .row, #clockSection .col, #clockDutiesWrap { overflow: visible; }
     #clockDutiesWrap { overflow-x: hidden; }
     #clockDutiesWrap table { table-layout: fixed; width: 100%; min-width: 0; max-width: 100%; }
@@ -3917,6 +3913,21 @@
             editSelect.appendChild(opt);
           }
         });
+        renderVolunteerDutyCards(duties);
+        const trackSel = document.getElementById('trackTimeDutySelect');
+        if (trackSel) {
+          const prev = trackSel.value;
+          trackSel.innerHTML = '<option value="">— Select duty —</option>';
+          duties.forEach(d => {
+            const opt = document.createElement('option');
+            opt.value = d.id;
+            opt.textContent = `${d.id} — ${d.title}`;
+            trackSel.appendChild(opt);
+          });
+          if (prev && trackSel.querySelector(`option[value="${prev}"]`)) {
+            trackSel.value = prev;
+          }
+        }
         if (editSelect) {
           ensureDutyColorPreview('dutyEditSelect', 'dutyEditColorPreview');
           if (editSelect.value) renderDutyColorPreview('dutyEditColorPreview', (window.dutyById && window.dutyById[Number(editSelect.value)])?.color_hex || editSelect.value);
