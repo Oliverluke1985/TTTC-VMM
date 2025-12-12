@@ -110,6 +110,37 @@
     .calendar-schedule-assignment:last-child { margin-bottom: 0; }
     .calendar-schedule-assignment-name { font-weight: 600; font-size: 13px; }
     .calendar-schedule-assignment-time { font-size: 12px; color: var(--accent5); }
+    /* Track time bar */
+    .track-time-bar { margin: 12px 0 0; padding: 12px; border: 1px solid var(--accent3); border-radius: 10px; background: rgba(0,0,0,0.15); overflow: visible; }
+    .track-time-main { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; }
+    .track-time-group { display: flex; flex-direction: column; gap: 6px; min-width: 180px; flex: 1 1 220px; }
+    .track-time-buttons { display: flex; flex-direction: column; gap: 6px; width: 140px; }
+    .track-time-buttons button { width: 100%; }
+    .track-time-bar select, .track-time-bar input { width: 100%; box-sizing: border-box; min-height: 42px; }
+    .track-time-select { position: relative; }
+    .track-time-select button { width: 100%; min-height: 40px; text-align: left; padding: 6px 10px; background: rgba(0,0,0,0.35); color: var(--text); border: 1px solid var(--accent3); border-radius: 8px; font-size: 13px; }
+    .track-time-options { position: absolute; top: 100%; left: 0; right: 0; background: #0f172a; border: 1px solid var(--accent3); border-radius: 8px; margin-top: 6px; max-height: 240px; overflow-y: auto; z-index: 50; box-shadow: 0 10px 25px rgba(0,0,0,0.35); }
+    .track-time-options.hidden { display: none; }
+    .track-time-options li { list-style: none; padding: 6px 10px; border-bottom: 1px solid rgba(255,255,255,0.06); cursor: pointer; font-size: 13px; }
+    .track-time-options li:last-child { border-bottom: none; }
+    .track-time-options li:hover { background: rgba(53,177,251,0.15); }
+    .track-time-options li.active { background: rgba(53,177,251,0.25); }
+    #clockSection, #clockSection .row, #clockSection .col, #clockDutiesWrap { overflow: visible; }
+    #clockDutiesWrap table { table-layout: fixed; width: 100%; max-width: 100%; }
+    #clockDutiesWrap table th { white-space: nowrap; }
+    #clockDutiesWrap th:nth-child(1), #clockDutiesWrap td:nth-child(1) { width: 28px; }
+    #clockDutiesWrap th:nth-child(2), #clockDutiesWrap td:nth-child(2) { width: 70px; }
+    #clockDutiesWrap th:nth-child(3), #clockDutiesWrap td:nth-child(3) { width: 110px; min-width: 100px; max-width: 120px; white-space: normal; word-break: break-word; }
+    #clockDutiesWrap th:nth-child(4), #clockDutiesWrap td:nth-child(4) { width: 46px; }
+    #clockDutiesWrap th:nth-child(5), #clockDutiesWrap td:nth-child(5) { width: 40px; }
+    #clockDutiesWrap th:nth-child(6), #clockDutiesWrap td:nth-child(6) { width: 36px; }
+    #clockDutiesWrap th, #clockDutiesWrap td { white-space: normal; word-break: break-word; padding: 2px 4px; font-size: 11px; }
+    @media (max-width: 640px) {
+      .track-time-main { flex-direction: column; }
+      .track-time-group { width: 100%; }
+      .track-time-buttons { width: 100%; }
+      .track-time-buttons button { width: 100%; }
+    }
     .calendar-day-schedule-empty { padding: 8px; font-size: 13px; color: var(--accent5); }
 
     /* Home section tweaks */
@@ -384,10 +415,31 @@
     </div>
     <div id="clockDutiesWrap">
       <h3>My Duties</h3>
-      <table class="stacked-table">
-        <thead><tr><th>ID</th><th>Title</th><th>Description</th><th>Status</th><th>Capacity</th><th>Active</th><th>Track Time</th></tr></thead>
+      <table>
+        <thead><tr><th>ID</th><th>Title</th><th>Description</th><th>Status</th><th>Capacity</th><th>Active</th></tr></thead>
         <tbody id="dutyList"></tbody>
       </table>
+      <div class="track-time-bar">
+        <div class="track-time-main">
+          <div class="track-time-group">
+            <label for="trackTimeDutySelect">Select Duty</label>
+            <div class="track-time-select" id="trackTimeSelectWrap">
+              <button type="button" id="trackTimeSelectBtn">— Select duty —</button>
+              <ul id="trackTimeOptions" class="track-time-options hidden"></ul>
+            </div>
+            <select id="trackTimeDutySelect" class="hidden"><option value="">— Select duty —</option></select>
+          </div>
+          <div class="track-time-group">
+            <label for="trackTimeDate">Duty Date</label>
+            <input type="date" id="trackTimeDate" />
+            <div class="track-time-buttons">
+              <button id="trackTimeClockIn" type="button">Clock In</button>
+              <button id="trackTimeClockOut" type="button">Clock Out</button>
+            </div>
+          </div>
+        </div>
+        <div id="trackTimeError" class="error"></div>
+      </div>
       <div class="row">
         <div class="col">
           <button id="volDownloadDutiesBtn" class="ghost-btn">Download Duties CSV</button>
@@ -1039,7 +1091,16 @@
   <footer id="footer"></footer>
 
   <script>
-    const apiUrl = window.location.origin;
+    const defaultApiOrigin = 'https://www.tttcvolunteermanagementapp.com';
+    const apiOverride =
+      (typeof window !== 'undefined' && window.API_BASE_OVERRIDE) ||
+      (typeof localStorage !== 'undefined' && localStorage.getItem('apiBaseOverride')) ||
+      null;
+    const localProxy =
+      typeof window !== 'undefined' && window.location && window.location.host.includes('localhost:8000')
+        ? 'http://localhost:8010/proxy'
+        : null;
+    const apiUrl = apiOverride || localProxy || defaultApiOrigin;
     let token = null;
     let role = null;
     let groupId = null;
@@ -2795,7 +2856,8 @@
     // UTIL: fetch wrapper with auth
     async function authed(path, opts = {}) {
       const headers = Object.assign({}, opts.headers || {}, token ? { Authorization: `Bearer ${token}` } : {});
-      const res = await fetch(`${apiUrl}${path}`, Object.assign({}, opts, { headers }));
+      const url = `${apiUrl}${path}`;
+      const res = await fetch(url, Object.assign({}, opts, { headers }));
       return res;
     }
 
@@ -3841,25 +3903,11 @@
           }
           const capacityLabel = (d.max_volunteers != null && d.max_volunteers !== '') ? d.max_volunteers : '—';
           const activeLabel = d.active_assignments != null ? d.active_assignments : 0;
-          const isFull = d.max_volunteers != null && d.max_volunteers !== '' && Number(d.max_volunteers) > 0 && Number(activeLabel) >= Number(d.max_volunteers);
-          const clockInDisabled = isFull ? 'disabled title="Duty has reached its volunteer limit"' : '';
-      const dutyColor = getDutyColor(d.id);
+          const dutyColor = getDutyColor(d.id);
           const dutyDot = dutyColor ? `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${dutyColor};margin-right:6px;"></span>` : '';
           tr.innerHTML =
-            `<td data-label="ID">${d.id}</td><td data-label="Title">${dutyDot}${d.title}</td><td data-label="Description">${d.description || ''}</td><td data-label="Status">${d.status}</td>
-             <td data-label="Capacity">${capacityLabel}</td><td data-label="Active">${activeLabel}</td>
-             <td class="track-time-cell" data-label="Track Time">
-               <div class="date-input-wrap">
-                 <input type="date" id="dutyDate-${d.id}" required class="duty-date-input">
-                 <span class="date-placeholder">Select date</span>
-               </div>
-               <div class="clock-buttons-wrap">
-                 <button onclick="startTime(${d.id})" ${clockInDisabled} class="clock-btn">Clock In</button>
-                 <button onclick="stopTime(${d.id})" class="clock-btn">Clock Out</button>
-               </div>
-               ${isFull ? '<div class="hint" style="margin-top:4px">Duty is full</div>' : ''}
-               ${adminActions}
-             </td>`;
+            `<td>${d.id}</td><td>${dutyDot}${d.title}</td><td>${d.description || ''}</td><td>${d.status}</td>
+             <td>${capacityLabel}</td><td>${activeLabel}</td>`;
           tbody.appendChild(tr);
           if (editSelect) {
             const opt = document.createElement('option');
@@ -3869,6 +3917,106 @@
           }
         });
         renderVolunteerDutyCards(duties);
+        const trackSel = document.getElementById('trackTimeDutySelect');
+        const trackOptions = document.getElementById('trackTimeOptions');
+        const trackBtn = document.getElementById('trackTimeSelectBtn');
+        if (trackSel) {
+          const prev = trackSel.value;
+          trackSel.innerHTML = '<option value="">— Select duty —</option>';
+          duties.forEach(d => {
+            const opt = document.createElement('option');
+            opt.value = d.id;
+            opt.textContent = `${d.id} — ${d.title}`;
+            trackSel.appendChild(opt);
+          });
+          if (prev && trackSel.querySelector(`option[value="${prev}"]`)) {
+            trackSel.value = prev;
+          }
+          if (trackOptions && trackBtn) {
+            trackOptions.innerHTML = '';
+            const addLi = (val, label) => {
+              const li = document.createElement('li');
+              li.setAttribute('data-value', val);
+              li.textContent = label;
+              if (trackSel.value === val) li.classList.add('active');
+              li.addEventListener('click', () => {
+                trackSel.value = val;
+                trackBtn.textContent = label;
+                trackOptions.classList.add('hidden');
+                trackOptions.querySelectorAll('li').forEach(el => el.classList.toggle('active', el === li));
+              });
+              trackOptions.appendChild(li);
+            };
+            addLi('', '— Select duty —');
+            duties.forEach(d => addLi(String(d.id), `${d.id} — ${d.title}`));
+            if (trackSel.value) {
+              trackBtn.textContent = `${trackSel.value} — ${(window.dutyById && window.dutyById[Number(trackSel.value)])?.title || 'Selected'}`;
+            } else {
+              trackBtn.textContent = '— Select duty —';
+            }
+          }
+        }
+          tbody.appendChild(tr);
+          if (editSelect) {
+            const opt = document.createElement('option');
+            opt.value = d.id;
+            opt.textContent = `${d.id} — ${d.title}`;
+            editSelect.appendChild(opt);
+          }
+        });
+          const dutyColor = getDutyColor(d.id);
+          const dutyDot = dutyColor ? `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${dutyColor};margin-right:6px;"></span>` : '';
+          tr.innerHTML =
+            `<td>${d.id}</td><td>${dutyDot}${d.title}</td><td>${d.description || ''}</td><td>${d.status}</td>
+             <td>${capacityLabel}</td><td>${activeLabel}</td>`;
+          tbody.appendChild(tr);
+          if (editSelect) {
+            const opt = document.createElement('option');
+            opt.value = d.id;
+            opt.textContent = `${d.id} — ${d.title}`;
+            editSelect.appendChild(opt);
+          }
+        });
+        renderVolunteerDutyCards(duties);
+        const trackSel = document.getElementById('trackTimeDutySelect');
+        const trackOptions = document.getElementById('trackTimeOptions');
+        const trackBtn = document.getElementById('trackTimeSelectBtn');
+        if (trackSel) {
+          const prev = trackSel.value;
+          trackSel.innerHTML = '<option value="">— Select duty —</option>';
+          duties.forEach(d => {
+            const opt = document.createElement('option');
+            opt.value = d.id;
+            opt.textContent = `${d.id} — ${d.title}`;
+            trackSel.appendChild(opt);
+          });
+          if (prev && trackSel.querySelector(`option[value="${prev}"]`)) {
+            trackSel.value = prev;
+          }
+          if (trackOptions && trackBtn) {
+            trackOptions.innerHTML = '';
+            const addLi = (val, label) => {
+              const li = document.createElement('li');
+              li.setAttribute('data-value', val);
+              li.textContent = label;
+              if (trackSel.value === val) li.classList.add('active');
+              li.addEventListener('click', () => {
+                trackSel.value = val;
+                trackBtn.textContent = label;
+                trackOptions.classList.add('hidden');
+                trackOptions.querySelectorAll('li').forEach(el => el.classList.toggle('active', el === li));
+              });
+              trackOptions.appendChild(li);
+            };
+            addLi('', '— Select duty —');
+            duties.forEach(d => addLi(String(d.id), `${d.id} — ${d.title}`));
+            if (trackSel.value) {
+              trackBtn.textContent = `${trackSel.value} — ${(window.dutyById && window.dutyById[Number(trackSel.value)])?.title || 'Selected'}`;
+            } else {
+              trackBtn.textContent = '— Select duty —';
+            }
+          }
+        }
         if (editSelect) {
           ensureDutyColorPreview('dutyEditSelect', 'dutyEditColorPreview');
           if (editSelect.value) renderDutyColorPreview('dutyEditColorPreview', (window.dutyById && window.dutyById[Number(editSelect.value)])?.color_hex || editSelect.value);
@@ -4399,7 +4547,9 @@
 
     async function startTime(dutyId) {
       try {
-        const dutyDate = document.getElementById(`dutyDate-${dutyId}`).value;
+        const rowInput = document.getElementById(`dutyDate-${dutyId}`);
+        const sharedInput = document.getElementById('trackTimeDate');
+        const dutyDate = rowInput?.value || sharedInput?.value || '';
         const res = await authed(`/duties/${dutyId}/time/start`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -6126,6 +6276,40 @@
       } catch {
         if (errEl) errEl.textContent = 'Error downloading CSV';
       }
+    });
+
+    const trackDutySel = document.getElementById('trackTimeDutySelect');
+    const trackDateInput = document.getElementById('trackTimeDate');
+    const trackErr = document.getElementById('trackTimeError');
+    const trackOptions = document.getElementById('trackTimeOptions');
+    const trackBtn = document.getElementById('trackTimeSelectBtn');
+    if (trackDateInput && !trackDateInput.value) {
+      trackDateInput.value = new Date().toISOString().slice(0, 10);
+    }
+    if (trackBtn && trackOptions) {
+      trackBtn.addEventListener('click', () => {
+        trackOptions.classList.toggle('hidden');
+      });
+      document.addEventListener('click', (e) => {
+        if (!trackOptions.contains(e.target) && !trackBtn.contains(e.target)) {
+          trackOptions.classList.add('hidden');
+        }
+      });
+    }
+    const trackInBtn = document.getElementById('trackTimeClockIn');
+    if (trackInBtn) trackInBtn.addEventListener('click', () => {
+      if (trackErr) trackErr.textContent = '';
+      const dutyId = Number(trackDutySel?.value || '');
+      if (!dutyId) { if (trackErr) trackErr.textContent = 'Select a duty first.'; return; }
+      if (trackDateInput && !trackDateInput.value) { if (trackErr) trackErr.textContent = 'Select a date.'; return; }
+      startTime(dutyId);
+    });
+    const trackOutBtn = document.getElementById('trackTimeClockOut');
+    if (trackOutBtn) trackOutBtn.addEventListener('click', () => {
+      if (trackErr) trackErr.textContent = '';
+      const dutyId = Number(trackDutySel?.value || '');
+      if (!dutyId) { if (trackErr) trackErr.textContent = 'Select a duty first.'; return; }
+      stopTime(dutyId);
     });
 
     const volCsvBtn = document.getElementById('volDownloadCsvBtn');
