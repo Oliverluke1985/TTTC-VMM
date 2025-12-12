@@ -300,7 +300,7 @@
     });
 
     // Mobile-only: replace native <select> menus with anchored custom menus
-    (function wireMobileSelectAnchors() {
+    window.__wireMobileSelectAnchors = function wireMobileSelectAnchors() {
       if (!window.matchMedia || !window.matchMedia('(max-width: 640px)').matches) return;
       const selects = Array.from(document.querySelectorAll('select'))
         .filter(sel => !sel.multiple)
@@ -381,7 +381,10 @@
       });
       window.addEventListener('scroll', () => closeAll(), { passive: true });
       window.addEventListener('resize', () => closeAll(), { passive: true });
-    })();
+    };
+    document.addEventListener('DOMContentLoaded', () => {
+      try { window.__wireMobileSelectAnchors && window.__wireMobileSelectAnchors(); } catch {}
+    });
   </script>
 </head>
 <body>
@@ -5445,6 +5448,7 @@
     function navigateTo(sectionId) {
       hideMainSections();
       show(sectionId);
+      try { window.__wireMobileSelectAnchors && window.__wireMobileSelectAnchors(); } catch {}
     }
     function setupToolbar(currentRole) {
       async function showEditableOrgInfoPanel(selectedId) {
