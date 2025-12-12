@@ -41,6 +41,49 @@
     .ghost-btn:hover { background: rgba(255,255,255,0.08); }
     /* NOTE: do not disable [popover]/top-layer globally; it breaks native <select> dropdowns */
 
+    /* Mobile: custom anchored dropdown for <select> */
+    .mobile-native-hidden { position: absolute !important; opacity: 0 !important; pointer-events: none !important; width: 1px !important; height: 1px !important; margin: 0 !important; padding: 0 !important; border: 0 !important; }
+    .mobile-select { position: relative; width: 100%; }
+    .mobile-select-btn {
+      width: 100%;
+      min-height: 40px;
+      text-align: left;
+      padding: 8px 10px;
+      background: rgba(0,0,0,0.25);
+      color: var(--text);
+      border: 1px solid var(--accent3);
+      border-radius: 8px;
+      box-sizing: border-box;
+    }
+    .mobile-select-menu {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: calc(100% + 6px);
+      border: 1px solid var(--accent3);
+      border-radius: 10px;
+      background: rgba(0,0,0,0.95);
+      max-height: 45vh;
+      overflow-y: auto;
+      z-index: 2000;
+      box-shadow: 0 10px 24px rgba(0,0,0,0.35);
+    }
+    .mobile-select-menu.hidden { display: none !important; }
+    .mobile-select-opt {
+      display: block;
+      width: 100%;
+      text-align: left;
+      padding: 10px 12px;
+      margin: 0;
+      border: 0;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      background: transparent;
+      color: var(--text);
+      border-radius: 0;
+    }
+    .mobile-select-opt:last-child { border-bottom: 0; }
+    .mobile-select-opt.is-active { background: rgba(53,177,251,0.18); }
+
     /* Predictive org suggestions (site-styled blue panel) */
     .org-suggest-wrap { position: relative; }
     .org-suggest {
@@ -255,6 +298,90 @@
       if (navCal) navCal.addEventListener('click', hookCalendarZoom);
       hookCalendarZoom();
     });
+
+    // Mobile-only: replace native <select> menus with anchored custom menus
+    (function wireMobileSelectAnchors() {
+      if (!window.matchMedia || !window.matchMedia('(max-width: 640px)').matches) return;
+      const selects = Array.from(document.querySelectorAll('select'))
+        .filter(sel => !sel.multiple)
+        .filter(sel => !(sel.size && Number(sel.size) > 1))
+        .filter(sel => !sel.classList.contains('hidden'))
+        .filter(sel => !sel.closest('nav#toolbar'));
+
+      function closeAll(except) {
+        document.querySelectorAll('.mobile-select-menu').forEach(menu => {
+          if (except && menu === except) return;
+          menu.classList.add('hidden');
+        });
+      }
+
+      selects.forEach(sel => {
+        if (sel.dataset.mobileSelectWired === 'true') return;
+        sel.dataset.mobileSelectWired = 'true';
+
+        const wrap = document.createElement('div');
+        wrap.className = 'mobile-select';
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'mobile-select-btn';
+        const menu = document.createElement('div');
+        menu.className = 'mobile-select-menu hidden';
+
+        function syncButton() {
+          const opt = sel.selectedOptions && sel.selectedOptions[0];
+          btn.textContent = opt ? (opt.textContent || '— Select —') : '— Select —';
+        }
+
+        function rebuildMenu() {
+          menu.innerHTML = '';
+          Array.from(sel.options).forEach((opt, idx) => {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'mobile-select-opt' + (sel.selectedIndex === idx ? ' is-active' : '');
+            b.textContent = opt.textContent || '';
+            b.addEventListener('click', () => {
+              sel.selectedIndex = idx;
+              sel.dispatchEvent(new Event('change', { bubbles: true }));
+              syncButton();
+              closeAll();
+            });
+            menu.appendChild(b);
+          });
+        }
+
+        btn.addEventListener('click', () => {
+          const willOpen = menu.classList.contains('hidden');
+          closeAll(willOpen ? menu : null);
+          if (willOpen) {
+            rebuildMenu();
+            menu.classList.remove('hidden');
+          } else {
+            menu.classList.add('hidden');
+          }
+        });
+
+        sel.addEventListener('change', () => {
+          syncButton();
+        });
+
+        // Initial render
+        syncButton();
+
+        // Insert wrapper and hide native select
+        sel.parentNode.insertBefore(wrap, sel);
+        wrap.appendChild(btn);
+        wrap.appendChild(menu);
+        sel.classList.add('mobile-native-hidden');
+        wrap.appendChild(sel);
+      });
+
+      document.addEventListener('click', (e) => {
+        if (e.target.closest('.mobile-select')) return;
+        closeAll();
+      });
+      window.addEventListener('scroll', () => closeAll(), { passive: true });
+      window.addEventListener('resize', () => closeAll(), { passive: true });
+    })();
   </script>
 </head>
 <body>
