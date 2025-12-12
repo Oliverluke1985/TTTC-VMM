@@ -126,16 +126,16 @@
     .track-time-options li:hover { background: rgba(53,177,251,0.15); }
     .track-time-options li.active { background: rgba(53,177,251,0.25); }
     #clockSection, #clockSection .row, #clockSection .col, #clockDutiesWrap { overflow: visible; }
-    #clockDutiesWrap { overflow-x: auto; }
-    #clockDutiesWrap table { table-layout: fixed; width: 100%; min-width: 320px; max-width: 100%; }
-    #clockDutiesWrap table th { white-space: nowrap; font-size: 11px; padding: 2px 3px; }
-    #clockDutiesWrap th:nth-child(1), #clockDutiesWrap td:nth-child(1) { width: 30px; }
-    #clockDutiesWrap th:nth-child(2), #clockDutiesWrap td:nth-child(2) { width: 80px; }
-    #clockDutiesWrap th:nth-child(3), #clockDutiesWrap td:nth-child(3) { width: 132px; min-width: 110px; max-width: 150px; white-space: normal; word-break: break-word; }
-    #clockDutiesWrap th:nth-child(4), #clockDutiesWrap td:nth-child(4) { width: 60px; }
-    #clockDutiesWrap th:nth-child(5), #clockDutiesWrap td:nth-child(5) { width: 52px; }
-    #clockDutiesWrap th:nth-child(6), #clockDutiesWrap td:nth-child(6) { width: 44px; }
-    #clockDutiesWrap th, #clockDutiesWrap td { white-space: normal; word-break: break-word; padding: 2px 3px; font-size: 11px; }
+    #clockDutiesWrap { overflow-x: hidden; }
+    #clockDutiesWrap table { table-layout: fixed; width: 100%; min-width: 0; max-width: 100%; }
+    #clockDutiesWrap table th { white-space: nowrap; font-size: 11px; padding: 3px 4px; }
+    #clockDutiesWrap th:nth-child(1), #clockDutiesWrap td:nth-child(1) { width: 8%; }
+    #clockDutiesWrap th:nth-child(2), #clockDutiesWrap td:nth-child(2) { width: 18%; }
+    #clockDutiesWrap th:nth-child(3), #clockDutiesWrap td:nth-child(3) { width: 32%; white-space: normal; word-break: break-word; }
+    #clockDutiesWrap th:nth-child(4), #clockDutiesWrap td:nth-child(4) { width: 12%; }
+    #clockDutiesWrap th:nth-child(5), #clockDutiesWrap td:nth-child(5) { width: 10%; }
+    #clockDutiesWrap th:nth-child(6), #clockDutiesWrap td:nth-child(6) { width: 10%; }
+    #clockDutiesWrap th, #clockDutiesWrap td { white-space: normal; word-break: break-word; padding: 3px 4px; font-size: 11px; }
     @media (max-width: 640px) {
       .track-time-main { flex-direction: column; }
       .track-time-group { width: 100%; }
