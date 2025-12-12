@@ -200,7 +200,7 @@
 
     /* Mobile-only overrides (single block) */
     @media (max-width: 640px) {
-      body { margin: 0; padding: 6px; overflow-x: hidden; }
+      body { margin: 0; padding: 0; overflow-x: hidden; }
       header, footer#footer { margin: 0 !important; width: 100% !important; }
       nav#toolbar, section, .col { width: 100%; max-width: 100%; box-sizing: border-box; }
       section { margin: 12px 0; padding: 12px; }
@@ -232,16 +232,16 @@
       /* Let the calendar use more horizontal room on mobile (bigger squares) */
       .calendar-weekdays,
       #calendarGridWrap {
-        margin-left: -6px;
-        margin-right: -6px;
-        padding-left: 6px;
-        padding-right: 6px;
+        margin-left: 0;
+        margin-right: 0;
+        padding-left: 0;
+        padding-right: 0;
         box-sizing: border-box;
       }
       .calendar-grid {
         width: 100%;
         box-sizing: border-box;
-        gap: 1px;
+        gap: 0;
         grid-template-columns: repeat(7, 1fr);
         padding: 0;
       }
@@ -251,7 +251,7 @@
         background: rgba(0,0,0,0.2);
         border: 1px solid rgba(5,74,116,0.6);
         overflow: hidden;
-        /* Mobile: make cells ~20% larger without horizontal scroll by increasing height */
+        /* Max out size on mobile (still 7 columns, no horizontal scroll) */
         aspect-ratio: 1 / 1.2;
         min-width: 0;
         min-height: 0; /* override desktop min-height so aspect-ratio can make true squares */
@@ -327,7 +327,7 @@
       #calendarGridWrap {
         overflow-x: hidden;
         overflow-y: auto;
-        max-height: 75vh;
+        max-height: 85vh;
         -webkit-overflow-scrolling: touch;
       }
     }
@@ -340,29 +340,7 @@
         history.replaceState({}, document.title, location.pathname);
       }
     })();
-    /* Mobile calendar zoom helper */
-    let calendarZoom = 1;
-    function applyCalendarZoom(next = 1) {
-      calendarZoom = Math.min(1.4, Math.max(0.8, next));
-      document.documentElement.style.setProperty('--cal-zoom', calendarZoom);
-      try { renderCalendar(); } catch {}
-    }
-    // Back-compat: some handlers call adjustCalendarZoom()
-    function adjustCalendarZoom(next = 1) {
-      applyCalendarZoom(next);
-    }
-    document.addEventListener('DOMContentLoaded', () => {
-      const hookCalendarZoom = () => {
-        const zin = document.getElementById('calendarZoomIn');
-        const zout = document.getElementById('calendarZoomOut');
-        if (zin) zin.onclick = () => applyCalendarZoom(calendarZoom + 0.1);
-        if (zout) zout.onclick = () => applyCalendarZoom(calendarZoom - 0.1);
-        applyCalendarZoom(calendarZoom);
-      };
-      const navCal = document.getElementById('navCalendarBtn');
-      if (navCal) navCal.addEventListener('click', hookCalendarZoom);
-      hookCalendarZoom();
-    });
+    // Mobile calendar zoom removed (not used)
 
     // Mobile-only: replace native <select> menus with anchored custom menus
     window.__wireMobileSelectAnchors = function wireMobileSelectAnchors() {
@@ -735,10 +713,7 @@
           <div id="calendarMonthLabel" class="calendar-month-label"></div>
           <button id="calendarNextMonth" type="button">Next &gt;</button>
         </div>
-        <div class="calendar-zoom-mobile">
-          <button id="calendarZoomOut" type="button">Zoom -</button>
-          <button id="calendarZoomIn" type="button">Zoom +</button>
-        </div>
+        <div class="calendar-zoom-mobile hidden"></div>
       </div>
     </div>
     <div class="calendar-weekdays">
@@ -2403,11 +2378,6 @@
         cell.addEventListener('click', (event) => {
           if (event.target.closest('.calendar-event')) return;
           if (event.target.classList && event.target.classList.contains('calendar-more')) return;
-          // On mobile, zoom to selected date
-          if (window.innerWidth <= 640) {
-            calendarState.zoomedDateKey = key;
-            adjustCalendarZoom(1.5, key);
-          }
           if (dayEvents.length) {
             showCalendarDayEvents(key);
           } else {
