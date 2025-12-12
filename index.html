@@ -2321,7 +2321,16 @@
       if (!grid) return;
       grid.innerHTML = '';
       updateCalendarMonthLabel();
-      const isMobile = !!(window.matchMedia && window.matchMedia('(max-width: 640px)').matches);
+      // Only use compact mobile calendar rendering on real mobile/touch devices.
+      // This prevents the desktop calendar from switching to "mobile bars" just because the browser window is narrow.
+      const isMobile = (() => {
+        const small = !!(window.matchMedia && window.matchMedia('(max-width: 640px)').matches);
+        if (!small) return false;
+        const touch = (navigator && typeof navigator.maxTouchPoints === 'number' && navigator.maxTouchPoints > 0);
+        const ua = (navigator && typeof navigator.userAgent === 'string') ? navigator.userAgent : '';
+        const looksMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(ua);
+        return touch || looksMobile;
+      })();
       const monthRef = calendarState.currentMonth;
       const startOfMonth = new Date(monthRef.getFullYear(), monthRef.getMonth(), 1);
       const gridStart = new Date(startOfMonth);
