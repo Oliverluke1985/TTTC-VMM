@@ -278,19 +278,20 @@
         align-items: center;
         justify-content: center;
         width: 100%;
-        padding: 0 4px;
+        padding: 0 2px;
         height: 26px;
         border-radius: 10px;
         font-size: 11px;
         line-height: 1;
-        font-weight: 700;
-        letter-spacing: 0.2px;
+        font-weight: 600;
+        letter-spacing: 0;
         color: rgba(255,255,255,0.95);
         text-shadow: 0 1px 2px rgba(0,0,0,0.5);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
         box-sizing: border-box;
+        font-variant-numeric: tabular-nums;
       }
       .calendar-more { font-size: 11px; }
       .calendar-count-badge {
@@ -2364,7 +2365,10 @@
             btn.textContent = label;
           } else {
             // Mobile: show start time in a boxed marker
-            btn.textContent = startTime || '';
+            const compactTime = startTime
+              ? String(startTime).replace(' AM', 'a').replace(' PM', 'p')
+              : '';
+            btn.textContent = compactTime;
             btn.setAttribute('aria-label', label);
             btn.title = label;
           }
