@@ -1130,6 +1130,8 @@
           <button id="saTogglePwBtn" type="button">Show</button>
           <button id="saUpdatePwBtn" type="button" style="margin-left:8px">Update Password</button>
         </div>
+        <label>Organization</label>
+        <select id="saAdminEditGroup"><option value="">— None —</option></select>
         <label>Phone</label><input id="saAdminEditPhone" type="text" />
         <label>Address</label><input id="saAdminEditAddress" type="text" />
         <button id="saSaveAdminBtn">Save User</button>
@@ -1172,6 +1174,7 @@
     <h3>Create Admin</h3>
     <div class="row">
       <div class="col">
+        <label>Name</label><input id="adminName" type="text" />
         <label>Email</label><input id="adminEmail" type="email" />
         <label>Password</label><input id="adminPassword" type="password" />
         <label>Group</label>
@@ -3426,7 +3429,8 @@
           document.getElementById('dutyGroup'),
           document.getElementById('superEventGroupFilter'),
           document.getElementById('superDutyGroupFilter'),
-          document.getElementById('dutyTemplateGroup')
+          document.getElementById('dutyTemplateGroup'),
+          document.getElementById('saAdminEditGroup')
         ];
         groupSelectors.forEach(sel => {
           if (!sel) return;
@@ -4849,9 +4853,9 @@
         const chosenRole = (roleSel && roleSel.value) ? roleSel.value : 'admin';
         const params = new URLSearchParams();
         if (chosenRole && chosenRole !== 'all') params.set('role', chosenRole);
-        // Only apply org filter for admin/volunteer; superadmins are global
-        const applyOrg = (chosenRole === 'admin' || chosenRole === 'volunteer');
-        if (applyOrg && orgSel && orgSel.value) params.set('group_id', orgSel.value);
+        // Superadmin: org filter is optional (used to narrow results). Do not force it.
+        // Also allow filtering when Role=all (show all users in the selected org).
+        if (orgSel && orgSel.value && chosenRole !== 'superadmin') params.set('group_id', orgSel.value);
         const res = await authed(`/users?${params.toString()}`);
         if (!res.ok) return [];
         return await res.json();
@@ -4862,13 +4866,7 @@
         const users = await fetchUsersForSuperadmin();
         const sel = document.getElementById('saAdminSelect');
         const selRow = document.getElementById('saAdminRow');
-        if (selRow) {
-          const roleSel = document.getElementById('saUserRole');
-          const chosenRole = (roleSel && roleSel.value) ? roleSel.value : 'admin';
-          const orgPicker = document.getElementById('superadminOrgPicker');
-          const requireOrg = (chosenRole === 'admin' || chosenRole === 'volunteer');
-          selRow.classList.toggle('hidden', requireOrg ? !orgPicker?.value : false);
-        }
+        if (selRow) selRow.classList.remove('hidden');
         if (!sel) return;
         const current = sel.value;
         sel.innerHTML = '<option value="">— Select user —</option>';
@@ -4876,7 +4874,8 @@
           const opt = document.createElement('option');
           opt.value = u.id;
           const label = u.name ? `${u.name} — ${u.email}` : u.email;
-          opt.textContent = label;
+          const orgName = (u.group_id != null && groupNameById && groupNameById[u.group_id]) ? groupNameById[u.group_id] : (u.group_id != null ? `Org #${u.group_id}` : 'No org');
+          opt.textContent = `${label} (${orgName})`;
           sel.appendChild(opt);
         });
         sel._users = users;
