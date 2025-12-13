@@ -274,14 +274,24 @@
       }
       /* Mobile calendar Option B: compact event bars (no titles in-grid) */
       .calendar-event.calendar-event--bar {
-        display: block;
+        display: flex;
+        align-items: center;
+        justify-content: center;
         width: 100%;
-        padding: 0;
+        padding: 0 4px;
         height: 26px;
         border-radius: 0;
         border-left-width: 0;
-        font-size: 0;
-        line-height: 0;
+        font-size: 11px;
+        line-height: 1;
+        font-weight: 700;
+        letter-spacing: 0.2px;
+        color: rgba(255,255,255,0.95);
+        text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        box-sizing: border-box;
       }
       .calendar-more { font-size: 11px; }
       .calendar-count-badge {
@@ -2354,6 +2364,8 @@
           if (!isMobile) {
             btn.textContent = label;
           } else {
+            // Mobile: show start time in a boxed marker
+            btn.textContent = startTime || '';
             btn.setAttribute('aria-label', label);
             btn.title = label;
           }
