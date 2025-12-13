@@ -368,9 +368,13 @@ app.post('/register', authRequired, adminOnly, async (req, res) => {
   try {
     const { name, email, phone, address, password, role, group_id } = req.body || {};
     if (!email || !password || !role) return res.status(400).json({ message: 'Missing required fields' });
+    const roleNormalized = String(role).toLowerCase().trim();
     // Enforce: Admins cannot create superadmins
-    if (req.user.role === 'admin' && String(role).toLowerCase() === 'superadmin') {
+    if (req.user.role === 'admin' && roleNormalized === 'superadmin') {
       return res.status(403).json({ message: 'Admins cannot create superadmins' });
+    }
+    if (!['volunteer', 'admin', 'superadmin'].includes(roleNormalized)) {
+      return res.status(400).json({ message: 'Invalid role' });
     }
 
     const hash = await bcrypt.hash(password, 10);
@@ -392,7 +396,7 @@ app.post('/register', authRequired, adminOnly, async (req, res) => {
     // Required fields
     fields.push('email'); params.push(`$${idx++}`); values.push(email);
     fields.push('password'); params.push(`$${idx++}`); values.push(hash);
-    fields.push('role'); params.push(`$${idx++}`); values.push(role);
+    fields.push('role'); params.push(`$${idx++}`); values.push(roleNormalized);
 
     // group_id if schema supports it
     if (has.has('group_id')) { fields.push('group_id'); params.push(`$${idx++}`); values.push(group_id ?? null); }
@@ -800,7 +804,7 @@ app.get('/users', authRequired, async (req, res) => {
     const where = [];
     const params = [];
     let idx = 1;
-    if (roleFilter) { where.push(`u.role = $${idx++}`); params.push(roleFilter); }
+    if (roleFilter) { where.push(`LOWER(u.role) = LOWER($${idx++})`); params.push(roleFilter); }
     if (req.user.role === 'superadmin') {
       if (Number.isFinite(groupFilter)) { where.push(`u.group_id = $${idx++}`); params.push(groupFilter); }
     } else if (req.user.role === 'admin') {
