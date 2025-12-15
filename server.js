@@ -1120,18 +1120,35 @@ app.delete('/groups/:id', authRequired, superadminOnly, async (req, res) => {
     // Detach any superadmin users that were incorrectly associated to this org
     await client.query("UPDATE users SET group_id = NULL WHERE group_id=$1 AND LOWER(role)='superadmin'", [id]);
 
-    // If any other users still reference this org, block deletion (org is required for admins/volunteers)
-    const remaining = await client.query(
-      "SELECT LOWER(role) AS role, COUNT(*)::int AS count FROM users WHERE group_id=$1 GROUP BY LOWER(role)",
+    // Delete all non-superadmin users assigned to this org (and their dependent records)
+    // NOTE: we delete dependent records explicitly where schemas may not have ON DELETE CASCADE.
+    // 1) Delete volunteer work photos for users in this org
+    await client.query(
+      `DELETE FROM work_photos p
+       USING users u
+       WHERE p.volunteer_id = u.id AND u.group_id = $1`,
       [id]
     );
-    if (remaining.rowCount > 0) {
-      await client.query('ROLLBACK');
-      const parts = remaining.rows.map(r => `${r.role}:${r.count}`);
-      return res.status(400).json({
-        message: `Cannot delete organization while users are assigned to it (${parts.join(', ')}). Reassign or delete those users first, or archive the organization instead.`
-      });
-    }
+    // 2) Delete time entries for users in this org (safe even if FKs would cascade)
+    await client.query(
+      `DELETE FROM time_tracking t
+       USING users u
+       WHERE t.volunteer_id = u.id AND u.group_id = $1`,
+      [id]
+    );
+    // 3) Delete users (admins/volunteers) in this org
+    await client.query(
+      `DELETE FROM users
+       WHERE group_id = $1 AND LOWER(role) <> 'superadmin'`,
+      [id]
+    );
+
+    // Delete org-scoped data so group deletion doesn't fail on FK constraints.
+    // Duties / events are org-scoped; related tables are cleaned up via FK actions where present.
+    await client.query('DELETE FROM duties WHERE group_id=$1', [id]);
+    await client.query('DELETE FROM events WHERE group_id=$1', [id]);
+    // duty_templates references groups, but delete explicitly for safety across schemas
+    await client.query('DELETE FROM duty_templates WHERE group_id=$1', [id]);
 
     await client.query('DELETE FROM groups WHERE id=$1', [id]);
     await client.query('COMMIT');
