@@ -1079,6 +1079,12 @@ app.get('/groups', authRequired, async (req, res) => {
   res.json(groups.rows);
 });
 
+// Ensure legacy superadmins are never bound to a group
+// (Older data may have superadmins with group_id set, which breaks org deletion.)
+try {
+  pool.query("UPDATE users SET group_id = NULL WHERE LOWER(role) = 'superadmin'");
+} catch (_) {}
+
 app.post('/groups', authRequired, superadminOnly, async (req, res) => {
   try {
     const { name, status, time_zone } = req.body || {};
@@ -1106,8 +1112,36 @@ app.post('/groups', authRequired, superadminOnly, async (req, res) => {
 });
 
 app.delete('/groups/:id', authRequired, superadminOnly, async (req, res) => {
-  await pool.query('DELETE FROM groups WHERE id=$1', [req.params.id]);
-  res.json({ ok: true });
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) return res.status(400).json({ message: 'Invalid id' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    // Detach any superadmin users that were incorrectly associated to this org
+    await client.query("UPDATE users SET group_id = NULL WHERE group_id=$1 AND LOWER(role)='superadmin'", [id]);
+
+    // If any other users still reference this org, block deletion (org is required for admins/volunteers)
+    const remaining = await client.query(
+      "SELECT LOWER(role) AS role, COUNT(*)::int AS count FROM users WHERE group_id=$1 GROUP BY LOWER(role)",
+      [id]
+    );
+    if (remaining.rowCount > 0) {
+      await client.query('ROLLBACK');
+      const parts = remaining.rows.map(r => `${r.role}:${r.count}`);
+      return res.status(400).json({
+        message: `Cannot delete organization while users are assigned to it (${parts.join(', ')}). Reassign or delete those users first, or archive the organization instead.`
+      });
+    }
+
+    await client.query('DELETE FROM groups WHERE id=$1', [id]);
+    await client.query('COMMIT');
+    res.json({ ok: true });
+  } catch (err) {
+    try { await client.query('ROLLBACK'); } catch {}
+    res.status(400).json({ message: err?.message || 'Failed to delete organization' });
+  } finally {
+    client.release();
+  }
 });
 
 // Update group (name/status)
