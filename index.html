@@ -3005,11 +3005,18 @@
       const roleSel = document.getElementById('newUserRole');
       const roleVal = roleSel ? roleSel.value : 'volunteer';
       const grpSel = document.getElementById('newUserGroup');
-      const gid = grpSel && grpSel.value ? Number(grpSel.value) : null;
+      let gid = grpSel && grpSel.value ? Number(grpSel.value) : null;
       const errEl = document.getElementById('createUserError');
       errEl.textContent = '';
       try {
         if (!email || !password) { errEl.textContent = 'Email and password required'; return; }
+        if (roleVal === 'superadmin') {
+          gid = null;
+          if (grpSel) grpSel.value = '';
+        } else if (!Number.isFinite(Number(gid))) {
+          errEl.textContent = 'Organization is required for admins and volunteers';
+          return;
+        }
         const res = await authed('/register', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -3026,6 +3033,16 @@
       } catch {
         errEl.textContent = 'Error creating user';
       }
+    });
+
+    // Superadmin create-user: org required for admin/volunteer, not allowed for superadmin
+    document.getElementById('newUserRole')?.addEventListener('change', () => {
+      const roleSel = document.getElementById('newUserRole');
+      const grpSel = document.getElementById('newUserGroup');
+      if (!roleSel || !grpSel) return;
+      const isSuper = roleSel.value === 'superadmin';
+      grpSel.disabled = isSuper;
+      if (isSuper) grpSel.value = '';
     });
 
     // Admin tools: create specific roles
@@ -4852,10 +4869,12 @@
         const roleSel = document.getElementById('saUserRole');
         const chosenRole = (roleSel && roleSel.value) ? roleSel.value : 'admin';
         const params = new URLSearchParams();
+        const requireOrg = (chosenRole === 'admin' || chosenRole === 'volunteer' || chosenRole === 'all');
+        if (requireOrg) {
+          if (!orgSel || !orgSel.value) return [];
+          params.set('group_id', orgSel.value);
+        }
         if (chosenRole && chosenRole !== 'all') params.set('role', chosenRole);
-        // Superadmin: org filter is optional (used to narrow results). Do not force it.
-        // Also allow filtering when Role=all (show all users in the selected org).
-        if (orgSel && orgSel.value && chosenRole !== 'superadmin') params.set('group_id', orgSel.value);
         const res = await authed(`/users?${params.toString()}`);
         if (!res.ok) return [];
         return await res.json();
@@ -4866,9 +4885,27 @@
         const users = await fetchUsersForSuperadmin();
         const sel = document.getElementById('saAdminSelect');
         const selRow = document.getElementById('saAdminRow');
-        if (selRow) selRow.classList.remove('hidden');
+        if (selRow) {
+          const roleSel = document.getElementById('saUserRole');
+          const chosenRole = (roleSel && roleSel.value) ? roleSel.value : 'admin';
+          const orgPicker = document.getElementById('superadminOrgPicker');
+          const requireOrg = (chosenRole === 'admin' || chosenRole === 'volunteer' || chosenRole === 'all');
+          selRow.classList.toggle('hidden', requireOrg ? !orgPicker?.value : false);
+        }
         if (!sel) return;
         const current = sel.value;
+        const orgPicker = document.getElementById('superadminOrgPicker');
+        const roleSel = document.getElementById('saUserRole');
+        const chosenRole = (roleSel && roleSel.value) ? roleSel.value : 'admin';
+        const requireOrg = (chosenRole === 'admin' || chosenRole === 'volunteer' || chosenRole === 'all');
+        if (requireOrg && !orgPicker?.value) {
+          sel.innerHTML = '<option value="">— Select organization first —</option>';
+          sel.disabled = true;
+          const panel = document.getElementById('saAdminEditPanel');
+          if (panel) panel.classList.add('hidden');
+          return;
+        }
+        sel.disabled = false;
         sel.innerHTML = '<option value="">— Select user —</option>';
         users.forEach(u => {
           const opt = document.createElement('option');
@@ -5801,7 +5838,7 @@
           if (selRow) {
             const roleSel2 = document.getElementById('saUserRole');
             const chosenRole2 = (roleSel2 && roleSel2.value) ? roleSel2.value : 'admin';
-            const requireOrg2 = (chosenRole2 === 'admin' || chosenRole2 === 'volunteer');
+            const requireOrg2 = (chosenRole2 === 'admin' || chosenRole2 === 'volunteer' || chosenRole2 === 'all');
             selRow.classList.toggle('hidden', requireOrg2 ? !orgPicker.value : false);
           }
           // Refresh Volunteer Mgmt scoped to org
@@ -6285,11 +6322,19 @@
             if (!u) return;
             const panel = document.getElementById('saAdminEditPanel');
             if (panel) panel.classList.remove('hidden');
+            // Track role for validation/saving
+            if (panel) panel.dataset.selectedRole = String(u.role || '').toLowerCase();
             document.getElementById('saAdminEditId').value = String(u.id);
             document.getElementById('saAdminEditName').value = u.name || '';
             document.getElementById('saAdminEditEmail').value = u.email || '';
             document.getElementById('saAdminEditPhone').value = u.phone || '';
             document.getElementById('saAdminEditAddress').value = u.address || '';
+            const groupSel = document.getElementById('saAdminEditGroup');
+            if (groupSel) {
+              const isSuper = String(u.role || '').toLowerCase() === 'superadmin';
+              groupSel.disabled = isSuper;
+              groupSel.value = (!isSuper && u.group_id != null) ? String(u.group_id) : '';
+            }
           });
           sel._wired = true;
         }
@@ -6300,7 +6345,7 @@
             const selRow2 = document.getElementById('saAdminRow');
             const orgPicker2 = document.getElementById('superadminOrgPicker');
             const chosenRole3 = roleFilter.value || 'admin';
-            const requireOrg3 = (chosenRole3 === 'admin' || chosenRole3 === 'volunteer');
+            const requireOrg3 = (chosenRole3 === 'admin' || chosenRole3 === 'volunteer' || chosenRole3 === 'all');
             if (selRow2) selRow2.classList.toggle('hidden', requireOrg3 ? !orgPicker2?.value : false);
           });
           roleFilter._wired = true;
@@ -6348,13 +6393,20 @@
             const password = document.getElementById('saAdminEditPassword').value;
             const phone = document.getElementById('saAdminEditPhone').value.trim();
             const address = document.getElementById('saAdminEditAddress').value.trim();
+            const roleVal = String(document.getElementById('saAdminEditPanel')?.dataset?.selectedRole || '').toLowerCase();
+            const groupSel = document.getElementById('saAdminEditGroup');
+            const group_id = (roleVal === 'superadmin') ? null : (groupSel && groupSel.value ? Number(groupSel.value) : null);
             const err = document.getElementById('saAdminSaveErr');
             if (err) err.textContent = '';
             try {
+              if (roleVal !== 'superadmin' && !Number.isFinite(Number(group_id))) {
+                if (err) err.textContent = 'Organization is required for admins and volunteers.';
+                return;
+              }
               const res = await authed(`/users/${id}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, email, phone, address, ...(password ? { password } : {}) })
+                body: JSON.stringify({ name, email, phone, address, group_id, ...(password ? { password } : {}) })
               });
               const data = await res.json().catch(() => ({}));
               if (!res.ok) { if (err) err.textContent = data.message || 'Failed to save user'; return; }

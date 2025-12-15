@@ -378,6 +378,20 @@ app.post('/register', authRequired, adminOnly, async (req, res) => {
     }
 
     const hash = await bcrypt.hash(password, 10);
+    let gidNormalized = group_id ?? null;
+    // Enforce org assignment rules
+    if (roleNormalized === 'superadmin') {
+      gidNormalized = null;
+    } else {
+      if (req.user.role === 'admin') {
+        gidNormalized = req.user.group_id ?? null;
+        if (gidNormalized == null) return res.status(400).json({ message: 'Admin must belong to an organization.' });
+      } else {
+        const n = Number(gidNormalized);
+        if (!Number.isFinite(n)) return res.status(400).json({ message: 'Organization is required for admins and volunteers.' });
+        gidNormalized = n;
+      }
+    }
 
     // Detect available columns on the current database schema (works across envs)
     const colsRes = await pool.query("SELECT column_name FROM information_schema.columns WHERE table_name='users'");
@@ -399,7 +413,7 @@ app.post('/register', authRequired, adminOnly, async (req, res) => {
     fields.push('role'); params.push(`$${idx++}`); values.push(roleNormalized);
 
     // group_id if schema supports it
-    if (has.has('group_id')) { fields.push('group_id'); params.push(`$${idx++}`); values.push(group_id ?? null); }
+    if (has.has('group_id')) { fields.push('group_id'); params.push(`$${idx++}`); values.push(gidNormalized); }
 
     const sql = `INSERT INTO users (${fields.join(',')}) VALUES (${params.join(',')}) RETURNING id`;
     const result = await pool.query(sql, values);
@@ -806,6 +820,11 @@ app.get('/users', authRequired, async (req, res) => {
     let idx = 1;
     if (roleFilter) { where.push(`LOWER(u.role) = LOWER($${idx++})`); params.push(roleFilter); }
     if (req.user.role === 'superadmin') {
+      const rf = String(roleFilter || '').toLowerCase();
+      const needsOrg = (rf === 'admin' || rf === 'volunteer' || rf === 'all');
+      if (needsOrg && !Number.isFinite(groupFilter)) {
+        return res.status(400).json({ message: 'Select an organization first.' });
+      }
       if (Number.isFinite(groupFilter)) { where.push(`u.group_id = $${idx++}`); params.push(groupFilter); }
     } else if (req.user.role === 'admin') {
       where.push(`u.group_id = $${idx++}`); params.push(req.user.group_id);
@@ -892,14 +911,25 @@ app.patch('/users/:id', authRequired, async (req, res) => {
       params.push(hash);
     }
   }
+    const requestedRoleVal = (t.role !== undefined) ? String(t.role).toLowerCase() : null;
     if (t.role !== undefined) {
-      const roleVal = String(t.role).toLowerCase();
+      const roleVal = requestedRoleVal;
       if (roleVal === 'superadmin' && req.user.role !== 'superadmin') return res.status(403).json({ message: 'Cannot assign superadmin' });
       setClauses.push(`role=$${idx++}`); params.push(roleVal);
     }
     if (t.group_id !== undefined) {
-      const gid = t.group_id == null ? null : Number(t.group_id);
-      if (req.user.role === 'admin' && gid !== req.user.group_id) return res.status(403).json({ message: 'Cannot change group' });
+      let gid = t.group_id == null ? null : Number(t.group_id);
+      if (req.user.role === 'admin') {
+        if (gid !== req.user.group_id) return res.status(403).json({ message: 'Cannot change group' });
+      } else {
+        // Superadmin editing: superadmins must not belong to an org; admins/volunteers must.
+        const effectiveRole = requestedRoleVal || String(target.role || '').toLowerCase();
+        if (effectiveRole === 'superadmin') {
+          gid = null;
+        } else {
+          if (!Number.isFinite(gid)) return res.status(400).json({ message: 'Organization is required for admins and volunteers.' });
+        }
+      }
       if (has.has('group_id')) { setClauses.push(`group_id=$${idx++}`); params.push(gid); }
     }
     let updated = false;
