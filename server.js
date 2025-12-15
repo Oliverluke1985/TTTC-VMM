@@ -1986,10 +1986,6 @@ app.get('/calendar/assignments', authRequired, async (req, res) => {
         OR (e.event_date IS NOT NULL AND e.event_date = $2::date)
       )`
     ];
-    if (req.user.role === 'volunteer') {
-      eventWhere.push('EXISTS (SELECT 1 FROM event_attendees a WHERE a.event_id = e.id AND a.user_id = $3)');
-      eventParams.push(req.user.id);
-    }
     const eventsRes = await pool.query(
       `SELECT e.id, e.title, e.group_id, e.color_hex, e.start_date, e.end_date, e.start_time, e.end_time, e.address
        FROM events e
@@ -2006,25 +2002,12 @@ app.get('/calendar/assignments', authRequired, async (req, res) => {
 
     // Load duties for these events (even if no one has clocked time yet)
     const dutyParams = [scopedGroupId, eventIds];
-    let dutySql = `
+    const dutySql = `
       SELECT d.id, d.title, d.location, d.max_volunteers, d.group_id, d.event_id, d.color_hex, COALESCE(d.is_closed,false) AS is_closed
       FROM duties d
       WHERE d.archived_at IS NULL AND d.group_id = $1 AND d.event_id = ANY($2::int[])
       ORDER BY d.event_id, d.id
     `;
-    if (req.user.role === 'volunteer') {
-      // Volunteers only see closed duties if explicitly assigned
-      dutySql = `
-        SELECT d.id, d.title, d.location, d.max_volunteers, d.group_id, d.event_id, d.color_hex, COALESCE(d.is_closed,false) AS is_closed
-        FROM duties d
-        WHERE d.archived_at IS NULL AND d.group_id = $1 AND d.event_id = ANY($2::int[])
-          AND (COALESCE(d.is_closed,false) = false OR EXISTS (
-            SELECT 1 FROM duty_assignments da WHERE da.duty_id = d.id AND da.volunteer_id = $3
-          ))
-        ORDER BY d.event_id, d.id
-      `;
-      dutyParams.push(req.user.id);
-    }
     const dutiesRes = await pool.query(dutySql, dutyParams);
     const dutyRows = dutiesRes.rows || [];
     const dutyIds = dutyRows.map(r => Number(r.id)).filter(Number.isFinite);
@@ -2103,6 +2086,7 @@ app.get('/calendar/assignments', authRequired, async (req, res) => {
         location: d.location || null,
         max_volunteers: d.max_volunteers,
         color_hex: d.color_hex || null,
+        is_closed: d.is_closed === true,
         assignments: []
       };
       dutyById.set(Number(d.id), entry);
