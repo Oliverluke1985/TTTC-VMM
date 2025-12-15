@@ -2029,6 +2029,29 @@ app.get('/calendar/assignments', authRequired, async (req, res) => {
     const dutyRows = dutiesRes.rows || [];
     const dutyIds = dutyRows.map(r => Number(r.id)).filter(Number.isFinite);
 
+    // Load duty assignments (who is assigned) even if no time has been logged yet
+    // Volunteers only see their own assignment row.
+    let dutyAssignRows = [];
+    if (dutyIds.length) {
+      const daParams = [dutyIds];
+      let daSql = `
+        SELECT
+          da.duty_id,
+          da.volunteer_id,
+          COALESCE(u.name, p.name, u.email, 'Volunteer #' || u.id::text) AS volunteer_name,
+          u.email AS volunteer_email
+        FROM duty_assignments da
+        JOIN users u ON u.id = da.volunteer_id
+        LEFT JOIN user_profile p ON p.user_id = u.id
+        WHERE da.duty_id = ANY($1::int[])
+      `;
+      if (req.user.role === 'volunteer') {
+        daSql += ' AND da.volunteer_id = $2';
+        daParams.push(req.user.id);
+      }
+      dutyAssignRows = (await pool.query(daSql, daParams)).rows || [];
+    }
+
     // Load time tracking assignments for this date (to show who worked / hours logged)
     const assignParams = [rawDate, scopedGroupId];
     let assignWhere = `t.duty_date = $1 AND d.group_id = $2 AND d.event_id = ANY($3::int[])`;
@@ -2087,19 +2110,54 @@ app.get('/calendar/assignments', authRequired, async (req, res) => {
       if (parent) parent.duties.push(entry);
     });
 
+    // Seed assignments from duty_assignments (so "assigned" shows up even before clock-in)
+    const seeded = new Map(); // dutyId -> Map(volunteerId -> assignmentObj)
+    dutyAssignRows.forEach(a => {
+      const duty = dutyById.get(Number(a.duty_id));
+      if (!duty) return;
+      const vId = Number(a.volunteer_id);
+      if (!Number.isFinite(vId)) return;
+      if (!seeded.has(Number(a.duty_id))) seeded.set(Number(a.duty_id), new Map());
+      const dutyMap = seeded.get(Number(a.duty_id));
+      const obj = {
+        time_tracking_id: null,
+        volunteer_id: vId,
+        volunteer_name: a.volunteer_name || a.volunteer_email || `Volunteer #${vId}`,
+        volunteer_email: a.volunteer_email || null,
+        start_time: null,
+        end_time: null,
+        duty_date: rawDate,
+        duration_hours: null
+      };
+      dutyMap.set(vId, obj);
+      duty.assignments.push(obj);
+    });
+
     (assignRows || []).forEach(a => {
       const duty = dutyById.get(Number(a.duty_id));
       if (!duty) return;
-      duty.assignments.push({
-        time_tracking_id: a.time_tracking_id,
-        volunteer_id: a.volunteer_id,
-        volunteer_name: a.volunteer_name || a.volunteer_email || (a.volunteer_id ? `Volunteer #${a.volunteer_id}` : 'Volunteer'),
-        volunteer_email: a.volunteer_email || null,
-        start_time: a.start_time,
-        end_time: a.end_time,
-        duty_date: a.duty_date || rawDate,
-        duration_hours: a.duration_hours
-      });
+      const vId = a.volunteer_id != null ? Number(a.volunteer_id) : null;
+      const dutyIdNum = Number(a.duty_id);
+      const existingMap = seeded.get(dutyIdNum);
+      const existing = (existingMap && vId != null) ? existingMap.get(vId) : null;
+      if (existing) {
+        existing.time_tracking_id = a.time_tracking_id;
+        existing.start_time = a.start_time;
+        existing.end_time = a.end_time;
+        existing.duty_date = a.duty_date || rawDate;
+        existing.duration_hours = a.duration_hours;
+      } else {
+        duty.assignments.push({
+          time_tracking_id: a.time_tracking_id,
+          volunteer_id: a.volunteer_id,
+          volunteer_name: a.volunteer_name || a.volunteer_email || (a.volunteer_id ? `Volunteer #${a.volunteer_id}` : 'Volunteer'),
+          volunteer_email: a.volunteer_email || null,
+          start_time: a.start_time,
+          end_time: a.end_time,
+          duty_date: a.duty_date || rawDate,
+          duration_hours: a.duration_hours
+        });
+      }
     });
 
     res.json({
