@@ -1958,35 +1958,86 @@ app.get('/calendar/assignments', authRequired, async (req, res) => {
       return res.status(400).json({ message: 'A date parameter in YYYY-MM-DD format is required.' });
     }
 
-    const params = [rawDate];
-    const where = ['t.duty_date = $1'];
-    let idx = 2;
+    // Resolve group scope
     let scopedGroupId = null;
-
-    if (req.user.role === 'volunteer') {
-      where.push(`t.volunteer_id = $${idx++}`);
-      params.push(req.user.id);
-    } else if (req.user.role === 'admin') {
-      const gid = Number(req.user.group_id);
-      if (!Number.isFinite(gid)) {
-        return res.status(400).json({ message: 'Admins must belong to an organization to view schedules.' });
-      }
-      where.push(`d.group_id = $${idx++}`);
-      params.push(gid);
-      scopedGroupId = gid;
-    } else if (req.user.role === 'superadmin') {
+    if (req.user.role === 'superadmin') {
       const gid = Number(req.query.group_id);
       if (!Number.isFinite(gid)) {
-        return res.status(400).json({ message: 'Select an organization to view volunteer schedules.' });
+        return res.status(400).json({ message: 'Select an organization to view schedules.' });
       }
-      where.push(`d.group_id = $${idx++}`);
-      params.push(gid);
       scopedGroupId = gid;
     } else {
-      return res.status(403).json({ message: 'Unsupported role for schedule view.' });
+      const gid = Number(req.user.group_id);
+      if (!Number.isFinite(gid)) {
+        return res.status(400).json({ message: 'You must belong to an organization to view schedules.' });
+      }
+      scopedGroupId = gid;
     }
 
-    const sql = `
+    // Load events on this date (include date ranges)
+    const eventParams = [scopedGroupId, rawDate];
+    const eventWhere = [
+      'e.archived_at IS NULL',
+      'e.group_id = $1',
+      `(
+        (e.start_date IS NOT NULL AND e.end_date IS NOT NULL AND $2::date BETWEEN e.start_date AND e.end_date)
+        OR (e.start_date IS NOT NULL AND e.end_date IS NULL AND e.start_date = $2::date)
+        OR (e.start_date IS NULL AND e.end_date IS NOT NULL AND e.end_date = $2::date)
+        OR (e.event_date IS NOT NULL AND e.event_date = $2::date)
+      )`
+    ];
+    if (req.user.role === 'volunteer') {
+      eventWhere.push('EXISTS (SELECT 1 FROM event_attendees a WHERE a.event_id = e.id AND a.user_id = $3)');
+      eventParams.push(req.user.id);
+    }
+    const eventsRes = await pool.query(
+      `SELECT e.id, e.title, e.group_id, e.color_hex, e.start_date, e.end_date, e.start_time, e.end_time, e.address
+       FROM events e
+       WHERE ${eventWhere.join(' AND ')}
+       ORDER BY COALESCE(e.start_date, e.event_date) ASC, e.start_time NULLS LAST, e.title`,
+      eventParams
+    );
+    const eventRows = eventsRes.rows || [];
+    const eventIds = eventRows.map(r => Number(r.id)).filter(Number.isFinite);
+
+    if (eventIds.length === 0) {
+      return res.json({ date: rawDate, group_id: scopedGroupId, events: [], total_assignments: 0 });
+    }
+
+    // Load duties for these events (even if no one has clocked time yet)
+    const dutyParams = [scopedGroupId, eventIds];
+    let dutySql = `
+      SELECT d.id, d.title, d.location, d.max_volunteers, d.group_id, d.event_id, d.color_hex, COALESCE(d.is_closed,false) AS is_closed
+      FROM duties d
+      WHERE d.archived_at IS NULL AND d.group_id = $1 AND d.event_id = ANY($2::int[])
+      ORDER BY d.event_id, d.id
+    `;
+    if (req.user.role === 'volunteer') {
+      // Volunteers only see closed duties if explicitly assigned
+      dutySql = `
+        SELECT d.id, d.title, d.location, d.max_volunteers, d.group_id, d.event_id, d.color_hex, COALESCE(d.is_closed,false) AS is_closed
+        FROM duties d
+        WHERE d.archived_at IS NULL AND d.group_id = $1 AND d.event_id = ANY($2::int[])
+          AND (COALESCE(d.is_closed,false) = false OR EXISTS (
+            SELECT 1 FROM duty_assignments da WHERE da.duty_id = d.id AND da.volunteer_id = $3
+          ))
+        ORDER BY d.event_id, d.id
+      `;
+      dutyParams.push(req.user.id);
+    }
+    const dutiesRes = await pool.query(dutySql, dutyParams);
+    const dutyRows = dutiesRes.rows || [];
+    const dutyIds = dutyRows.map(r => Number(r.id)).filter(Number.isFinite);
+
+    // Load time tracking assignments for this date (to show who worked / hours logged)
+    const assignParams = [rawDate, scopedGroupId];
+    let assignWhere = `t.duty_date = $1 AND d.group_id = $2 AND d.event_id = ANY($3::int[])`;
+    assignParams.push(eventIds);
+    if (req.user.role === 'volunteer') {
+      assignWhere += ` AND t.volunteer_id = $4`;
+      assignParams.push(req.user.id);
+    }
+    const assignSql = `
       SELECT
         t.id AS time_tracking_id,
         t.volunteer_id,
@@ -1996,86 +2047,66 @@ app.get('/calendar/assignments', authRequired, async (req, res) => {
         t.end_time,
         t.duration_hours,
         t.duty_date,
-        d.id AS duty_id,
-        d.title AS duty_title,
-        d.location AS duty_location,
-        d.max_volunteers,
-        d.group_id,
-        e.id AS event_id,
-        e.title AS event_title,
-        e.color_hex AS event_color_hex,
-        e.start_date AS event_start_date,
-        e.end_date AS event_end_date,
-        e.start_time AS event_start_time,
-        e.end_time AS event_end_time,
-        e.address AS event_address
+        d.id AS duty_id
       FROM time_tracking t
       JOIN duties d ON d.id = t.duty_id
-      LEFT JOIN events e ON e.id = d.event_id
       LEFT JOIN users u ON u.id = t.volunteer_id
       LEFT JOIN user_profile p ON p.user_id = u.id
-      WHERE ${where.join(' AND ')}
-      ORDER BY
-        COALESCE(t.start_time, (t.duty_date::timestamp)),
-        e.title NULLS LAST,
-        d.title,
-        volunteer_name
+      WHERE ${assignWhere}
+      ORDER BY COALESCE(t.start_time, (t.duty_date::timestamp)), volunteer_name
     `;
+    const assignRows = dutyIds.length ? (await pool.query(assignSql, assignParams)).rows : [];
 
-    const rows = (await pool.query(sql, params)).rows;
-    const events = [];
-    const eventMap = new Map();
+    // Assemble response shape expected by frontend
+    const events = eventRows.map(ev => ({
+      event_id: ev.id,
+      event_title: ev.title,
+      group_id: ev.group_id,
+      color_hex: ev.color_hex || null,
+      start_date: ev.start_date || null,
+      end_date: ev.end_date || null,
+      start_time: ev.start_time || null,
+      end_time: ev.end_time || null,
+      address: ev.address || null,
+      duties: []
+    }));
+    const eventById = new Map(events.map(e => [Number(e.event_id), e]));
+    const dutyById = new Map();
 
-    rows.forEach(row => {
-      const eventKey = row.event_id ? `event-${row.event_id}` : `duty-${row.duty_id}`;
-      let eventEntry = eventMap.get(eventKey);
-      if (!eventEntry) {
-        eventEntry = {
-          event_id: row.event_id,
-          title: row.event_title || row.duty_title || 'Untitled Event',
-          color_hex: row.event_color_hex || null,
-          group_id: row.group_id,
-          start_date: row.event_start_date,
-          end_date: row.event_end_date,
-          start_time: row.event_start_time,
-          end_time: row.event_end_time,
-          address: row.event_address || null,
-          duties: [],
-        };
-        eventMap.set(eventKey, eventEntry);
-        events.push(eventEntry);
-      }
-      let dutyEntry = eventEntry.duties.find(d => d.id === row.duty_id);
-      if (!dutyEntry) {
-        dutyEntry = {
-          id: row.duty_id,
-          title: row.duty_title,
-          location: row.duty_location || null,
-          max_volunteers: row.max_volunteers,
-          assignments: [],
-        };
-        eventEntry.duties.push(dutyEntry);
-      }
-      dutyEntry.assignments.push({
-        time_tracking_id: row.time_tracking_id,
-        volunteer_id: row.volunteer_id,
-        volunteer_name: row.volunteer_name || row.volunteer_email || (row.volunteer_id ? `Volunteer #${row.volunteer_id}` : 'Volunteer'),
-        volunteer_email: row.volunteer_email || null,
-        start_time: row.start_time,
-        end_time: row.end_time,
-        duty_date: row.duty_date,
-      });
+    dutyRows.forEach(d => {
+      const entry = {
+        id: d.id,
+        title: d.title,
+        location: d.location || null,
+        max_volunteers: d.max_volunteers,
+        color_hex: d.color_hex || null,
+        assignments: []
+      };
+      dutyById.set(Number(d.id), entry);
+      const parent = eventById.get(Number(d.event_id));
+      if (parent) parent.duties.push(entry);
     });
 
-    if (scopedGroupId == null && rows.length && rows[0].group_id != null) {
-      scopedGroupId = rows[0].group_id;
-    }
+    (assignRows || []).forEach(a => {
+      const duty = dutyById.get(Number(a.duty_id));
+      if (!duty) return;
+      duty.assignments.push({
+        time_tracking_id: a.time_tracking_id,
+        volunteer_id: a.volunteer_id,
+        volunteer_name: a.volunteer_name || a.volunteer_email || (a.volunteer_id ? `Volunteer #${a.volunteer_id}` : 'Volunteer'),
+        volunteer_email: a.volunteer_email || null,
+        start_time: a.start_time,
+        end_time: a.end_time,
+        duty_date: a.duty_date || rawDate,
+        duration_hours: a.duration_hours
+      });
+    });
 
     res.json({
       date: rawDate,
       group_id: scopedGroupId,
       events,
-      total_assignments: rows.length,
+      total_assignments: (assignRows || []).length
     });
   } catch (err) {
     res.status(500).json({ message: err?.message || 'Failed to load calendar assignments' });
