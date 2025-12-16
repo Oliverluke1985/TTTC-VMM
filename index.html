@@ -2556,10 +2556,20 @@
       if (err) err.textContent = '';
       calendarState.scheduleFocusEventId = Number(event.id) || null;
       if (calendarState.activeDateKey) {
-        renderCalendarDaySchedule(calendarState.activeDateKey);
+        // Always refetch schedule when switching events so duties update immediately
+        try {
+          if (calendarState.scheduleCache) delete calendarState.scheduleCache[calendarState.activeDateKey];
+        } catch {}
+        loadCalendarDaySchedule(calendarState.activeDateKey, { force: true });
       } else {
         const inferredDate = extractDatePart(event.start_date || event.event_date);
-        if (inferredDate) loadCalendarDaySchedule(inferredDate);
+        if (inferredDate) {
+          calendarState.activeDateKey = inferredDate;
+          try {
+            if (calendarState.scheduleCache) delete calendarState.scheduleCache[inferredDate];
+          } catch {}
+          loadCalendarDaySchedule(inferredDate, { force: true });
+        }
       }
     }
 
@@ -3981,10 +3991,10 @@
         if (!sel) return;
         const current = sel.value;
         sel.innerHTML = '<option value="">— Select duty —</option>';
-        // Enforce: an event MUST be chosen before duties can be selected
-        if (!gid || !eventId) {
+        // Organization is required; event is an optional filter
+        if (!gid) {
           sel.disabled = true;
-          sel.innerHTML = '<option value="">— Select event first —</option>';
+          sel.innerHTML = '<option value="">— Select organization first —</option>';
           return;
         }
         sel.disabled = false;
@@ -4000,8 +4010,10 @@
             if (resAll.ok) duties = await resAll.json();
           } catch { /* silent */ }
         }
-        // Strictly require event match; duties without event_id are excluded
-        duties = duties.filter(d => Number(d.event_id) === Number(eventId));
+        // If an event is selected, filter duties to that event
+        if (eventId) {
+          duties = duties.filter(d => Number(d.event_id) === Number(eventId));
+        }
         // Prefer matching org when group_id exists
         const hasGroupId = duties.some(d => Object.prototype.hasOwnProperty.call(d, 'group_id'));
         if (hasGroupId) duties = duties.filter(d => String(d.group_id) === String(gid));
