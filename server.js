@@ -1438,35 +1438,45 @@ app.get('/duties', authRequired, async (req, res) => {
     FROM duties d
   `;
   const eventFilter = req.query.event_id ? Number(req.query.event_id) : null;
+  const includeArchived = ['1', 'true', 'yes', 'on'].includes(String(req.query.include_archived || '').toLowerCase());
   if (req.user.role === 'superadmin') {
     const groupFilter = req.query.group_id ? Number(req.query.group_id) : null;
     if (Number.isFinite(groupFilter)) {
       if (Number.isFinite(eventFilter)) {
         const duties = await pool.query(
-          `${baseSelect} WHERE d.group_id=$1 AND d.event_id=$2 AND d.archived_at IS NULL ORDER BY d.id`,
+          `${baseSelect} WHERE d.group_id=$1 AND d.event_id=$2 ${includeArchived ? '' : 'AND d.archived_at IS NULL'} ORDER BY d.archived_at NULLS FIRST, d.id`,
           [groupFilter, eventFilter]
         );
         return res.json(duties.rows);
       }
-      const duties = await pool.query(`${baseSelect} WHERE d.group_id=$1 AND d.archived_at IS NULL ORDER BY d.id`, [groupFilter]);
+      const duties = await pool.query(
+        `${baseSelect} WHERE d.group_id=$1 ${includeArchived ? '' : 'AND d.archived_at IS NULL'} ORDER BY d.archived_at NULLS FIRST, d.id`,
+        [groupFilter]
+      );
       return res.json(duties.rows);
     }
     if (Number.isFinite(eventFilter)) {
-      const duties = await pool.query(`${baseSelect} WHERE d.event_id=$1 AND d.archived_at IS NULL ORDER BY d.id`, [eventFilter]);
+      const duties = await pool.query(
+        `${baseSelect} WHERE d.event_id=$1 ${includeArchived ? '' : 'AND d.archived_at IS NULL'} ORDER BY d.archived_at NULLS FIRST, d.id`,
+        [eventFilter]
+      );
       return res.json(duties.rows);
     }
-    const duties = await pool.query(`${baseSelect} WHERE d.archived_at IS NULL ORDER BY d.id`);
+    const duties = await pool.query(`${baseSelect} ${includeArchived ? '' : 'WHERE d.archived_at IS NULL'} ORDER BY d.archived_at NULLS FIRST, d.id`);
     return res.json(duties.rows);
   }
   if (req.user.role === 'admin') {
     if (Number.isFinite(eventFilter)) {
       const duties = await pool.query(
-        `${baseSelect} WHERE d.group_id=$1 AND d.event_id=$2 AND d.archived_at IS NULL ORDER BY d.id`,
+        `${baseSelect} WHERE d.group_id=$1 AND d.event_id=$2 ${includeArchived ? '' : 'AND d.archived_at IS NULL'} ORDER BY d.archived_at NULLS FIRST, d.id`,
         [req.user.group_id, eventFilter]
       );
       return res.json(duties.rows);
     }
-    const duties = await pool.query(`${baseSelect} WHERE d.group_id=$1 AND d.archived_at IS NULL ORDER BY d.id`, [req.user.group_id]);
+    const duties = await pool.query(
+      `${baseSelect} WHERE d.group_id=$1 ${includeArchived ? '' : 'AND d.archived_at IS NULL'} ORDER BY d.archived_at NULLS FIRST, d.id`,
+      [req.user.group_id]
+    );
     return res.json(duties.rows);
   }
   const duties = await pool.query(

@@ -911,6 +911,11 @@
       <div class="col">
         <label>Select Duty to Edit</label>
         <select id="dutyEditSelect"><option value="">— Select duty —</option></select>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:8px">
+          <input type="checkbox" id="dutyEditIncludeArchived" />
+          Show archived duties
+        </label>
+        <div id="dutyEditLoadNote" class="hint"></div>
       </div>
     </div>
     <div id="dutyEditWrap" class="row hidden">
@@ -4138,12 +4143,16 @@
           }
         }
         let path = '/duties';
+        const includeArchived = (document.getElementById('dutyEditIncludeArchived')?.checked === true);
         if (role === 'superadmin') {
           const sel = document.getElementById('superDutyGroupFilter');
           if (sel && sel.value) path = `/duties?group_id=${encodeURIComponent(sel.value)}`;
           // Superadmin should not see the "My Duties" table
           const dutiesWrap = document.getElementById('clockDutiesWrap');
           if (dutiesWrap) dutiesWrap.classList.add('hidden');
+        }
+        if ((role === 'admin' || role === 'superadmin') && includeArchived) {
+          path += (path.includes('?') ? '&' : '?') + 'include_archived=1';
         }
         const res = await authed(path); // backend should return duties user can see
         const ct = (res.headers && res.headers.get) ? (res.headers.get('content-type') || '') : '';
@@ -4174,6 +4183,14 @@
         if (!Array.isArray(duties)) {
           showActionStatus('Failed to load duties', true);
           return;
+        }
+        const note = document.getElementById('dutyEditLoadNote');
+        if (note && (role === 'admin' || role === 'superadmin')) {
+          const archivedCount = duties.filter(d => d && d.archived_at).length;
+          const activeCount = duties.length - archivedCount;
+          note.textContent = includeArchived
+            ? `Loaded ${duties.length} duties (${activeCount} active, ${archivedCount} archived).`
+            : `Loaded ${duties.length} active duties.`;
         }
         // Build a duty map for later event-based filtering in time-tracking
         try {
@@ -4319,6 +4336,8 @@
           editSel.innerHTML = '<option value="">— Unable to load duties —</option>';
           editSel.disabled = true;
         }
+        const note = document.getElementById('dutyEditLoadNote');
+        if (note) note.textContent = '';
       }
     }
 
@@ -5893,6 +5912,11 @@
         dutyEditSelect.addEventListener('mousedown', ensureLoaded);
         dutyEditSelect.addEventListener('touchstart', ensureLoaded, { passive: true });
         dutyEditSelect._ensureLoadedWired = true;
+      }
+      const dutyEditArchivedToggle = document.getElementById('dutyEditIncludeArchived');
+      if (dutyEditArchivedToggle && !dutyEditArchivedToggle._wired) {
+        dutyEditArchivedToggle.addEventListener('change', () => fetchDuties());
+        dutyEditArchivedToggle._wired = true;
       }
       const navDuties = document.getElementById('navDutiesBtn');
       const navAdmin = document.getElementById('navAdminBtn');
