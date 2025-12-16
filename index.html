@@ -354,16 +354,19 @@
     })();
     // Mobile calendar zoom removed (not used)
 
-    // Mobile-only: replace native <select> menus with anchored custom menus
+    // Mobile-only: (DISABLED) custom anchored dropdown for <select>
+    // This feature caused iOS issues (menus closing on scroll / not showing options).
+    // Leave the implementation in place but make it opt-in via data-mobile-select="anchor".
     window.__wireMobileSelectAnchors = function wireMobileSelectAnchors() {
       if (!window.matchMedia || !window.matchMedia('(max-width: 640px)').matches) return;
-      const selects = Array.from(document.querySelectorAll('select'))
+      const selects = Array.from(document.querySelectorAll('select[data-mobile-select="anchor"]'))
         .filter(sel => !sel.multiple)
         .filter(sel => !(sel.size && Number(sel.size) > 1))
         .filter(sel => !sel.classList.contains('hidden'))
         .filter(sel => !sel.closest('nav#toolbar'));
 
-      const anyMenuOpen = () => Array.from(document.querySelectorAll('.mobile-select-menu')).some(m => !m.classList.contains('hidden'));
+      const anyMenuOpen = () =>
+        Array.from(document.querySelectorAll('.mobile-select-menu')).some(m => !m.classList.contains('hidden'));
 
       function closeAll(except) {
         document.querySelectorAll('.mobile-select-menu').forEach(menu => {
@@ -449,19 +452,7 @@
         if (e.target.closest('.mobile-select')) return;
         closeAll();
       });
-      // Prevent background page scrolling while a dropdown is open (mobile),
-      // but allow scrolling inside the open dropdown menu itself.
-      if (!document._mobileSelectScrollGuardWired) {
-        const guard = (e) => {
-          if (!anyMenuOpen()) return;
-          if (e.target && e.target.closest && e.target.closest('.mobile-select-menu')) return;
-          // allow taps/clicks, just prevent scroll gestures from moving the page
-          e.preventDefault();
-        };
-        document.addEventListener('touchmove', guard, { passive: false });
-        document.addEventListener('wheel', guard, { passive: false });
-        document._mobileSelectScrollGuardWired = true;
-      }
+      // No global scroll-guard; native selects handle this better on iOS.
       window.addEventListener('resize', () => closeAll(), { passive: true });
     };
     document.addEventListener('DOMContentLoaded', () => {
