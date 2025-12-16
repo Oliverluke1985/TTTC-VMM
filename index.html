@@ -347,16 +347,6 @@
 
   <!-- Strip any tracking params like ?utm_source=... to avoid parser oddities -->
   <script>
-    (function canonicalHostRedirect() {
-      try {
-        const host = (location && location.hostname) ? location.hostname : '';
-        // Production canonical: always use www.* so API + frontend share the same origin
-        if (host && host === 'tttcvolunteermanagementapp.com') {
-          const target = `https://www.${host}${location.pathname || ''}${location.search || ''}${location.hash || ''}`;
-          location.replace(target);
-        }
-      } catch { /* ignore */ }
-    })();
     (function stripQuery() {
       if (location.search && /utm_|fbclid|gclid/i.test(location.search)) {
         history.replaceState({}, document.title, location.pathname);
@@ -1313,9 +1303,10 @@
   <footer id="footer"></footer>
 
   <script>
-    // Canonical API origin (production). The page redirects to www.* so this stays same-origin.
+    // Default API origin: same-origin (relative) for production so it works on both
+    // www and non-www hosts and avoids CORS/caching issues on mobile Safari.
     // Can still be overridden via API_BASE_OVERRIDE or localStorage 'apiBaseOverride'.
-    const defaultApiOrigin = 'https://www.tttcvolunteermanagementapp.com';
+    const defaultApiOrigin = '';
     const apiOverride =
       (typeof window !== 'undefined' && window.API_BASE_OVERRIDE) ||
       (typeof localStorage !== 'undefined' && localStorage.getItem('apiBaseOverride')) ||
