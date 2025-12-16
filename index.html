@@ -347,6 +347,16 @@
 
   <!-- Strip any tracking params like ?utm_source=... to avoid parser oddities -->
   <script>
+    (function canonicalHostRedirect() {
+      try {
+        const host = (location && location.hostname) ? location.hostname : '';
+        // Production canonical: always use www.* so API + frontend share the same origin
+        if (host && host === 'tttcvolunteermanagementapp.com') {
+          const target = `https://www.${host}${location.pathname || ''}${location.search || ''}${location.hash || ''}`;
+          location.replace(target);
+        }
+      } catch { /* ignore */ }
+    })();
     (function stripQuery() {
       if (location.search && /utm_|fbclid|gclid/i.test(location.search)) {
         history.replaceState({}, document.title, location.pathname);
@@ -1303,12 +1313,9 @@
   <footer id="footer"></footer>
 
   <script>
-    // Default to same-origin API to avoid www/non-www + mobile Safari quirks.
+    // Canonical API origin (production). The page redirects to www.* so this stays same-origin.
     // Can still be overridden via API_BASE_OVERRIDE or localStorage 'apiBaseOverride'.
-    const defaultApiOrigin =
-      (typeof window !== 'undefined' && window.location && window.location.origin)
-        ? window.location.origin
-        : 'https://www.tttcvolunteermanagementapp.com';
+    const defaultApiOrigin = 'https://www.tttcvolunteermanagementapp.com';
     const apiOverride =
       (typeof window !== 'undefined' && window.API_BASE_OVERRIDE) ||
       (typeof localStorage !== 'undefined' && localStorage.getItem('apiBaseOverride')) ||
@@ -4138,8 +4145,9 @@
           if (dutiesWrap) dutiesWrap.classList.add('hidden');
         }
         const res = await authed(path); // backend should return duties user can see
+        const ct = (res.headers && res.headers.get) ? (res.headers.get('content-type') || '') : '';
         if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
+          const data = ct.includes('application/json') ? await res.json().catch(() => ({})) : {};
           showActionStatus(data.message || 'Failed to load duties', true);
           const editSel = document.getElementById('dutyEditSelect');
           if (editSel) {
@@ -4150,7 +4158,18 @@
           if (tbody) tbody.innerHTML = '';
           return;
         }
-        const duties = await res.json();
+        if (!ct.includes('application/json')) {
+          showActionStatus('Failed to load duties (bad server response).', true);
+          const editSel = document.getElementById('dutyEditSelect');
+          if (editSel) {
+            editSel.innerHTML = '<option value="">— Unable to load duties —</option>';
+            editSel.disabled = true;
+          }
+          const tbody = document.getElementById('dutyList');
+          if (tbody) tbody.innerHTML = '';
+          return;
+        }
+        const duties = await res.json().catch(() => null);
         if (!Array.isArray(duties)) {
           showActionStatus('Failed to load duties', true);
           return;
