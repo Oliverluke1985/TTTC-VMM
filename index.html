@@ -44,15 +44,6 @@
     /* Mobile: custom anchored dropdown for <select> */
     .mobile-native-hidden { position: absolute !important; opacity: 0 !important; pointer-events: none !important; width: 1px !important; height: 1px !important; margin: 0 !important; padding: 0 !important; border: 0 !important; }
     .mobile-select { position: relative; width: 100%; }
-    body.mobile-select-open {
-      /* Prevent page from scrolling while a dropdown is open (mobile) */
-      position: fixed;
-      width: 100%;
-      left: 0;
-      right: 0;
-      overflow: hidden;
-      touch-action: none;
-    }
     .mobile-select-btn {
       width: 100%;
       min-height: 40px;
@@ -372,31 +363,13 @@
         .filter(sel => !sel.classList.contains('hidden'))
         .filter(sel => !sel.closest('nav#toolbar'));
 
-      function lockBodyScroll() {
-        // iOS-friendly scroll lock (position:fixed) so swipes scroll the menu, not the page
-        if (document.body.classList.contains('mobile-select-open')) return;
-        const y = window.scrollY || 0;
-        document.body.dataset.mobileSelectScrollY = String(y);
-        document.body.style.top = `-${y}px`;
-        document.body.classList.add('mobile-select-open');
-      }
-      function unlockBodyScroll() {
-        if (!document.body.classList.contains('mobile-select-open')) return;
-        const y = Number(document.body.dataset.mobileSelectScrollY || '0') || 0;
-        document.body.classList.remove('mobile-select-open');
-        document.body.style.top = '';
-        delete document.body.dataset.mobileSelectScrollY;
-        window.scrollTo(0, y);
-      }
+      const anyMenuOpen = () => Array.from(document.querySelectorAll('.mobile-select-menu')).some(m => !m.classList.contains('hidden'));
 
       function closeAll(except) {
         document.querySelectorAll('.mobile-select-menu').forEach(menu => {
           if (except && menu === except) return;
           menu.classList.add('hidden');
         });
-        // If nothing is open anymore, re-enable page scroll
-        const anyOpen = Array.from(document.querySelectorAll('.mobile-select-menu')).some(m => !m.classList.contains('hidden'));
-        if (!anyOpen) unlockBodyScroll();
       }
       // If the user is actively scrolling inside an open dropdown menu, don't auto-close
       // on window scroll (iOS can "chain" scroll to the page).
@@ -445,10 +418,8 @@
             menu.classList.remove('hidden');
             // prevent immediate close from tiny scroll adjustments
             ignoreWindowScrollBriefly();
-            lockBodyScroll();
           } else {
             menu.classList.add('hidden');
-            unlockBodyScroll();
           }
         });
 
@@ -478,10 +449,19 @@
         if (e.target.closest('.mobile-select')) return;
         closeAll();
       });
-      window.addEventListener('scroll', () => {
-        if (Date.now() < ignoreWindowScrollUntil) return;
-        closeAll();
-      }, { passive: true });
+      // Prevent background page scrolling while a dropdown is open (mobile),
+      // but allow scrolling inside the open dropdown menu itself.
+      if (!document._mobileSelectScrollGuardWired) {
+        const guard = (e) => {
+          if (!anyMenuOpen()) return;
+          if (e.target && e.target.closest && e.target.closest('.mobile-select-menu')) return;
+          // allow taps/clicks, just prevent scroll gestures from moving the page
+          e.preventDefault();
+        };
+        document.addEventListener('touchmove', guard, { passive: false });
+        document.addEventListener('wheel', guard, { passive: false });
+        document._mobileSelectScrollGuardWired = true;
+      }
       window.addEventListener('resize', () => closeAll(), { passive: true });
     };
     document.addEventListener('DOMContentLoaded', () => {
