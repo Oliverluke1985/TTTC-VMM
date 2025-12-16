@@ -65,6 +65,8 @@
       background: rgba(0,0,0,0.95);
       max-height: 45vh;
       overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior: contain;
       z-index: 2000;
       box-shadow: 0 10px 24px rgba(0,0,0,0.35);
     }
@@ -367,6 +369,10 @@
           menu.classList.add('hidden');
         });
       }
+      // If the user is actively scrolling inside an open dropdown menu, don't auto-close
+      // on window scroll (iOS can "chain" scroll to the page).
+      let ignoreWindowScrollUntil = 0;
+      const ignoreWindowScrollBriefly = () => { ignoreWindowScrollUntil = Date.now() + 700; };
 
       selects.forEach(sel => {
         if (sel.dataset.mobileSelectWired === 'true') return;
@@ -408,6 +414,8 @@
           if (willOpen) {
             rebuildMenu();
             menu.classList.remove('hidden');
+            // prevent immediate close from tiny scroll adjustments
+            ignoreWindowScrollBriefly();
           } else {
             menu.classList.add('hidden');
           }
@@ -419,6 +427,13 @@
 
         // Initial render
         syncButton();
+
+        // While interacting with the menu, avoid closing on window scroll.
+        // (scroll doesn't bubble, so we use touch/pointer signals + menu scroll)
+        menu.addEventListener('scroll', ignoreWindowScrollBriefly, { passive: true });
+        menu.addEventListener('touchstart', ignoreWindowScrollBriefly, { passive: true });
+        menu.addEventListener('touchmove', ignoreWindowScrollBriefly, { passive: true });
+        menu.addEventListener('pointerdown', ignoreWindowScrollBriefly, { passive: true });
 
         // Insert wrapper and hide native select
         sel.parentNode.insertBefore(wrap, sel);
@@ -432,7 +447,10 @@
         if (e.target.closest('.mobile-select')) return;
         closeAll();
       });
-      window.addEventListener('scroll', () => closeAll(), { passive: true });
+      window.addEventListener('scroll', () => {
+        if (Date.now() < ignoreWindowScrollUntil) return;
+        closeAll();
+      }, { passive: true });
       window.addEventListener('resize', () => closeAll(), { passive: true });
     };
     document.addEventListener('DOMContentLoaded', () => {
