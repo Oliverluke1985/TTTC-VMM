@@ -899,6 +899,8 @@
         <label>Duty ID</label><input id="editDutyId" type="number" />
         <label>Title</label><input id="editDutyTitle" type="text" />
         <label>Description</label><input id="editDutyDesc" type="text" />
+        <label>Event</label>
+        <select id="editDutyEvent"><option value="">— Select event —</option></select>
         <label>Access</label>
         <select id="editDutyAccess">
           <option value="open">open</option>
@@ -3728,12 +3730,13 @@
       try {
         const dutySel = document.getElementById('dutyEvent');
         const volSel = document.getElementById('volDutyEvent');
+        const editSel = document.getElementById('editDutyEvent');
         const clear = (sel) => { if (sel) sel.innerHTML = '<option value="">— Select event —</option>'; };
-        if (!gid) { clear(dutySel); clear(volSel); return; }
+        if (!gid) { clear(dutySel); clear(volSel); clear(editSel); return; }
         const res = await authed(`/events?group_id=${encodeURIComponent(gid)}`);
-        if (!res.ok) { clear(dutySel); clear(volSel); return; }
+        if (!res.ok) { clear(dutySel); clear(volSel); clear(editSel); return; }
         const events = await res.json();
-        [dutySel, volSel].forEach(sel => {
+        [dutySel, volSel, editSel].forEach(sel => {
           if (!sel) return;
           const current = sel.value;
           sel.innerHTML = '<option value="">— Select event —</option>';
@@ -4193,6 +4196,13 @@
           document.getElementById('editDutyId').value = String(id);
           document.getElementById('editDutyTitle').value = storedDuty?.title || (row[1].textContent || '');
           document.getElementById('editDutyDesc').value = storedDuty?.description || (row[2].textContent || '');
+          const editEventSel = document.getElementById('editDutyEvent');
+          if (editEventSel) {
+            editEventSel.disabled = (role !== 'admin' && role !== 'superadmin');
+            editEventSel.value = storedDuty?.event_id != null ? String(storedDuty.event_id) : '';
+          }
+          // Ensure the edit event dropdown is populated for this duty's organization
+          if (storedDuty?.group_id != null) populateEventDropdownsForGroup(storedDuty.group_id);
           const accessSel = document.getElementById('editDutyAccess');
           if (accessSel) {
             const isClosed = storedDuty ? (storedDuty.is_closed === true || String(storedDuty.status || '').toLowerCase() === 'closed') : false;
@@ -4395,6 +4405,12 @@
         document.getElementById('editDutyId').value = String(id);
         document.getElementById('editDutyTitle').value = storedDuty?.title || '';
         document.getElementById('editDutyDesc').value = storedDuty?.description || '';
+        const editEventSel = document.getElementById('editDutyEvent');
+        if (editEventSel) {
+          editEventSel.disabled = (role !== 'admin' && role !== 'superadmin');
+          editEventSel.value = storedDuty?.event_id != null ? String(storedDuty.event_id) : '';
+        }
+        if (storedDuty?.group_id != null) populateEventDropdownsForGroup(storedDuty.group_id);
         const accessSel = document.getElementById('editDutyAccess');
         if (accessSel) {
           const isClosed = storedDuty ? (storedDuty.is_closed === true || String(storedDuty.status || '').toLowerCase() === 'closed') : false;
@@ -4425,6 +4441,12 @@
       document.getElementById('editDutyId').value = String(id);
       document.getElementById('editDutyTitle').value = storedDuty?.title || (cells[1].textContent || '');
       document.getElementById('editDutyDesc').value = storedDuty?.description || (cells[2].textContent || '');
+      const editEventSel = document.getElementById('editDutyEvent');
+      if (editEventSel) {
+        editEventSel.disabled = (role !== 'admin' && role !== 'superadmin');
+        editEventSel.value = storedDuty?.event_id != null ? String(storedDuty.event_id) : '';
+      }
+      if (storedDuty?.group_id != null) populateEventDropdownsForGroup(storedDuty.group_id);
       const accessSel = document.getElementById('editDutyAccess');
       if (accessSel) {
         const isClosed = storedDuty ? (storedDuty.is_closed === true || String(storedDuty.status || '').toLowerCase() === 'closed') : false;
@@ -4627,6 +4649,12 @@
       const description = document.getElementById('editDutyDesc').value.trim();
       const status = document.getElementById('editDutyStatus').value;
       const access = document.getElementById('editDutyAccess')?.value || 'open';
+      const eventIdRaw = document.getElementById('editDutyEvent')?.value || '';
+      const event_id = eventIdRaw ? Number(eventIdRaw) : null;
+      if (!event_id || !Number.isFinite(event_id)) {
+        document.getElementById('editDutyError').textContent = 'Event is required for duties';
+        return;
+      }
       const capacityInput = document.getElementById('editDutyCapacity');
       const rawCapacity = capacityInput?.value?.trim();
       const editLocationInput = document.getElementById('editDutyLocation');
@@ -4653,6 +4681,7 @@
             description,
             status,
             is_closed: String(access).toLowerCase() === 'closed',
+            event_id,
             max_volunteers,
             location: location || null,
             color_hex: normalizeHexColor(document.getElementById('editDutyColor')?.value) || null
