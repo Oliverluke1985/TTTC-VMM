@@ -2378,7 +2378,7 @@
           applyEventColorStyles(btn, ev);
           btn.addEventListener('click', (event) => {
             event.stopPropagation();
-            openCalendarEvent(ev.id);
+            openCalendarEvent(ev.id, key);
           });
           list.appendChild(btn);
         });
@@ -2519,7 +2519,7 @@
       if (selectedId != null) sel.value = String(selectedId);
     }
 
-    function openCalendarEvent(eventId) {
+    function openCalendarEvent(eventId, dateKeyOverride = null) {
       const events = calendarState.events || [];
       const event = events.find(ev => Number(ev.id) === Number(eventId));
       if (!event) return;
@@ -2555,12 +2555,14 @@
       const err = document.getElementById('calendarEditError');
       if (err) err.textContent = '';
       calendarState.scheduleFocusEventId = Number(event.id) || null;
-      if (calendarState.activeDateKey) {
+      const targetDateKey = dateKeyOverride || calendarState.activeDateKey || null;
+      if (targetDateKey) {
+        calendarState.activeDateKey = targetDateKey;
         // Always refetch schedule when switching events so duties update immediately
         try {
-          if (calendarState.scheduleCache) delete calendarState.scheduleCache[calendarState.activeDateKey];
+          if (calendarState.scheduleCache) delete calendarState.scheduleCache[targetDateKey];
         } catch {}
-        loadCalendarDaySchedule(calendarState.activeDateKey, { force: true });
+        loadCalendarDaySchedule(targetDateKey, { force: true });
       } else {
         const inferredDate = extractDatePart(event.start_date || event.event_date);
         if (inferredDate) {
