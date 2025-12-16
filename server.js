@@ -1430,25 +1430,42 @@ app.get('/duties', authRequired, async (req, res) => {
       COALESCE((SELECT COUNT(*) FROM time_tracking t WHERE t.duty_id = d.id AND t.end_time IS NULL), 0) AS active_assignments
     FROM duties d
   `;
+  const eventFilter = req.query.event_id ? Number(req.query.event_id) : null;
   if (req.user.role === 'superadmin') {
     const groupFilter = req.query.group_id ? Number(req.query.group_id) : null;
     if (Number.isFinite(groupFilter)) {
+      if (Number.isFinite(eventFilter)) {
+        const duties = await pool.query(
+          `${baseSelect} WHERE d.group_id=$1 AND d.event_id=$2 AND d.archived_at IS NULL ORDER BY d.id`,
+          [groupFilter, eventFilter]
+        );
+        return res.json(duties.rows);
+      }
       const duties = await pool.query(`${baseSelect} WHERE d.group_id=$1 AND d.archived_at IS NULL ORDER BY d.id`, [groupFilter]);
+      return res.json(duties.rows);
+    }
+    if (Number.isFinite(eventFilter)) {
+      const duties = await pool.query(`${baseSelect} WHERE d.event_id=$1 AND d.archived_at IS NULL ORDER BY d.id`, [eventFilter]);
       return res.json(duties.rows);
     }
     const duties = await pool.query(`${baseSelect} WHERE d.archived_at IS NULL ORDER BY d.id`);
     return res.json(duties.rows);
   }
   if (req.user.role === 'admin') {
-    const duties = await pool.query(
-      `${baseSelect} WHERE d.group_id=$1 AND d.archived_at IS NULL ORDER BY d.id`,
-      [req.user.group_id]
-    );
+    if (Number.isFinite(eventFilter)) {
+      const duties = await pool.query(
+        `${baseSelect} WHERE d.group_id=$1 AND d.event_id=$2 AND d.archived_at IS NULL ORDER BY d.id`,
+        [req.user.group_id, eventFilter]
+      );
+      return res.json(duties.rows);
+    }
+    const duties = await pool.query(`${baseSelect} WHERE d.group_id=$1 AND d.archived_at IS NULL ORDER BY d.id`, [req.user.group_id]);
     return res.json(duties.rows);
   }
   const duties = await pool.query(
     `${baseSelect}
      WHERE d.group_id=$1 AND d.archived_at IS NULL
+       ${Number.isFinite(eventFilter) ? 'AND d.event_id = $3' : ''}
        AND (COALESCE(d.is_closed, false) = false OR EXISTS (
          SELECT 1 FROM duty_assignments da
          WHERE da.duty_id = d.id AND da.volunteer_id = $2
@@ -1458,7 +1475,7 @@ app.get('/duties', authRequired, async (req, res) => {
          WHERE dr.duty_id = d.id AND dr.volunteer_id = $2
        )
      ORDER BY d.id`,
-    [req.user.group_id, req.user.id]
+    Number.isFinite(eventFilter) ? [req.user.group_id, req.user.id, eventFilter] : [req.user.group_id, req.user.id]
   );
   res.json(duties.rows);
 });
