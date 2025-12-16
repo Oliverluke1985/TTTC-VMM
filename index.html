@@ -4180,6 +4180,36 @@
           window.dutyById = {};
           (duties || []).forEach(d => { if (d && d.id != null) window.dutyById[d.id] = d; });
         } catch { /* ignore */ }
+
+        // Populate key selectors FIRST so Edit Duty works even if later rendering throws.
+        try {
+          const editSelect = document.getElementById('dutyEditSelect');
+          if (editSelect) {
+            editSelect.innerHTML = '<option value="">— Select duty —</option>';
+            duties.forEach(d => {
+              const opt = document.createElement('option');
+              opt.value = d.id;
+              opt.textContent = `${d.id} — ${d.title}`;
+              editSelect.appendChild(opt);
+            });
+            editSelect.disabled = false;
+          }
+        } catch { /* ignore */ }
+        try {
+          const trackSel = document.getElementById('trackTimeDutySelect');
+          if (trackSel) {
+            const prev = trackSel.value;
+            trackSel.innerHTML = '<option value="">— Select duty —</option>';
+            duties.forEach(d => {
+              const opt = document.createElement('option');
+              opt.value = d.id;
+              opt.textContent = `${d.id} — ${d.title}`;
+              trackSel.appendChild(opt);
+            });
+            if (prev && trackSel.querySelector(`option[value="${prev}"]`)) trackSel.value = prev;
+          }
+        } catch { /* ignore */ }
+
         const tbody = document.getElementById('dutyList');
         if (role === 'superadmin') {
           const filterSel = document.getElementById('superDutyGroupFilter');
@@ -4200,9 +4230,8 @@
         }
         if (!tbody) return;
         tbody.innerHTML = '';
-        // populate duty table rows and selects
+        // populate duty table rows (edit select already populated above)
         const editSelect = document.getElementById('dutyEditSelect');
-        if (editSelect) { editSelect.innerHTML = '<option value="">— Select duty —</option>'; editSelect.disabled = false; }
         const vmDutySelEnabled = document.getElementById('vmDuty');
         if (vmDutySelEnabled) vmDutySelEnabled.disabled = false;
         duties.forEach(d => {
@@ -4221,31 +4250,13 @@
             `<td>${d.id}</td><td>${dutyDot}${d.title}</td><td>${d.description || ''}</td><td>${accessStatus}</td>
              <td>${capacityLabel}</td><td>${activeLabel}</td>`;
           tbody.appendChild(tr);
-          if (editSelect) {
-            const opt = document.createElement('option');
-            opt.value = d.id;
-            opt.textContent = `${d.id} — ${d.title}`;
-            editSelect.appendChild(opt);
-          }
         });
-        renderVolunteerDutyCards(duties);
-        const trackSel = document.getElementById('trackTimeDutySelect');
-        if (trackSel) {
-          const prev = trackSel.value;
-          trackSel.innerHTML = '<option value="">— Select duty —</option>';
-          duties.forEach(d => {
-            const opt = document.createElement('option');
-            opt.value = d.id;
-            opt.textContent = `${d.id} — ${d.title}`;
-            trackSel.appendChild(opt);
-          });
-          if (prev && trackSel.querySelector(`option[value="${prev}"]`)) {
-            trackSel.value = prev;
-          }
-        }
+        try { renderVolunteerDutyCards(duties); } catch { /* ignore */ }
         if (editSelect) {
-          ensureDutyColorPreview('dutyEditSelect', 'dutyEditColorPreview');
-          if (editSelect.value) renderDutyColorPreview('dutyEditColorPreview', (window.dutyById && window.dutyById[Number(editSelect.value)])?.color_hex || editSelect.value);
+          try {
+            ensureDutyColorPreview('dutyEditSelect', 'dutyEditColorPreview');
+            if (editSelect.value) renderDutyColorPreview('dutyEditColorPreview', (window.dutyById && window.dutyById[Number(editSelect.value)])?.color_hex || editSelect.value);
+          } catch { /* ignore */ }
         }
         // wire prefill duty edit
         tbody.querySelectorAll('.prefillDutyEditBtn').forEach(btn => btn.addEventListener('click', (ev) => {
@@ -4300,7 +4311,15 @@
             if (res.ok) { await fetchDuties(); }
           } catch { /* silent */ }
         }));
-      } catch (e) { /* silent */ }
+      } catch (e) {
+        try { console.error('fetchDuties failed', e); } catch {}
+        showActionStatus('Error loading duties.', true);
+        const editSel = document.getElementById('dutyEditSelect');
+        if (editSel) {
+          editSel.innerHTML = '<option value="">— Unable to load duties —</option>';
+          editSel.disabled = true;
+        }
+      }
     }
 
     function updateDutyTemplateModeUI() {
