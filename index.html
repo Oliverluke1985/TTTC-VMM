@@ -3131,7 +3131,7 @@
 
     async function bootstrapAfterAuth(data) {
       token = data.token;
-      role = data.role;
+      role = (data.role != null ? String(data.role).toLowerCase() : null);
       groupId = data.group_id || null;
       userId = data.id;
 

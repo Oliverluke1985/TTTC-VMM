@@ -338,6 +338,10 @@ function authRequired(req, res, next) {
   try {
     const token = auth.split(' ')[1];
     req.user = jwt.verify(token, JWT_SECRET);
+    // Normalize role casing for legacy users (e.g. 'Admin' vs 'admin')
+    if (req.user && typeof req.user.role === 'string') {
+      req.user.role = req.user.role.toLowerCase();
+    }
     next();
   } catch {
     return res.status(401).json({ message: 'Invalid token' });
@@ -345,14 +349,16 @@ function authRequired(req, res, next) {
 }
 
 function adminOnly(req, res, next) {
-  if (!['admin','superadmin'].includes(req.user.role)) {
+  const r = String(req.user?.role || '').toLowerCase();
+  if (!['admin','superadmin'].includes(r)) {
     return res.status(403).json({ message: 'Admins only' });
   }
   next();
 }
 
 function superadminOnly(req, res, next) {
-  if (req.user.role !== 'superadmin') {
+  const r = String(req.user?.role || '').toLowerCase();
+  if (r !== 'superadmin') {
     return res.status(403).json({ message: 'Superadmins only' });
   }
   next();
@@ -360,7 +366,8 @@ function superadminOnly(req, res, next) {
 
 // --- Helpers
 function isAdmin(user) {
-  return user && (user.role === 'admin' || user.role === 'superadmin');
+  const r = String(user?.role || '').toLowerCase();
+  return r === 'admin' || r === 'superadmin';
 }
 
 // --- Auth Routes
