@@ -1303,7 +1303,12 @@
   <footer id="footer"></footer>
 
   <script>
-    const defaultApiOrigin = 'https://www.tttcvolunteermanagementapp.com';
+    // Default to same-origin API to avoid www/non-www + mobile Safari quirks.
+    // Can still be overridden via API_BASE_OVERRIDE or localStorage 'apiBaseOverride'.
+    const defaultApiOrigin =
+      (typeof window !== 'undefined' && window.location && window.location.origin)
+        ? window.location.origin
+        : 'https://www.tttcvolunteermanagementapp.com';
     const apiOverride =
       (typeof window !== 'undefined' && window.API_BASE_OVERRIDE) ||
       (typeof localStorage !== 'undefined' && localStorage.getItem('apiBaseOverride')) ||
@@ -4133,7 +4138,23 @@
           if (dutiesWrap) dutiesWrap.classList.add('hidden');
         }
         const res = await authed(path); // backend should return duties user can see
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          showActionStatus(data.message || 'Failed to load duties', true);
+          const editSel = document.getElementById('dutyEditSelect');
+          if (editSel) {
+            editSel.innerHTML = '<option value="">— Unable to load duties —</option>';
+            editSel.disabled = true;
+          }
+          const tbody = document.getElementById('dutyList');
+          if (tbody) tbody.innerHTML = '';
+          return;
+        }
         const duties = await res.json();
+        if (!Array.isArray(duties)) {
+          showActionStatus('Failed to load duties', true);
+          return;
+        }
         // Build a duty map for later event-based filtering in time-tracking
         try {
           window.dutyById = {};
