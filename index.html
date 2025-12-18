@@ -570,7 +570,7 @@
       </div>
 
       <h3>All Time Logs (Scoped to Org)</h3>
-      <table>
+      <table class="stacked-table">
         <thead>
           <tr>
             <th>ID</th>
@@ -606,7 +606,7 @@
           <div id="superDownloadCsvError" class="error"></div>
         </div>
       </div>
-      <table>
+      <table class="stacked-table">
         <thead>
           <tr>
             <th>ID</th>
@@ -5504,18 +5504,18 @@
           ? '<span>Approved</span>'
           : `<button type="button" class="approve-btn" onclick="approve(${r.id})">Approve</button>`;
         tr.innerHTML =
-          `<td>${r.id}</td>
-           <td>${volunteerLabel}</td>
-           <td>${assignment.eventLabel || '-'}</td>
-           <td>${assignment.dutyLabel || '-'}</td>
-           <td><input type="datetime-local" id="start-${r.id}" value="${formatDateTimeLocal(r.start_time, tz)}"></td>
-           <td><input type="datetime-local" id="end-${r.id}" value="${formatDateTimeLocal(r.end_time, tz)}"></td>
-           <td>${hours}</td>
-           <td><input type="date" id="date-${r.id}" value="${formatDateLocal(r.duty_date)}"></td>
-           <td>${statusLabel}</td>
-           <td>${approveCell}</td>
-           <td><button onclick="saveTime(${r.id})">Save</button></td>
-           <td><button onclick="deleteTime(${r.id})">Delete</button></td>`;
+          `<td data-label="ID">${r.id}</td>
+           <td data-label="Volunteer">${volunteerLabel}</td>
+           <td data-label="Event">${assignment.eventLabel || '-'}</td>
+           <td data-label="Duty">${assignment.dutyLabel || '-'}</td>
+           <td data-label="Start"><input type="datetime-local" id="start-${r.id}" value="${formatDateTimeLocal(r.start_time, tz)}"></td>
+           <td data-label="End"><input type="datetime-local" id="end-${r.id}" value="${formatDateTimeLocal(r.end_time, tz)}"></td>
+           <td data-label="Hours">${hours}</td>
+           <td data-label="Date"><input type="date" id="date-${r.id}" value="${formatDateLocal(r.duty_date)}"></td>
+           <td data-label="Status">${statusLabel}</td>
+           <td data-label="Approve">${approveCell}</td>
+           <td data-label="Edit"><button onclick="saveTime(${r.id})">Save</button></td>
+           <td data-label="Delete"><button onclick="deleteTime(${r.id})">Delete</button></td>`;
         tbody.appendChild(tr);
       });
     }
