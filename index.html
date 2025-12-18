@@ -1614,9 +1614,26 @@
       return { dutyLabel, eventLabel };
     }
 
+    function isSmallTouchDevice() {
+      try {
+        const small = window.matchMedia && window.matchMedia('(max-width: 640px)').matches;
+        const touch = (navigator && typeof navigator.maxTouchPoints === 'number' && navigator.maxTouchPoints > 0);
+        const ua = (navigator && navigator.userAgent) ? navigator.userAgent : '';
+        const looksMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(ua);
+        return Boolean(small && (touch || looksMobile));
+      } catch {
+        return false;
+      }
+    }
+
     function getSelectedAdminVolunteerIds() {
       const sel = document.getElementById('adminTimeVolunteerSelect');
       if (!sel || sel.disabled) return [];
+      // Mobile Safari doesn't handle multi-select well; treat as single-select when not multiple
+      if (!sel.multiple) {
+        const val = Number(sel.value);
+        return Number.isFinite(val) ? [val] : [];
+      }
       return Array.from(sel.selectedOptions || [])
         .map(opt => Number(opt.value))
         .filter(id => Number.isFinite(id));
@@ -1648,10 +1665,14 @@
         return;
       }
       const previousSelection = new Set(getSelectedAdminVolunteerIds().map(id => String(id)));
+      // On mobile, use single-select (multi-select is not usable on iOS)
+      const mobileSingle = isSmallTouchDevice();
+      sel.multiple = !mobileSingle;
+      try { sel.size = mobileSingle ? 1 : 6; } catch { /* ignore */ }
       sel.disabled = true;
       sel.innerHTML = '<option value="">Loading volunteers…</option>';
       const volunteers = await fetchVolunteers(targetGroupId);
-      sel.innerHTML = '';
+      sel.innerHTML = mobileSingle ? '<option value="">— Select volunteer —</option>' : '';
       if (!volunteers || volunteers.length === 0) {
         sel.innerHTML = '<option value="">No volunteers found.</option>';
         sel.disabled = true;
@@ -1674,7 +1695,11 @@
         });
         sel._wired = true;
       }
-      if (hint) hint.textContent = 'Hold Cmd/Ctrl (or Shift) to select multiple volunteers.';
+      if (hint) {
+        hint.textContent = mobileSingle
+          ? 'Select a volunteer to view logs.'
+          : 'Hold Cmd/Ctrl (or Shift) to select multiple volunteers.';
+      }
       await fetchAdminTimes();
     }
 
