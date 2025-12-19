@@ -5591,12 +5591,30 @@
     async function fetchApprovals() {
       if (role !== 'admin' && role !== 'superadmin') return;
       try {
-        const res = await authed('/time-tracking');
-        const rows = await res.json();
         const tbody = document.getElementById('approvalList');
         if (!tbody) return;
         tbody.innerHTML = '';
-        rows.filter(r => !r.approved).forEach(r => {
+        // Only show approvals for the volunteers currently selected to review
+        const selectedIds = (role === 'superadmin') ? getSelectedSuperVolunteerIds() : getSelectedAdminVolunteerIds();
+        if (!selectedIds || selectedIds.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="6" class="hint">Select volunteer(s) above to view pending approvals.</td></tr>`;
+          return;
+        }
+        const rows = [];
+        for (const volunteerId of selectedIds) {
+          try {
+            const res = await authed(`/time-tracking?volunteer_id=${encodeURIComponent(volunteerId)}`);
+            if (!res.ok) continue;
+            const data = await res.json();
+            if (Array.isArray(data)) rows.push(...data);
+          } catch { /* ignore */ }
+        }
+        const pending = rows.filter(r => !r.approved);
+        if (!pending.length) {
+          tbody.innerHTML = `<tr><td colspan="6" class="hint">No pending approvals for the selected volunteer(s).</td></tr>`;
+          return;
+        }
+        pending.forEach(r => {
           const tr = document.createElement('tr');
           const hours = (r.duration_hours != null ? Number(r.duration_hours).toFixed(2) : '');
           const volunteerLabel = formatVolunteerLabel(r);
