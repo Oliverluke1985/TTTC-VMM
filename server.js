@@ -1676,15 +1676,47 @@ app.post('/duties/:id/time/start', authRequired, async (req, res) => {
     await ensureTimeTrackingEventColumn();
     const dutyId = Number(req.params.id);
     if (!Number.isFinite(dutyId)) return res.status(400).json({ message: 'Invalid duty id' });
-    const dutyRes = await pool.query('SELECT max_volunteers, event_id, COALESCE(is_closed,false) AS is_closed FROM duties WHERE id=$1 AND archived_at IS NULL', [dutyId]);
+    const dutyRes = await pool.query(
+      'SELECT max_volunteers, event_id, group_id, COALESCE(is_closed,false) AS is_closed FROM duties WHERE id=$1 AND archived_at IS NULL',
+      [dutyId]
+    );
     if (dutyRes.rowCount === 0) return res.status(404).json({ message: 'Duty not found' });
     const maxVol = dutyRes.rows[0].max_volunteers;
     const dutyEventId = dutyRes.rows[0].event_id || null;
+    const dutyGroupId = dutyRes.rows[0].group_id || null;
     const isClosed = !!dutyRes.rows[0].is_closed;
-    if (String(req.user.role || '').toLowerCase() === 'volunteer' && isClosed) {
+
+    // Allow admins/superadmins to clock in on behalf of a volunteer
+    let targetVolunteerId = req.user.id;
+    const requestedVolunteerId = req.body?.volunteer_id;
+    if (isAdmin(req.user) && requestedVolunteerId != null && requestedVolunteerId !== '') {
+      const vid = Number(requestedVolunteerId);
+      if (!Number.isFinite(vid)) return res.status(400).json({ message: 'Invalid volunteer_id' });
+      const vRes = await pool.query('SELECT id, role, group_id FROM users WHERE id=$1', [vid]);
+      if (vRes.rowCount === 0 || String(vRes.rows[0].role || '').toLowerCase() !== 'volunteer') {
+        return res.status(404).json({ message: 'Volunteer not found' });
+      }
+      const vGroup = vRes.rows[0].group_id || null;
+      if (String(req.user.role || '').toLowerCase() === 'admin') {
+        if (req.user.group_id == null || dutyGroupId == null || String(req.user.group_id) !== String(dutyGroupId)) {
+          return res.status(403).json({ message: 'Admins can only clock volunteers into duties in their organization.' });
+        }
+        if (vGroup == null || String(vGroup) !== String(req.user.group_id)) {
+          return res.status(403).json({ message: 'Admins can only clock volunteers in their organization.' });
+        }
+      } else if (String(req.user.role || '').toLowerCase() === 'superadmin') {
+        if (dutyGroupId != null && vGroup != null && String(dutyGroupId) !== String(vGroup)) {
+          return res.status(400).json({ message: 'Volunteer must belong to the same organization as the duty.' });
+        }
+      }
+      targetVolunteerId = vid;
+    }
+
+    // Closed duty restriction applies to volunteers being clocked in (including admin clock-in on behalf)
+    if (isClosed) {
       const assigned = await pool.query(
         'SELECT 1 FROM duty_assignments WHERE duty_id=$1 AND volunteer_id=$2',
-        [dutyId, req.user.id]
+        [dutyId, targetVolunteerId]
       );
       if (assigned.rowCount === 0) {
         return res.status(403).json({ message: 'This duty is closed and can only be worked by an assigned volunteer.' });
@@ -1700,7 +1732,7 @@ app.post('/duties/:id/time/start', authRequired, async (req, res) => {
     const { duty_date } = req.body;
     const result = await pool.query(
       'INSERT INTO time_tracking (volunteer_id,duty_id,event_id,start_time,duty_date) VALUES ($1,$2,$3,NOW(),$4) RETURNING id',
-      [req.user.id, dutyId, dutyEventId, duty_date]
+      [targetVolunteerId, dutyId, dutyEventId, duty_date]
     );
     res.json({ id: result.rows[0].id });
   } catch (err) {
@@ -1712,13 +1744,41 @@ app.post('/duties/:id/time/end', authRequired, async (req, res) => {
   try {
     await ensureDurationHoursColumn();
     await ensureTimeTrackingConstraints();
+    // Allow admins/superadmins to clock out on behalf of a volunteer
+    let targetVolunteerId = req.user.id;
+    const requestedVolunteerId = req.body?.volunteer_id;
+    if (isAdmin(req.user) && requestedVolunteerId != null && requestedVolunteerId !== '') {
+      const vid = Number(requestedVolunteerId);
+      if (!Number.isFinite(vid)) return res.status(400).json({ message: 'Invalid volunteer_id' });
+      const dutyRes = await pool.query('SELECT group_id FROM duties WHERE id=$1 AND archived_at IS NULL', [Number(req.params.id)]);
+      if (dutyRes.rowCount === 0) return res.status(404).json({ message: 'Duty not found' });
+      const dutyGroupId = dutyRes.rows[0].group_id || null;
+      const vRes = await pool.query('SELECT id, role, group_id FROM users WHERE id=$1', [vid]);
+      if (vRes.rowCount === 0 || String(vRes.rows[0].role || '').toLowerCase() !== 'volunteer') {
+        return res.status(404).json({ message: 'Volunteer not found' });
+      }
+      const vGroup = vRes.rows[0].group_id || null;
+      if (String(req.user.role || '').toLowerCase() === 'admin') {
+        if (req.user.group_id == null || dutyGroupId == null || String(req.user.group_id) !== String(dutyGroupId)) {
+          return res.status(403).json({ message: 'Admins can only clock volunteers out of duties in their organization.' });
+        }
+        if (vGroup == null || String(vGroup) !== String(req.user.group_id)) {
+          return res.status(403).json({ message: 'Admins can only clock volunteers in their organization.' });
+        }
+      } else if (String(req.user.role || '').toLowerCase() === 'superadmin') {
+        if (dutyGroupId != null && vGroup != null && String(dutyGroupId) !== String(vGroup)) {
+          return res.status(400).json({ message: 'Volunteer must belong to the same organization as the duty.' });
+        }
+      }
+      targetVolunteerId = vid;
+    }
     const result = await pool.query(
       `UPDATE time_tracking
        SET end_time=NOW(),
            duration_hours=EXTRACT(EPOCH FROM (NOW()-start_time))/3600
        WHERE volunteer_id=$1 AND duty_id=$2 AND end_time IS NULL
        RETURNING id`,
-      [req.user.id, req.params.id]
+      [targetVolunteerId, req.params.id]
     );
     if (result.rowCount === 0) return res.status(400).json({ message: 'No active clock-in' });
     res.json({ id: result.rows[0].id });
