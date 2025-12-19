@@ -1270,13 +1270,11 @@
         <select id="vmDuty"><option value="">— Select duty —</option></select>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
           <button id="vmAssignBtn" type="button">Assign Volunteer to Duty</button>
-          <button id="vmAdminClockInBtn" type="button" class="ghost-btn">Admin Clock In</button>
-          <button id="vmAdminClockOutBtn" type="button" class="ghost-btn">Admin Clock Out</button>
         </div>
         <div id="vmAssignStatus" class="ok hidden" style="margin-top:6px"></div>
         <div id="vmAssignErr" class="error"></div>
         <div class="hint" style="margin-top:10px">
-          Assign the volunteer to the duty here. Admins can also clock volunteers in/out if needed.
+          Assign the volunteer to the duty here.
         </div>
       </div>
     </div>
@@ -6623,89 +6621,6 @@
             }
           });
           assignBtn._wired = true;
-        }
-        const clockInBtn = document.getElementById('vmAdminClockInBtn');
-        if (clockInBtn && !clockInBtn._wired) {
-          clockInBtn.addEventListener('click', async () => {
-            const errEl = document.getElementById('vmAssignErr');
-            const statusEl = document.getElementById('vmAssignStatus');
-            if (errEl) errEl.textContent = '';
-            if (statusEl) { statusEl.textContent = ''; statusEl.classList.add('hidden'); }
-            const volunteer_id = Number(document.getElementById('vmVolunteer')?.value);
-            const duty_id = Number(document.getElementById('vmDuty')?.value);
-            if (!volunteer_id || !duty_id) {
-              if (errEl) errEl.textContent = 'Volunteer and duty are required.';
-              return;
-            }
-            // Default duty_date to today's date; helps calendar views show it without extra input.
-            const duty_date = new Date().toISOString().slice(0, 10);
-            try {
-              const res = await authed(`/duties/${duty_id}/time/start`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ volunteer_id, duty_date })
-              });
-              const data = await res.json().catch(() => ({}));
-              if (!res.ok) {
-                if (errEl) errEl.textContent = data.message || 'Failed to clock in';
-                return;
-              }
-              if (statusEl) {
-                statusEl.textContent = 'Volunteer clocked in.';
-                statusEl.classList.remove('hidden');
-              }
-              await refreshVolunteerLogs();
-              await fetchAdminTimes();
-              await refreshClockAdminTimes();
-              await fetchTimeTracking();
-              invalidateCalendarSchedule(duty_date, { refresh: true });
-              await refreshCalendarIfVisible();
-            } catch {
-              if (errEl) errEl.textContent = 'Error clocking in';
-            }
-          });
-          clockInBtn._wired = true;
-        }
-        const clockOutBtn = document.getElementById('vmAdminClockOutBtn');
-        if (clockOutBtn && !clockOutBtn._wired) {
-          clockOutBtn.addEventListener('click', async () => {
-            const errEl = document.getElementById('vmAssignErr');
-            const statusEl = document.getElementById('vmAssignStatus');
-            if (errEl) errEl.textContent = '';
-            if (statusEl) { statusEl.textContent = ''; statusEl.classList.add('hidden'); }
-            const volunteer_id = Number(document.getElementById('vmVolunteer')?.value);
-            const duty_id = Number(document.getElementById('vmDuty')?.value);
-            if (!volunteer_id || !duty_id) {
-              if (errEl) errEl.textContent = 'Volunteer and duty are required.';
-              return;
-            }
-            const duty_date = new Date().toISOString().slice(0, 10);
-            try {
-              const res = await authed(`/duties/${duty_id}/time/end`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ volunteer_id })
-              });
-              const data = await res.json().catch(() => ({}));
-              if (!res.ok) {
-                if (errEl) errEl.textContent = data.message || 'Failed to clock out';
-                return;
-              }
-              if (statusEl) {
-                statusEl.textContent = 'Volunteer clocked out.';
-                statusEl.classList.remove('hidden');
-              }
-              await refreshVolunteerLogs();
-              await fetchAdminTimes();
-              await refreshClockAdminTimes();
-              await fetchTimeTracking();
-              invalidateCalendarSchedule(duty_date, { refresh: true });
-              await refreshCalendarIfVisible();
-            } catch {
-              if (errEl) errEl.textContent = 'Error clocking out';
-            }
-          });
-          clockOutBtn._wired = true;
         }
         const saveUserBtn = document.getElementById('vmSaveUserBtn');
         if (saveUserBtn && !saveUserBtn._wired) {
