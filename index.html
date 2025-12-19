@@ -522,6 +522,28 @@
       </div>
       <div class="row">
         <div class="col">
+          <label>Event</label>
+          <select id="clockAdminEvent"><option value="">— Select event —</option></select>
+        </div>
+        <div class="col">
+          <label>Duty</label>
+          <select id="clockAdminDuty" disabled><option value="">— Select duty —</option></select>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col">
+          <label>Duty Date</label>
+          <input id="clockAdminDutyDate" type="date" />
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+            <button id="clockAdminClockInBtn" type="button">Admin Clock In</button>
+            <button id="clockAdminClockOutBtn" type="button" class="ghost-btn">Admin Clock Out</button>
+          </div>
+          <div id="clockAdminClockStatus" class="ok hidden" style="margin-top:6px"></div>
+          <div id="clockAdminClockErr" class="error"></div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col">
           <h3>Volunteer Timesheet</h3>
           <table class="stacked-table">
             <thead>
@@ -3900,22 +3922,95 @@
         if (!sel._wired) {
           sel.addEventListener('change', async () => {
             await populateClockAdminVolunteersByOrg(sel.value || '');
+            await populateClockAdminEventsByOrg(sel.value || '');
           });
           sel._wired = true;
         }
         if (sel.value) {
           await populateClockAdminVolunteersByOrg(sel.value);
+          await populateClockAdminEventsByOrg(sel.value);
         } else {
           const volunteerSel = document.getElementById('clockAdminVolunteer');
           if (volunteerSel) {
             volunteerSel.innerHTML = '<option value="">— Select organization first —</option>';
             volunteerSel.disabled = true;
           }
+          const eventSel = document.getElementById('clockAdminEvent');
+          if (eventSel) { eventSel.innerHTML = '<option value="">— Select organization first —</option>'; eventSel.disabled = true; }
+          const dutySel = document.getElementById('clockAdminDuty');
+          if (dutySel) { dutySel.innerHTML = '<option value="">— Select duty —</option>'; dutySel.disabled = true; }
           const tbody = document.getElementById('clockAdminTimeList');
           if (tbody) tbody.innerHTML = '';
           const empty = document.getElementById('clockAdminEmpty');
           if (empty) empty.textContent = 'Select an organization to manage volunteer time logs.';
         }
+      } catch { /* silent */ }
+    }
+
+    async function populateClockAdminEventsByOrg(gid) {
+      try {
+        const sel = document.getElementById('clockAdminEvent');
+        const dutySel = document.getElementById('clockAdminDuty');
+        if (!sel) return;
+        const current = sel.value;
+        sel.innerHTML = '<option value="">— Select event —</option>';
+        sel.disabled = !gid;
+        if (dutySel) { dutySel.innerHTML = '<option value="">— Select duty —</option>'; dutySel.disabled = true; }
+        if (!gid) return;
+        const res = await authed(`/events?group_id=${encodeURIComponent(gid)}`);
+        if (!res.ok) return;
+        const events = await res.json();
+        events.forEach(e => {
+          const opt = document.createElement('option');
+          opt.value = e.id;
+          const d = e.start_date ? (e.end_date ? `${e.start_date} – ${e.end_date}` : `${e.start_date}`) : (e.event_date || '');
+          opt.textContent = `${e.title}${d ? ' — ' + d : ''}`;
+          sel.appendChild(opt);
+        });
+        if (current) sel.value = current;
+        if (!sel._wired) {
+          sel.addEventListener('change', async () => {
+            const gidResolved =
+              (role === 'superadmin')
+                ? (document.getElementById('clockAdminOrgPicker')?.value || '')
+                : (groupId != null ? String(groupId) : '');
+            await populateClockAdminDutiesByOrgAndEvent(gidResolved, sel.value || null);
+          });
+          sel._wired = true;
+        }
+        // Initial duties load for current selection
+        const gidResolved =
+          (role === 'superadmin')
+            ? (document.getElementById('clockAdminOrgPicker')?.value || '')
+            : (groupId != null ? String(groupId) : '');
+        await populateClockAdminDutiesByOrgAndEvent(gidResolved, sel.value || null);
+      } catch { /* silent */ }
+    }
+
+    async function populateClockAdminDutiesByOrgAndEvent(gid, eventId) {
+      try {
+        const sel = document.getElementById('clockAdminDuty');
+        if (!sel) return;
+        const current = sel.value;
+        sel.innerHTML = '<option value="">— Select duty —</option>';
+        sel.disabled = !gid ? true : false;
+        if (!gid) return;
+        const params = new URLSearchParams();
+        params.set('group_id', String(gid));
+        if (eventId) params.set('event_id', String(eventId));
+        let duties = [];
+        try {
+          const res = await authed(`/duties?${params.toString()}`);
+          if (res.ok) duties = await res.json();
+        } catch { /* ignore */ }
+        duties.forEach(d => {
+          const opt = document.createElement('option');
+          opt.value = d.id;
+          opt.textContent = `${d.id} — ${d.title}`;
+          sel.appendChild(opt);
+        });
+        sel.disabled = false;
+        if (current && sel.querySelector(`option[value="${current}"]`)) sel.value = current;
       } catch { /* silent */ }
     }
     async function populateClockAdminVolunteersByOrg(orgId) {
@@ -4032,6 +4127,86 @@
           });
         });
       } catch { /* silent */ }
+    }
+
+    // Admin clock-in/out controls (Time Clock page)
+    function wireClockAdminClockButtonsOnce() {
+      const inBtn = document.getElementById('clockAdminClockInBtn');
+      const outBtn = document.getElementById('clockAdminClockOutBtn');
+      if (inBtn && !inBtn._wired) {
+        inBtn.addEventListener('click', async () => {
+          const errEl = document.getElementById('clockAdminClockErr');
+          const okEl = document.getElementById('clockAdminClockStatus');
+          if (errEl) errEl.textContent = '';
+          if (okEl) { okEl.textContent = ''; okEl.classList.add('hidden'); }
+          const volunteer_id = Number(document.getElementById('clockAdminVolunteer')?.value);
+          const duty_id = Number(document.getElementById('clockAdminDuty')?.value);
+          const dateVal = document.getElementById('clockAdminDutyDate')?.value || '';
+          const duty_date = dateVal || new Date().toISOString().slice(0, 10);
+          if (!volunteer_id || !duty_id) {
+            if (errEl) errEl.textContent = 'Volunteer and duty are required.';
+            return;
+          }
+          try {
+            const res = await authed(`/duties/${duty_id}/time/start`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ volunteer_id, duty_date })
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+              if (errEl) errEl.textContent = data.message || 'Failed to clock in';
+              return;
+            }
+            if (okEl) { okEl.textContent = 'Volunteer clocked in.'; okEl.classList.remove('hidden'); }
+            await refreshClockAdminTimes();
+            await fetchAdminTimes();
+            await fetchTimeTracking();
+            invalidateCalendarSchedule(duty_date, { refresh: true });
+            await refreshCalendarIfVisible();
+          } catch {
+            if (errEl) errEl.textContent = 'Error clocking in';
+          }
+        });
+        inBtn._wired = true;
+      }
+      if (outBtn && !outBtn._wired) {
+        outBtn.addEventListener('click', async () => {
+          const errEl = document.getElementById('clockAdminClockErr');
+          const okEl = document.getElementById('clockAdminClockStatus');
+          if (errEl) errEl.textContent = '';
+          if (okEl) { okEl.textContent = ''; okEl.classList.add('hidden'); }
+          const volunteer_id = Number(document.getElementById('clockAdminVolunteer')?.value);
+          const duty_id = Number(document.getElementById('clockAdminDuty')?.value);
+          const dateVal = document.getElementById('clockAdminDutyDate')?.value || '';
+          const duty_date = dateVal || new Date().toISOString().slice(0, 10);
+          if (!volunteer_id || !duty_id) {
+            if (errEl) errEl.textContent = 'Volunteer and duty are required.';
+            return;
+          }
+          try {
+            const res = await authed(`/duties/${duty_id}/time/end`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ volunteer_id })
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+              if (errEl) errEl.textContent = data.message || 'Failed to clock out';
+              return;
+            }
+            if (okEl) { okEl.textContent = 'Volunteer clocked out.'; okEl.classList.remove('hidden'); }
+            await refreshClockAdminTimes();
+            await fetchAdminTimes();
+            await fetchTimeTracking();
+            invalidateCalendarSchedule(duty_date, { refresh: true });
+            await refreshCalendarIfVisible();
+          } catch {
+            if (errEl) errEl.textContent = 'Error clocking out';
+          }
+        });
+        outBtn._wired = true;
+      }
     }
     // Populate VM Event select strictly by organization
     async function populateVmEventsByOrg(gid) {
@@ -6244,7 +6419,14 @@
             await populateClockAdminOrgPicker();
           } else {
             await populateClockAdminVolunteersByOrg(groupId != null ? String(groupId) : '');
+            await populateClockAdminEventsByOrg(groupId != null ? String(groupId) : '');
           }
+          // Ensure admin clock-in/out controls are wired and date defaults
+          try {
+            const dateInput = document.getElementById('clockAdminDutyDate');
+            if (dateInput && !dateInput.value) dateInput.value = new Date().toISOString().slice(0, 10);
+          } catch { /* ignore */ }
+          try { wireClockAdminClockButtonsOnce(); } catch { /* ignore */ }
           await populateAdminTimeVolunteerSelect();
           await populateSuperTimeVolunteerSelect();
           await fetchApprovals();
