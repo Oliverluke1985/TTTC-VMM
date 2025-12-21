@@ -753,11 +753,11 @@
         <label>End Date</label><input id="editEventEnd" type="date" />
         <label>Start Date Time</label><input id="editEventStartTime" type="time" />
         <label>End Date Time</label><input id="editEventEndTime" type="time" />
-        <h4 style="margin-top:14px">Showtimes</h4>
+        <h4 style="margin-top:14px">Performances / Shows</h4>
         <div id="eventShowsPanel" style="border:1px solid var(--accent3);border-radius:10px;padding:10px;background:rgba(0,0,0,0.18)">
           <div class="row" style="gap:10px">
             <div class="col">
-              <label>Show Date</label><input id="newShowDate" type="date" />
+              <label>Performance / Show Date</label><input id="newShowDate" type="date" />
             </div>
             <div class="col">
               <label>Start Time</label><input id="newShowStart" type="time" />
@@ -766,12 +766,12 @@
               <label>End Time</label><input id="newShowEnd" type="time" />
             </div>
           </div>
-          <label>Notes (optional)</label><input id="newShowNotes" type="text" placeholder="matinee, understudy, etc" />
-          <button id="addShowBtn" type="button">Add Showtime</button>
+          <label>Label / Notes (optional)</label><input id="newShowNotes" type="text" placeholder="matinee, DJ set, stage name, etc" />
+          <button id="addShowBtn" type="button">Add Performance / Show</button>
           <div id="showtimeStatus" class="error"></div>
           <table class="stacked-table" style="margin-top:10px">
             <thead>
-              <tr><th>Date</th><th>Start</th><th>End</th><th>Notes</th><th>Save</th><th>Delete</th></tr>
+              <tr><th>Date</th><th>Start</th><th>End</th><th>Label/Notes</th><th>Save</th><th>Delete</th></tr>
             </thead>
             <tbody id="showtimeList"></tbody>
           </table>
@@ -891,8 +891,8 @@
         <select id="dutyGroup"><option value="">— Select group —</option></select>
         <label>Event</label>
         <select id="dutyEvent"><option value="">— Select event —</option></select>
-        <label>Showtime (optional)</label>
-        <select id="dutyShow" disabled><option value="">— Select showtime —</option></select>
+        <label>Performance / Show (optional)</label>
+        <select id="dutyShow" disabled><option value="">— Select performance/show —</option></select>
         <label>Status</label>
         <select id="dutyStatus">
           <option value="open">open</option>
@@ -984,8 +984,8 @@
         <label>Description</label><input id="editDutyDesc" type="text" />
         <label>Event</label>
         <select id="editDutyEvent"><option value="">— Select event —</option></select>
-        <label>Showtime (optional)</label>
-        <select id="editDutyShow" disabled><option value="">— Select showtime —</option></select>
+        <label>Performance / Show (optional)</label>
+        <select id="editDutyShow" disabled><option value="">— Select performance/show —</option></select>
         <label>Access</label>
         <select id="editDutyAccess">
           <option value="open">open</option>
@@ -3874,20 +3874,20 @@
       const status = document.getElementById('showtimeStatus');
       if (status) status.textContent = '';
       if (!tbody) return;
-      tbody.innerHTML = `<tr><td colspan="6" class="hint">Loading showtimes…</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6" class="hint">Loading performances/shows…</td></tr>`;
       try {
         const res = await authed(`/events/${eventId}/shows`);
         if (!res.ok) {
           const d = await res.json().catch(() => ({}));
-          tbody.innerHTML = `<tr><td colspan="6" class="hint">No showtimes.</td></tr>`;
-          if (status) status.textContent = d.message || 'Failed to load showtimes';
+          tbody.innerHTML = `<tr><td colspan="6" class="hint">No performances/shows.</td></tr>`;
+          if (status) status.textContent = d.message || 'Failed to load performances/shows';
           return;
         }
         const shows = await res.json().catch(() => ([]));
         renderEventShowtimes(eventId, Array.isArray(shows) ? shows : []);
       } catch {
-        tbody.innerHTML = `<tr><td colspan="6" class="hint">No showtimes.</td></tr>`;
-        if (status) status.textContent = 'Error loading showtimes';
+        tbody.innerHTML = `<tr><td colspan="6" class="hint">No performances/shows.</td></tr>`;
+        if (status) status.textContent = 'Error loading performances/shows';
       }
     }
 
@@ -3896,7 +3896,7 @@
       if (!tbody) return;
       tbody.innerHTML = '';
       if (!shows.length) {
-        tbody.innerHTML = `<tr><td colspan="6" class="hint">No showtimes yet.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="hint">No performances/shows yet.</td></tr>`;
         return;
       }
       shows.forEach(s => {
@@ -3908,7 +3908,7 @@
           `<td data-label="Date"><input type="date" value="${dateVal}" data-sid="${s.id}" class="showDate"></td>
            <td data-label="Start"><input type="time" value="${startVal}" data-sid="${s.id}" class="showStart"></td>
            <td data-label="End"><input type="time" value="${endVal}" data-sid="${s.id}" class="showEnd"></td>
-           <td data-label="Notes"><input type="text" value="${(s.notes || '').replace(/\"/g,'&quot;')}" data-sid="${s.id}" class="showNotes"></td>
+           <td data-label="Label/Notes"><input type="text" value="${(s.notes || '').replace(/\"/g,'&quot;')}" data-sid="${s.id}" class="showNotes"></td>
            <td data-label="Save"><button type="button" class="showSaveBtn" data-sid="${s.id}">Save</button></td>
            <td data-label="Delete"><button type="button" class="showDeleteBtn" data-sid="${s.id}" style="color:#b00020">Delete</button></td>`;
         tbody.appendChild(tr);
@@ -3929,24 +3929,24 @@
             body: JSON.stringify({ show_date, start_time, end_time, notes: notes || null })
           });
           const d = await res.json().catch(() => ({}));
-          if (!res.ok) { if (status) status.textContent = d.message || 'Failed to save showtime'; return; }
+          if (!res.ok) { if (status) status.textContent = d.message || 'Failed to save performance/show'; return; }
           await loadEventShowtimes(eventId);
         } catch {
-          if (status) status.textContent = 'Error saving showtime';
+          if (status) status.textContent = 'Error saving performance/show';
         }
       }));
       tbody.querySelectorAll('.showDeleteBtn').forEach(btn => btn.addEventListener('click', async (ev) => {
         const sid = Number(ev.currentTarget.getAttribute('data-sid'));
         const status = document.getElementById('showtimeStatus');
         if (status) status.textContent = '';
-        if (!confirm('Delete this showtime?')) return;
+        if (!confirm('Delete this performance/show?')) return;
         try {
           const res = await authed(`/events/${eventId}/shows/${sid}`, { method: 'DELETE' });
           const d = await res.json().catch(() => ({}));
-          if (!res.ok) { if (status) status.textContent = d.message || 'Failed to delete showtime'; return; }
+          if (!res.ok) { if (status) status.textContent = d.message || 'Failed to delete performance/show'; return; }
           await loadEventShowtimes(eventId);
         } catch {
-          if (status) status.textContent = 'Error deleting showtime';
+          if (status) status.textContent = 'Error deleting performance/show';
         }
       }));
     }
@@ -3962,15 +3962,15 @@
         const clear = (sel) => { if (sel) sel.innerHTML = '<option value="">— Select event —</option>'; };
         if (!gid) {
           clear(dutySel); clear(volSel); clear(editSel);
-          if (dutyShowSel) { dutyShowSel.innerHTML = '<option value="">— Select showtime —</option>'; dutyShowSel.disabled = true; }
-          if (editShowSel) { editShowSel.innerHTML = '<option value="">— Select showtime —</option>'; editShowSel.disabled = true; }
+          if (dutyShowSel) { dutyShowSel.innerHTML = '<option value="">— Select performance/show —</option>'; dutyShowSel.disabled = true; }
+          if (editShowSel) { editShowSel.innerHTML = '<option value="">— Select performance/show —</option>'; editShowSel.disabled = true; }
           return;
         }
         const res = await authed(`/events?group_id=${encodeURIComponent(gid)}`);
         if (!res.ok) {
           clear(dutySel); clear(volSel); clear(editSel);
-          if (dutyShowSel) { dutyShowSel.innerHTML = '<option value="">— Select showtime —</option>'; dutyShowSel.disabled = true; }
-          if (editShowSel) { editShowSel.innerHTML = '<option value="">— Select showtime —</option>'; editShowSel.disabled = true; }
+          if (dutyShowSel) { dutyShowSel.innerHTML = '<option value="">— Select performance/show —</option>'; dutyShowSel.disabled = true; }
+          if (editShowSel) { editShowSel.innerHTML = '<option value="">— Select performance/show —</option>'; editShowSel.disabled = true; }
           return;
         }
         const events = await res.json();
@@ -4008,7 +4008,7 @@
     async function populateShowtimeDropdown(eventId, sel, desiredValue = null) {
       try {
         if (!sel) return;
-        sel.innerHTML = '<option value="">— Select showtime —</option>';
+        sel.innerHTML = '<option value="">— Select performance/show —</option>';
         sel.disabled = true;
         if (!eventId) return;
         const res = await authed(`/events/${encodeURIComponent(eventId)}/shows`);
@@ -4020,7 +4020,9 @@
           const d = s.show_date || '';
           const t1 = (s.start_time || '').slice(0, 5);
           const t2 = (s.end_time || '').slice(0, 5);
-          opt.textContent = `${d}${t1 ? ' — ' + t1 : ''}${t2 ? '–' + t2 : ''}`;
+          const notes = (s.notes || '').trim();
+          const label = `${d}${t1 ? ' — ' + t1 : ''}${t2 ? '–' + t2 : ''}`.trim();
+          opt.textContent = notes ? `${label} (${notes})` : label;
           sel.appendChild(opt);
         });
         sel.disabled = false;
@@ -4538,7 +4540,7 @@
       const start_time = document.getElementById('newShowStart')?.value || '';
       const end_time = document.getElementById('newShowEnd')?.value || '';
       const notes = document.getElementById('newShowNotes')?.value || '';
-      if (!show_date || !start_time || !end_time) { if (status) status.textContent = 'Show date, start time, and end time are required.'; return; }
+      if (!show_date || !start_time || !end_time) { if (status) status.textContent = 'Date, start time, and end time are required.'; return; }
       try {
         const res = await authed(`/events/${eventId}/shows`, {
           method: 'POST',
@@ -4546,7 +4548,7 @@
           body: JSON.stringify({ show_date, start_time, end_time, notes: notes || null })
         });
         const d = await res.json().catch(() => ({}));
-        if (!res.ok) { if (status) status.textContent = d.message || 'Failed to add showtime'; return; }
+        if (!res.ok) { if (status) status.textContent = d.message || 'Failed to add performance/show'; return; }
         // clear inputs
         const nd = document.getElementById('newShowDate'); if (nd) nd.value = '';
         const ns = document.getElementById('newShowStart'); if (ns) ns.value = '';
@@ -4554,7 +4556,7 @@
         const nn = document.getElementById('newShowNotes'); if (nn) nn.value = '';
         await loadEventShowtimes(eventId);
       } catch {
-        if (status) status.textContent = 'Error adding showtime';
+        if (status) status.textContent = 'Error adding performance/show';
       }
     });
 
