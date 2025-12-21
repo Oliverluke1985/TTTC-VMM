@@ -155,6 +155,9 @@
     .calendar-schedule-duty { border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; padding: 8px; background: rgba(0,0,0,0.18); }
     .calendar-schedule-duty h4 { margin: 0 0 6px; font-size: 13px; font-weight: 600; }
     .calendar-schedule-duty-location { font-size: 12px; color: var(--accent5); margin-bottom: 6px; }
+    .calendar-showtime-block { border: 1px dashed rgba(255,255,255,0.18); border-radius: 10px; padding: 10px; background: rgba(0,0,0,0.12); }
+    .calendar-showtime-header { font-size: 13px; color: var(--accent2); margin-bottom: 8px; }
+    .calendar-event-duties-block { display: flex; flex-direction: column; gap: 10px; }
     .calendar-schedule-assignment { border-left: 4px solid var(--accent1); padding-left: 6px; margin-bottom: 6px; border-radius: 4px; background: rgba(255,255,255,0.05); }
     .calendar-schedule-assignment:last-child { margin-bottom: 0; }
     .calendar-schedule-assignment-name { font-weight: 600; font-size: 13px; }
@@ -750,6 +753,29 @@
         <label>End Date</label><input id="editEventEnd" type="date" />
         <label>Start Time</label><input id="editEventStartTime" type="time" />
         <label>End Time</label><input id="editEventEndTime" type="time" />
+        <h4 style="margin-top:14px">Showtimes</h4>
+        <div id="eventShowsPanel" style="border:1px solid var(--accent3);border-radius:10px;padding:10px;background:rgba(0,0,0,0.18)">
+          <div class="row" style="gap:10px">
+            <div class="col">
+              <label>Show Date</label><input id="newShowDate" type="date" />
+            </div>
+            <div class="col">
+              <label>Start Time</label><input id="newShowStart" type="time" />
+            </div>
+            <div class="col">
+              <label>End Time</label><input id="newShowEnd" type="time" />
+            </div>
+          </div>
+          <label>Notes (optional)</label><input id="newShowNotes" type="text" placeholder="matinee, understudy, etc" />
+          <button id="addShowBtn" type="button">Add Showtime</button>
+          <div id="showtimeStatus" class="error"></div>
+          <table class="stacked-table" style="margin-top:10px">
+            <thead>
+              <tr><th>Date</th><th>Start</th><th>End</th><th>Notes</th><th>Save</th><th>Delete</th></tr>
+            </thead>
+            <tbody id="showtimeList"></tbody>
+          </table>
+        </div>
         <button id="saveEventBtn">Save Event</button>
         <div id="editEventError" class="error"></div>
       </div>
@@ -865,6 +891,8 @@
         <select id="dutyGroup"><option value="">— Select group —</option></select>
         <label>Event</label>
         <select id="dutyEvent"><option value="">— Select event —</option></select>
+        <label>Showtime (optional)</label>
+        <select id="dutyShow" disabled><option value="">— Select showtime —</option></select>
         <label>Status</label>
         <select id="dutyStatus">
           <option value="open">open</option>
@@ -956,6 +984,8 @@
         <label>Description</label><input id="editDutyDesc" type="text" />
         <label>Event</label>
         <select id="editDutyEvent"><option value="">— Select event —</option></select>
+        <label>Showtime (optional)</label>
+        <select id="editDutyShow" disabled><option value="">— Select showtime —</option></select>
         <label>Access</label>
         <select id="editDutyAccess">
           <option value="open">open</option>
@@ -2037,11 +2067,36 @@
         : null;
       const tz = getGroupTimeZone(eventEntry.group_id);
       const duties = Array.isArray(eventEntry.duties) ? eventEntry.duties : [];
-      const allAssignments = duties.flatMap(d => Array.isArray(d.assignments) ? d.assignments : []);
+      const showtimes = Array.isArray(eventEntry.showtimes) ? eventEntry.showtimes : [];
+      const showDuties = showtimes.flatMap(s => Array.isArray(s.duties) ? s.duties : []);
+      const eventLevelDuties = showtimes.length
+        ? duties.filter(d => !d.show_id)
+        : duties;
+      const allAssignments = [...eventLevelDuties, ...showDuties].flatMap(d => Array.isArray(d.assignments) ? d.assignments : []);
       const totalHours = allAssignments.reduce((sum, a) => sum + (Number(a?.duration_hours) || 0), 0);
-      const dutiesHtml = duties.length
-        ? duties.map(duty => buildScheduleDutyHtml(duty, color, tz)).join('')
-        : '<div class="calendar-day-schedule-empty">No duties scheduled.</div>';
+      const formatShowLabel = (s) => {
+        const t1 = formatTime12((s?.start_time || '').slice(0, 5));
+        const t2 = formatTime12((s?.end_time || '').slice(0, 5));
+        if (t1 && t2) return `${t1} – ${t2}`;
+        if (t1) return t1;
+        return 'Showtime';
+      };
+      const showHtml = showtimes.length
+        ? showtimes.map(s => {
+            const sd = Array.isArray(s.duties) ? s.duties : [];
+            const inner = sd.length
+              ? sd.map(duty => buildScheduleDutyHtml(duty, color, tz)).join('')
+              : '<div class="calendar-day-schedule-empty">No duties for this showtime.</div>';
+            return `<div class="calendar-showtime-block">
+              <div class="calendar-showtime-header"><strong>${formatShowLabel(s)}</strong></div>
+              ${inner}
+            </div>`;
+          }).join('')
+        : '';
+      const eventDutyHtml = eventLevelDuties.length
+        ? eventLevelDuties.map(duty => buildScheduleDutyHtml(duty, color, tz)).join('')
+        : (showtimes.length ? '' : '<div class="calendar-day-schedule-empty">No duties scheduled.</div>');
+      const dutiesHtml = `${showHtml}${eventDutyHtml ? `<div class=\"calendar-event-duties-block\">${eventDutyHtml}</div>` : ''}`.trim();
       const metaLabel = orgName || eventEntry.address || '';
       const metaHtml = metaLabel ? `<span>${metaLabel}</span>` : '';
       const hoursHtml = totalHours > 0 ? `<div class="calendar-schedule-hours">Hours logged: ${totalHours.toFixed(2)}</div>` : '';
@@ -3731,6 +3786,8 @@
             document.getElementById('editEventEnd').value = eventData.end_date || eventData.start_date || eventData.event_date || '';
             document.getElementById('editEventStartTime').value = (eventData.start_time || '').slice(0, 5);
             document.getElementById('editEventEndTime').value = (eventData.end_time || '').slice(0, 5);
+            // Load showtimes for this event
+            loadEventShowtimes(id);
           }));
           tbody.querySelectorAll('.joinBtn').forEach(btn => btn.addEventListener('click', async (ev) => {
             const id = Number(ev.currentTarget.getAttribute('data-eid'));
@@ -3812,16 +3869,110 @@
       } catch (e) { /* silent */ }
     }
 
+    async function loadEventShowtimes(eventId) {
+      const tbody = document.getElementById('showtimeList');
+      const status = document.getElementById('showtimeStatus');
+      if (status) status.textContent = '';
+      if (!tbody) return;
+      tbody.innerHTML = `<tr><td colspan="6" class="hint">Loading showtimes…</td></tr>`;
+      try {
+        const res = await authed(`/events/${eventId}/shows`);
+        if (!res.ok) {
+          const d = await res.json().catch(() => ({}));
+          tbody.innerHTML = `<tr><td colspan="6" class="hint">No showtimes.</td></tr>`;
+          if (status) status.textContent = d.message || 'Failed to load showtimes';
+          return;
+        }
+        const shows = await res.json().catch(() => ([]));
+        renderEventShowtimes(eventId, Array.isArray(shows) ? shows : []);
+      } catch {
+        tbody.innerHTML = `<tr><td colspan="6" class="hint">No showtimes.</td></tr>`;
+        if (status) status.textContent = 'Error loading showtimes';
+      }
+    }
+
+    function renderEventShowtimes(eventId, shows) {
+      const tbody = document.getElementById('showtimeList');
+      if (!tbody) return;
+      tbody.innerHTML = '';
+      if (!shows.length) {
+        tbody.innerHTML = `<tr><td colspan="6" class="hint">No showtimes yet.</td></tr>`;
+        return;
+      }
+      shows.forEach(s => {
+        const tr = document.createElement('tr');
+        const dateVal = s.show_date || '';
+        const startVal = (s.start_time || '').slice(0, 5);
+        const endVal = (s.end_time || '').slice(0, 5);
+        tr.innerHTML =
+          `<td data-label="Date"><input type="date" value="${dateVal}" data-sid="${s.id}" class="showDate"></td>
+           <td data-label="Start"><input type="time" value="${startVal}" data-sid="${s.id}" class="showStart"></td>
+           <td data-label="End"><input type="time" value="${endVal}" data-sid="${s.id}" class="showEnd"></td>
+           <td data-label="Notes"><input type="text" value="${(s.notes || '').replace(/\"/g,'&quot;')}" data-sid="${s.id}" class="showNotes"></td>
+           <td data-label="Save"><button type="button" class="showSaveBtn" data-sid="${s.id}">Save</button></td>
+           <td data-label="Delete"><button type="button" class="showDeleteBtn" data-sid="${s.id}" style="color:#b00020">Delete</button></td>`;
+        tbody.appendChild(tr);
+      });
+      tbody.querySelectorAll('.showSaveBtn').forEach(btn => btn.addEventListener('click', async (ev) => {
+        const sid = Number(ev.currentTarget.getAttribute('data-sid'));
+        const status = document.getElementById('showtimeStatus');
+        if (status) status.textContent = '';
+        const row = ev.currentTarget.closest('tr');
+        const show_date = row?.querySelector('.showDate')?.value || '';
+        const start_time = row?.querySelector('.showStart')?.value || '';
+        const end_time = row?.querySelector('.showEnd')?.value || '';
+        const notes = row?.querySelector('.showNotes')?.value || '';
+        try {
+          const res = await authed(`/events/${eventId}/shows/${sid}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ show_date, start_time, end_time, notes: notes || null })
+          });
+          const d = await res.json().catch(() => ({}));
+          if (!res.ok) { if (status) status.textContent = d.message || 'Failed to save showtime'; return; }
+          await loadEventShowtimes(eventId);
+        } catch {
+          if (status) status.textContent = 'Error saving showtime';
+        }
+      }));
+      tbody.querySelectorAll('.showDeleteBtn').forEach(btn => btn.addEventListener('click', async (ev) => {
+        const sid = Number(ev.currentTarget.getAttribute('data-sid'));
+        const status = document.getElementById('showtimeStatus');
+        if (status) status.textContent = '';
+        if (!confirm('Delete this showtime?')) return;
+        try {
+          const res = await authed(`/events/${eventId}/shows/${sid}`, { method: 'DELETE' });
+          const d = await res.json().catch(() => ({}));
+          if (!res.ok) { if (status) status.textContent = d.message || 'Failed to delete showtime'; return; }
+          await loadEventShowtimes(eventId);
+        } catch {
+          if (status) status.textContent = 'Error deleting showtime';
+        }
+      }));
+    }
+
     // Populate duty event dropdowns for a specific organization
     async function populateEventDropdownsForGroup(gid) {
       try {
         const dutySel = document.getElementById('dutyEvent');
         const volSel = document.getElementById('volDutyEvent');
         const editSel = document.getElementById('editDutyEvent');
+        const dutyShowSel = document.getElementById('dutyShow');
+        const editShowSel = document.getElementById('editDutyShow');
         const clear = (sel) => { if (sel) sel.innerHTML = '<option value="">— Select event —</option>'; };
-        if (!gid) { clear(dutySel); clear(volSel); clear(editSel); return; }
+        if (!gid) {
+          clear(dutySel); clear(volSel); clear(editSel);
+          if (dutyShowSel) { dutyShowSel.innerHTML = '<option value="">— Select showtime —</option>'; dutyShowSel.disabled = true; }
+          if (editShowSel) { editShowSel.innerHTML = '<option value="">— Select showtime —</option>'; editShowSel.disabled = true; }
+          return;
+        }
         const res = await authed(`/events?group_id=${encodeURIComponent(gid)}`);
-        if (!res.ok) { clear(dutySel); clear(volSel); clear(editSel); return; }
+        if (!res.ok) {
+          clear(dutySel); clear(volSel); clear(editSel);
+          if (dutyShowSel) { dutyShowSel.innerHTML = '<option value="">— Select showtime —</option>'; dutyShowSel.disabled = true; }
+          if (editShowSel) { editShowSel.innerHTML = '<option value="">— Select showtime —</option>'; editShowSel.disabled = true; }
+          return;
+        }
         const events = await res.json();
         [dutySel, volSel, editSel].forEach(sel => {
           if (!sel) return;
@@ -3838,6 +3989,42 @@
           });
           if (current) sel.value = current;
         });
+
+        // Wire showtime dropdowns to event selection (once)
+        if (dutySel && dutyShowSel && !dutySel._wiredShows) {
+          dutySel.addEventListener('change', () => populateShowtimeDropdown(dutySel.value || null, dutyShowSel));
+          dutySel._wiredShows = true;
+        }
+        if (editSel && editShowSel && !editSel._wiredShows) {
+          editSel.addEventListener('change', () => populateShowtimeDropdown(editSel.value || null, editShowSel));
+          editSel._wiredShows = true;
+        }
+        // Refresh showtime lists for current selections
+        if (dutySel && dutyShowSel) await populateShowtimeDropdown(dutySel.value || null, dutyShowSel, dutyShowSel.value || null);
+        if (editSel && editShowSel) await populateShowtimeDropdown(editSel.value || null, editShowSel, editShowSel.value || null);
+      } catch { /* silent */ }
+    }
+
+    async function populateShowtimeDropdown(eventId, sel, desiredValue = null) {
+      try {
+        if (!sel) return;
+        sel.innerHTML = '<option value="">— Select showtime —</option>';
+        sel.disabled = true;
+        if (!eventId) return;
+        const res = await authed(`/events/${encodeURIComponent(eventId)}/shows`);
+        if (!res.ok) return;
+        const shows = await res.json();
+        (Array.isArray(shows) ? shows : []).forEach(s => {
+          const opt = document.createElement('option');
+          opt.value = s.id;
+          const d = s.show_date || '';
+          const t1 = (s.start_time || '').slice(0, 5);
+          const t2 = (s.end_time || '').slice(0, 5);
+          opt.textContent = `${d}${t1 ? ' — ' + t1 : ''}${t2 ? '–' + t2 : ''}`;
+          sel.appendChild(opt);
+        });
+        sel.disabled = false;
+        if (desiredValue && sel.querySelector(`option[value="${desiredValue}"]`)) sel.value = String(desiredValue);
       } catch { /* silent */ }
     }
 
@@ -4341,6 +4528,36 @@
       } catch { document.getElementById('editEventError').textContent = 'Error saving event'; }
     });
 
+    // Add showtime
+    document.getElementById('addShowBtn')?.addEventListener('click', async () => {
+      const status = document.getElementById('showtimeStatus');
+      if (status) status.textContent = '';
+      const eventId = Number(document.getElementById('editEventId')?.value || '');
+      if (!Number.isFinite(eventId)) { if (status) status.textContent = 'Select an event first.'; return; }
+      const show_date = document.getElementById('newShowDate')?.value || '';
+      const start_time = document.getElementById('newShowStart')?.value || '';
+      const end_time = document.getElementById('newShowEnd')?.value || '';
+      const notes = document.getElementById('newShowNotes')?.value || '';
+      if (!show_date || !start_time || !end_time) { if (status) status.textContent = 'Show date, start time, and end time are required.'; return; }
+      try {
+        const res = await authed(`/events/${eventId}/shows`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ show_date, start_time, end_time, notes: notes || null })
+        });
+        const d = await res.json().catch(() => ({}));
+        if (!res.ok) { if (status) status.textContent = d.message || 'Failed to add showtime'; return; }
+        // clear inputs
+        const nd = document.getElementById('newShowDate'); if (nd) nd.value = '';
+        const ns = document.getElementById('newShowStart'); if (ns) ns.value = '';
+        const ne = document.getElementById('newShowEnd'); if (ne) ne.value = '';
+        const nn = document.getElementById('newShowNotes'); if (nn) nn.value = '';
+        await loadEventShowtimes(eventId);
+      } catch {
+        if (status) status.textContent = 'Error adding showtime';
+      }
+    });
+
     // DUTIES (admin-managed; volunteer sees assigned duties)
     async function fetchDuties() {
       try {
@@ -4502,8 +4719,17 @@
             editEventSel.disabled = (role !== 'admin' && role !== 'superadmin');
             editEventSel.value = storedDuty?.event_id != null ? String(storedDuty.event_id) : '';
           }
+          const editShowSel = document.getElementById('editDutyShow');
+          if (editShowSel) {
+            editShowSel.innerHTML = '<option value="">— Select showtime —</option>';
+            editShowSel.disabled = true;
+          }
           // Ensure the edit event dropdown is populated for this duty's organization
           if (storedDuty?.group_id != null) populateEventDropdownsForGroup(storedDuty.group_id);
+          // Load showtimes for this duty's event and preselect
+          if (editShowSel && storedDuty?.event_id != null) {
+            populateShowtimeDropdown(storedDuty.event_id, editShowSel, storedDuty?.show_id != null ? String(storedDuty.show_id) : null);
+          }
           const accessSel = document.getElementById('editDutyAccess');
           if (accessSel) {
             const isClosed = storedDuty ? (storedDuty.is_closed === true || String(storedDuty.status || '').toLowerCase() === 'closed') : false;
@@ -4721,7 +4947,15 @@
           editEventSel.disabled = (role !== 'admin' && role !== 'superadmin');
           editEventSel.value = storedDuty?.event_id != null ? String(storedDuty.event_id) : '';
         }
+        const editShowSel = document.getElementById('editDutyShow');
+        if (editShowSel) {
+          editShowSel.innerHTML = '<option value="">— Select showtime —</option>';
+          editShowSel.disabled = true;
+        }
         if (storedDuty?.group_id != null) populateEventDropdownsForGroup(storedDuty.group_id);
+        if (editShowSel && storedDuty?.event_id != null) {
+          populateShowtimeDropdown(storedDuty.event_id, editShowSel, storedDuty?.show_id != null ? String(storedDuty.show_id) : null);
+        }
         const accessSel = document.getElementById('editDutyAccess');
         if (accessSel) {
           const isClosed = storedDuty ? (storedDuty.is_closed === true || String(storedDuty.status || '').toLowerCase() === 'closed') : false;
@@ -4757,7 +4991,15 @@
         editEventSel.disabled = (role !== 'admin' && role !== 'superadmin');
         editEventSel.value = storedDuty?.event_id != null ? String(storedDuty.event_id) : '';
       }
+      const editShowSel2 = document.getElementById('editDutyShow');
+      if (editShowSel2) {
+        editShowSel2.innerHTML = '<option value="">— Select showtime —</option>';
+        editShowSel2.disabled = true;
+      }
       if (storedDuty?.group_id != null) populateEventDropdownsForGroup(storedDuty.group_id);
+      if (editShowSel2 && storedDuty?.event_id != null) {
+        populateShowtimeDropdown(storedDuty.event_id, editShowSel2, storedDuty?.show_id != null ? String(storedDuty.show_id) : null);
+      }
       const accessSel = document.getElementById('editDutyAccess');
       if (accessSel) {
         const isClosed = storedDuty ? (storedDuty.is_closed === true || String(storedDuty.status || '').toLowerCase() === 'closed') : false;
@@ -4898,6 +5140,8 @@
       const group_id = groupSel && groupSel.value ? Number(groupSel.value) : (groupId ?? null);
         const eventSel = document.getElementById('dutyEvent');
         const event_id = eventSel && eventSel.value ? Number(eventSel.value) : null;
+      const showSel = document.getElementById('dutyShow');
+      const show_id = showSel && showSel.value ? Number(showSel.value) : null;
       const status = document.getElementById('dutyStatus').value;
       const capacityInput = document.getElementById('dutyCapacity');
       const rawCapacity = capacityInput?.value?.trim();
@@ -4919,7 +5163,7 @@
         const res = await authed('/duties', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title, description, status, group_id, event_id, max_volunteers, location: dutyLocationValue || null, color_hex: normalizeHexColor(document.getElementById('dutyColor')?.value) || null })
+          body: JSON.stringify({ title, description, status, group_id, event_id, show_id, max_volunteers, location: dutyLocationValue || null, color_hex: normalizeHexColor(document.getElementById('dutyColor')?.value) || null })
         });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
@@ -4966,6 +5210,8 @@
         document.getElementById('editDutyError').textContent = 'Event is required for duties';
         return;
       }
+      const showIdRaw = document.getElementById('editDutyShow')?.value || '';
+      const show_id = showIdRaw ? Number(showIdRaw) : null;
       const capacityInput = document.getElementById('editDutyCapacity');
       const rawCapacity = capacityInput?.value?.trim();
       const editLocationInput = document.getElementById('editDutyLocation');
@@ -4993,6 +5239,7 @@
             status,
             is_closed: String(access).toLowerCase() === 'closed',
             event_id,
+            show_id,
             max_volunteers,
             location: location || null,
             color_hex: normalizeHexColor(document.getElementById('editDutyColor')?.value) || null

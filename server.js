@@ -326,6 +326,29 @@ async function ensureTimeTrackingApprovalColumn() {
       await pool.query(`UPDATE duty_templates SET is_closed=true WHERE LOWER(status)='closed' AND COALESCE(is_closed,false)=false`);
       await pool.query(`UPDATE duty_templates SET status='pending' WHERE LOWER(status) IN ('open','closed')`);
     } catch (_) {}
+
+    // --- Event showtimes ("shows") linked to an event run
+    await pool.query(
+      `CREATE TABLE IF NOT EXISTS event_shows (
+         id SERIAL PRIMARY KEY,
+         event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+         show_date DATE NOT NULL,
+         start_time TIME NOT NULL,
+         end_time TIME NOT NULL,
+         notes TEXT NULL,
+         created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+         updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+       )`
+    );
+    // Unique per-event showtime (avoid duplicates)
+    await pool.query(
+      `CREATE UNIQUE INDEX IF NOT EXISTS event_shows_event_date_time_uq
+       ON event_shows (event_id, show_date, start_time)`
+    );
+    // Duties can optionally be attached to a specific showtime (still linked to event_id)
+    await pool.query(
+      'ALTER TABLE IF EXISTS duties ADD COLUMN IF NOT EXISTS show_id INTEGER REFERENCES event_shows(id) ON DELETE SET NULL'
+    );
   } catch (e) {
     console.error('Schema ensure failed (duties.event_id):', e?.message || e);
   }
@@ -1327,6 +1350,122 @@ app.delete('/events/:id', authRequired, adminOnly, async (req, res) => {
   }
 });
 
+// --- Event showtimes ("shows")
+app.get('/events/:id/shows', authRequired, async (req, res) => {
+  try {
+    const eventId = Number(req.params.id);
+    if (!Number.isFinite(eventId)) return res.status(400).json({ message: 'Invalid event id' });
+    const ev = await pool.query('SELECT id, group_id FROM events WHERE id=$1', [eventId]);
+    if (ev.rowCount === 0) return res.status(404).json({ message: 'Event not found' });
+    const eventGroupId = ev.rows[0].group_id;
+    if (req.user.role !== 'superadmin') {
+      if (req.user.group_id == null || eventGroupId == null || String(req.user.group_id) !== String(eventGroupId)) {
+        return res.status(403).json({ message: 'Forbidden' });
+      }
+    }
+    const shows = await pool.query(
+      `SELECT id, event_id, show_date, start_time, end_time, notes
+       FROM event_shows
+       WHERE event_id=$1
+       ORDER BY show_date ASC, start_time ASC, id ASC`,
+      [eventId]
+    );
+    res.json(shows.rows);
+  } catch (err) {
+    res.status(400).json({ message: err?.message || 'Failed to load showtimes' });
+  }
+});
+
+app.post('/events/:id/shows', authRequired, adminOnly, async (req, res) => {
+  try {
+    const eventId = Number(req.params.id);
+    if (!Number.isFinite(eventId)) return res.status(400).json({ message: 'Invalid event id' });
+    const { show_date, start_time, end_time, notes } = req.body || {};
+    if (!show_date) return res.status(400).json({ message: 'show_date is required' });
+    if (!start_time) return res.status(400).json({ message: 'start_time is required' });
+    if (!end_time) return res.status(400).json({ message: 'end_time is required' });
+    const ev = await pool.query('SELECT id, group_id FROM events WHERE id=$1', [eventId]);
+    if (ev.rowCount === 0) return res.status(404).json({ message: 'Event not found' });
+    const eventGroupId = ev.rows[0].group_id;
+    if (req.user.role === 'admin' && (req.user.group_id == null || String(req.user.group_id) !== String(eventGroupId))) {
+      return res.status(403).json({ message: 'Admins can only add showtimes for their organization.' });
+    }
+    const result = await pool.query(
+      `INSERT INTO event_shows (event_id, show_date, start_time, end_time, notes, updated_at)
+       VALUES ($1,$2,$3,$4,$5,NOW())
+       RETURNING id`,
+      [eventId, show_date, start_time, end_time, notes ?? null]
+    );
+    res.json({ id: result.rows[0].id });
+  } catch (err) {
+    res.status(400).json({ message: err?.message || 'Failed to create showtime' });
+  }
+});
+
+app.patch('/events/:id/shows/:showId', authRequired, adminOnly, async (req, res) => {
+  try {
+    const eventId = Number(req.params.id);
+    const showId = Number(req.params.showId);
+    if (!Number.isFinite(eventId) || !Number.isFinite(showId)) return res.status(400).json({ message: 'Invalid id' });
+    const showRes = await pool.query(
+      `SELECT s.id, e.group_id
+       FROM event_shows s
+       JOIN events e ON e.id = s.event_id
+       WHERE s.id=$1 AND s.event_id=$2`,
+      [showId, eventId]
+    );
+    if (showRes.rowCount === 0) return res.status(404).json({ message: 'Showtime not found' });
+    const eventGroupId = showRes.rows[0].group_id;
+    if (req.user.role === 'admin' && (req.user.group_id == null || String(req.user.group_id) !== String(eventGroupId))) {
+      return res.status(403).json({ message: 'Admins can only edit showtimes in their organization.' });
+    }
+    const { show_date, start_time, end_time, notes } = req.body || {};
+    const setClauses = [];
+    const params = [];
+    let idx = 1;
+    if (show_date !== undefined) { setClauses.push(`show_date=$${idx++}`); params.push(show_date); }
+    if (start_time !== undefined) { setClauses.push(`start_time=$${idx++}`); params.push(start_time); }
+    if (end_time !== undefined) { setClauses.push(`end_time=$${idx++}`); params.push(end_time); }
+    if (notes !== undefined) { setClauses.push(`notes=$${idx++}`); params.push(notes ?? null); }
+    setClauses.push(`updated_at=NOW()`);
+    if (setClauses.length === 1) return res.json({ id: showId });
+    const result = await pool.query(
+      `UPDATE event_shows SET ${setClauses.join(', ')} WHERE id=$${idx} AND event_id=$${idx + 1} RETURNING id`,
+      [...params, showId, eventId]
+    );
+    if (result.rowCount === 0) return res.status(404).json({ message: 'Showtime not found' });
+    res.json({ id: result.rows[0].id });
+  } catch (err) {
+    res.status(400).json({ message: err?.message || 'Failed to update showtime' });
+  }
+});
+
+app.delete('/events/:id/shows/:showId', authRequired, adminOnly, async (req, res) => {
+  try {
+    const eventId = Number(req.params.id);
+    const showId = Number(req.params.showId);
+    if (!Number.isFinite(eventId) || !Number.isFinite(showId)) return res.status(400).json({ message: 'Invalid id' });
+    const showRes = await pool.query(
+      `SELECT s.id, e.group_id
+       FROM event_shows s
+       JOIN events e ON e.id = s.event_id
+       WHERE s.id=$1 AND s.event_id=$2`,
+      [showId, eventId]
+    );
+    if (showRes.rowCount === 0) return res.status(404).json({ message: 'Showtime not found' });
+    const eventGroupId = showRes.rows[0].group_id;
+    if (req.user.role === 'admin' && (req.user.group_id == null || String(req.user.group_id) !== String(eventGroupId))) {
+      return res.status(403).json({ message: 'Admins can only delete showtimes in their organization.' });
+    }
+    // Clear duties.show_id for duties attached to this showtime
+    try { await pool.query('UPDATE duties SET show_id=NULL WHERE show_id=$1', [showId]); } catch (_) {}
+    await pool.query('DELETE FROM event_shows WHERE id=$1 AND event_id=$2', [showId, eventId]);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ message: err?.message || 'Failed to delete showtime' });
+  }
+});
+
 // RSVP: join an event
 app.post('/events/:id/join', authRequired, async (req, res) => {
   try {
@@ -1500,7 +1639,7 @@ app.get('/duties', authRequired, async (req, res) => {
 app.post('/duties', authRequired, async (req, res) => {
   await ensureDutyColorColumns();
   try {
-    const { title, description, status, group_id, event_id, max_volunteers, location, color_hex } = req.body || {};
+    const { title, description, status, group_id, event_id, show_id, max_volunteers, location, color_hex } = req.body || {};
     let targetGroupId = group_id ?? null;
     if (isAdmin(req.user)) {
       targetGroupId = (targetGroupId ?? req.user.group_id ?? null);
@@ -1513,6 +1652,21 @@ app.post('/duties', authRequired, async (req, res) => {
     }
     // Require event for all duties
     if (event_id == null) return res.status(400).json({ message: 'Event is required for duties' });
+
+    // Validate event belongs to the selected org and caller has access
+    const evRes = await pool.query('SELECT id, group_id, archived_at FROM events WHERE id=$1', [event_id]);
+    if (evRes.rowCount === 0) return res.status(404).json({ message: 'Event not found' });
+    if (evRes.rows[0].archived_at) return res.status(400).json({ message: 'Cannot add duties to an archived event' });
+    const eventGroupId = evRes.rows[0].group_id ?? null;
+    if (targetGroupId != null && eventGroupId != null && String(targetGroupId) !== String(eventGroupId)) {
+      return res.status(400).json({ message: 'Duty organization must match the event organization' });
+    }
+    if (req.user.role === 'admin' && (req.user.group_id == null || String(req.user.group_id) !== String(eventGroupId))) {
+      return res.status(403).json({ message: 'Admins can only create duties for events in their organization' });
+    }
+    if (req.user.role === 'volunteer' && (req.user.group_id == null || String(req.user.group_id) !== String(eventGroupId))) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
 
     let maxVol = null;
     if (max_volunteers !== undefined && max_volunteers !== null && max_volunteers !== '') {
@@ -1540,6 +1694,17 @@ app.post('/duties', authRequired, async (req, res) => {
     if (has.has('is_closed')) { fields.push('is_closed'); params.push(`$${idx++}`); values.push(isClosed); }
     if (has.has('group_id')) { fields.push('group_id'); params.push(`$${idx++}`); values.push(targetGroupId); }
     if (has.has('event_id')) { fields.push('event_id'); params.push(`$${idx++}`); values.push(event_id ?? null); }
+    if (has.has('show_id')) {
+      let showIdVal = null;
+      if (show_id !== undefined && show_id !== null && show_id !== '') {
+        const showIdNum = Number(show_id);
+        if (!Number.isFinite(showIdNum)) return res.status(400).json({ message: 'Invalid show_id' });
+        const showRes = await pool.query('SELECT id FROM event_shows WHERE id=$1 AND event_id=$2', [showIdNum, event_id]);
+        if (showRes.rowCount === 0) return res.status(400).json({ message: 'Showtime must belong to the selected event' });
+        showIdVal = showIdNum;
+      }
+      fields.push('show_id'); params.push(`$${idx++}`); values.push(showIdVal);
+    }
     if (has.has('max_volunteers')) { fields.push('max_volunteers'); params.push(`$${idx++}`); values.push(maxVol); }
     if (has.has('location')) { fields.push('location'); params.push(`$${idx++}`); values.push(location ?? null); }
     if (has.has('color_hex')) { fields.push('color_hex'); params.push(`$${idx++}`); values.push(color_hex ?? null); }
@@ -1558,11 +1723,17 @@ app.patch('/duties/:id', authRequired, async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (!Number.isFinite(id)) return res.status(400).json({ message: 'Invalid id' });
-    const { title, description, status, is_closed, event_id, group_id, max_volunteers, location, color_hex } = req.body || {};
+    const { title, description, status, is_closed, event_id, show_id, group_id, max_volunteers, location, color_hex } = req.body || {};
     // Only admins/superadmins can edit duties broadly; volunteers can only edit their own created duty's title/description
     const isAdminish = isAdmin(req.user);
     const colsRes = await pool.query("SELECT column_name FROM information_schema.columns WHERE table_name='duties'");
     const has = new Set(colsRes.rows.map(r => r.column_name));
+
+    // Load current duty context for validation (event/show consistency)
+    const currentDutyRes = await pool.query('SELECT id, event_id, group_id, show_id FROM duties WHERE id=$1', [id]);
+    if (currentDutyRes.rowCount === 0) return res.status(404).json({ message: 'Not found' });
+    const currentEventId = currentDutyRes.rows[0].event_id ?? null;
+    const nextEventId = event_id !== undefined ? event_id : currentEventId;
 
     const setClauses = [];
     const params = [];
@@ -1582,7 +1753,31 @@ app.patch('/duties/:id', authRequired, async (req, res) => {
     }
     if (event_id !== undefined && has.has('event_id')) {
       if (event_id == null) return res.status(400).json({ message: 'Event cannot be cleared from a duty' });
+      // Validate event access for admins
+      const evRes = await pool.query('SELECT id, group_id, archived_at FROM events WHERE id=$1', [event_id]);
+      if (evRes.rowCount === 0) return res.status(404).json({ message: 'Event not found' });
+      if (evRes.rows[0].archived_at) return res.status(400).json({ message: 'Cannot move duty to an archived event' });
+      const eventGroupId = evRes.rows[0].group_id ?? null;
+      if (req.user.role === 'admin' && (req.user.group_id == null || String(req.user.group_id) !== String(eventGroupId))) {
+        return res.status(403).json({ message: 'Admins can only move duties to events in their organization' });
+      }
       setClauses.push(`event_id=$${idx++}`); params.push(event_id);
+      // If event changes and show_id not explicitly set, clear show_id to avoid mismatched showtime
+      if (has.has('show_id') && show_id === undefined) {
+        setClauses.push(`show_id=NULL`);
+      }
+    }
+    // Optional showtime link (admins only)
+    if (isAdminish && has.has('show_id') && show_id !== undefined) {
+      if (show_id == null || show_id === '') {
+        setClauses.push(`show_id=NULL`);
+      } else {
+        const showIdNum = Number(show_id);
+        if (!Number.isFinite(showIdNum)) return res.status(400).json({ message: 'Invalid show_id' });
+        const showRes = await pool.query('SELECT id FROM event_shows WHERE id=$1 AND event_id=$2', [showIdNum, nextEventId]);
+        if (showRes.rowCount === 0) return res.status(400).json({ message: 'Showtime must belong to the selected event' });
+        setClauses.push(`show_id=$${idx++}`); params.push(showIdNum);
+      }
     }
     if (group_id !== undefined && has.has('group_id')) { setClauses.push(`group_id=$${idx++}`); params.push(group_id); }
     if (max_volunteers !== undefined && has.has('max_volunteers')) {
@@ -1598,6 +1793,9 @@ app.patch('/duties/:id', authRequired, async (req, res) => {
     }
     if (location !== undefined && has.has('location')) {
       setClauses.push(`location=$${idx++}`); params.push(location ?? null);
+    }
+    if (color_hex !== undefined && has.has('color_hex')) {
+      setClauses.push(`color_hex=$${idx++}`); params.push(color_hex ?? null);
     }
     if (setClauses.length === 0) return res.json({ id });
 
@@ -2094,12 +2292,27 @@ app.get('/calendar/assignments', authRequired, async (req, res) => {
       return res.json({ date: rawDate, group_id: scopedGroupId, events: [], total_assignments: 0 });
     }
 
+    // Load showtimes for these events on this date
+    const showsRes = await pool.query(
+      `SELECT id, event_id, show_date, start_time, end_time, notes
+       FROM event_shows
+       WHERE event_id = ANY($1::int[]) AND show_date = $2::date
+       ORDER BY event_id, show_date, start_time, id`,
+      [eventIds, rawDate]
+    );
+    const showRows = showsRes.rows || [];
+
     // Load duties for these events (even if no one has clocked time yet)
-    const dutyParams = [scopedGroupId, eventIds];
+    // Include show-specific duties only when that show occurs on this date.
+    const dutyParams = [scopedGroupId, eventIds, rawDate];
     const dutySql = `
-      SELECT d.id, d.title, d.location, d.max_volunteers, d.group_id, d.event_id, d.color_hex, COALESCE(d.is_closed,false) AS is_closed
+      SELECT d.id, d.title, d.location, d.max_volunteers, d.group_id, d.event_id, d.show_id, d.color_hex, COALESCE(d.is_closed,false) AS is_closed
       FROM duties d
-      WHERE d.archived_at IS NULL AND d.group_id = $1 AND d.event_id = ANY($2::int[])
+      LEFT JOIN event_shows s ON s.id = d.show_id AND s.show_date = $3::date
+      WHERE d.archived_at IS NULL
+        AND d.group_id = $1
+        AND d.event_id = ANY($2::int[])
+        AND (d.show_id IS NULL OR s.id IS NOT NULL)
       ORDER BY d.event_id, d.id
     `;
     const dutiesRes = await pool.query(dutySql, dutyParams);
@@ -2168,10 +2381,29 @@ app.get('/calendar/assignments', authRequired, async (req, res) => {
       start_time: ev.start_time || null,
       end_time: ev.end_time || null,
       address: ev.address || null,
+      showtimes: [],
       duties: []
     }));
     const eventById = new Map(events.map(e => [Number(e.event_id), e]));
+    const showById = new Map();
     const dutyById = new Map();
+
+    // Attach showtimes to their parent events
+    showRows.forEach(s => {
+      const parent = eventById.get(Number(s.event_id));
+      if (!parent) return;
+      const showObj = {
+        id: s.id,
+        event_id: s.event_id,
+        show_date: s.show_date,
+        start_time: s.start_time,
+        end_time: s.end_time,
+        notes: s.notes || null,
+        duties: []
+      };
+      parent.showtimes.push(showObj);
+      showById.set(Number(s.id), showObj);
+    });
 
     dutyRows.forEach(d => {
       const entry = {
@@ -2181,11 +2413,16 @@ app.get('/calendar/assignments', authRequired, async (req, res) => {
         max_volunteers: d.max_volunteers,
         color_hex: d.color_hex || null,
         is_closed: d.is_closed === true,
+        show_id: d.show_id != null ? Number(d.show_id) : null,
         assignments: []
       };
       dutyById.set(Number(d.id), entry);
       const parent = eventById.get(Number(d.event_id));
       if (parent) parent.duties.push(entry);
+      if (d.show_id != null) {
+        const show = showById.get(Number(d.show_id));
+        if (show) show.duties.push(entry);
+      }
     });
 
     // Seed assignments from duty_assignments (so "assigned" shows up even before clock-in)
