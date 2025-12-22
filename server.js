@@ -236,8 +236,19 @@ async function ensureTimeTrackingApprovalColumn() {
       `ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS name TEXT`
     );
     await pool.query(
-      `ALTER TABLE IF EXISTS groups ADD COLUMN IF NOT EXISTS time_zone TEXT DEFAULT 'UTC'`
+      `ALTER TABLE IF EXISTS groups ADD COLUMN IF NOT EXISTS time_zone TEXT DEFAULT 'America/Chicago'`
     );
+    // Ensure org timezone isn't accidentally stuck on UTC (North America default)
+    try {
+      await pool.query(`ALTER TABLE IF EXISTS groups ALTER COLUMN time_zone SET DEFAULT 'America/Chicago'`);
+    } catch (_) {}
+    try {
+      await pool.query(
+        `UPDATE groups
+         SET time_zone = 'America/Chicago'
+         WHERE time_zone IS NULL OR time_zone = '' OR time_zone = 'UTC'`
+      );
+    } catch (_) {}
     await pool.query(
       'ALTER TABLE IF EXISTS duties ADD COLUMN IF NOT EXISTS max_volunteers INTEGER'
     );
