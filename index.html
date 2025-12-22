@@ -2146,6 +2146,14 @@
       const focusId = calendarState.scheduleFocusEventId || calendarState.selectedEventId || null;
       const columns = events.map(ev => buildScheduleColumnHtml(ev, focusId, dateKey)).join('');
       body.innerHTML = `<div class="calendar-schedule-columns">${columns}</div>`;
+
+      // Update the Event Details panel to reflect the selected date + event performance/show times.
+      if (selectedEventId && dateKey) {
+        const baseEvent = (calendarState.events || []).find(e => Number(e.id) === selectedEventId);
+        if (baseEvent) {
+          populateCalendarEventSummaryForDate(baseEvent, dateKey);
+        }
+      }
     }
 
     async function loadCalendarDaySchedule(dateKey, options = {}) {
@@ -2672,6 +2680,82 @@
       summary.appendChild(descRow);
     }
 
+    function populateCalendarEventSummaryForDate(event, dateKey) {
+      const summary = document.getElementById('calendarEventSummary');
+      if (!summary) return;
+      summary.innerHTML = '';
+
+      const titleRow = document.createElement('div');
+      const strong = document.createElement('strong');
+      strong.textContent = (event && event.title) ? event.title : 'Untitled Event';
+      const color = getEventColor(event);
+      if (color) {
+        const swatch = document.createElement('span');
+        swatch.style.display = 'inline-block';
+        swatch.style.width = '12px';
+        swatch.style.height = '12px';
+        swatch.style.borderRadius = '50%';
+        swatch.style.marginRight = '6px';
+        swatch.style.background = color;
+        titleRow.appendChild(swatch);
+      }
+      titleRow.appendChild(strong);
+      summary.appendChild(titleRow);
+
+      const dateRow = document.createElement('div');
+      dateRow.textContent = dateKey ? `Date: ${formatDateKeyToReadable(dateKey)}` : 'Date: (none)';
+      summary.appendChild(dateRow);
+
+      const groupRow = document.createElement('div');
+      const groupLabel = groupNameById[event?.group_id] || (event?.group_id ? `Group ${event.group_id}` : 'No organization specified');
+      groupRow.textContent = `Organization: ${groupLabel}`;
+      summary.appendChild(groupRow);
+
+      const descRow = document.createElement('div');
+      descRow.textContent = event?.description ? `Notes: ${event.description}` : 'Notes: None provided.';
+      summary.appendChild(descRow);
+
+      const sched = (dateKey && calendarState.scheduleCache?.[dateKey]) ? calendarState.scheduleCache[dateKey] : null;
+      const entry = (sched && Array.isArray(sched.events))
+        ? sched.events.find(e => Number(e.event_id) === Number(event?.id))
+        : null;
+
+      const shows = Array.isArray(entry?.showtimes) ? entry.showtimes : [];
+      const showsHeader = document.createElement('div');
+      showsHeader.style.marginTop = '8px';
+      showsHeader.innerHTML = '<strong>Performances / Shows</strong>';
+      summary.appendChild(showsHeader);
+
+      if (shows.length) {
+        shows.forEach(s => {
+          const line = document.createElement('div');
+          const t1 = formatTime12((s.start_time || '').slice(0, 5));
+          const t2 = formatTime12((s.end_time || '').slice(0, 5));
+          const notes = (s.notes || '').trim();
+          const label = `${t1 || ''}${t1 && t2 ? ' – ' : ''}${t2 || ''}`.trim() || 'Show';
+          line.textContent = notes ? `${label} (${notes})` : label;
+          summary.appendChild(line);
+        });
+      } else {
+        const none = document.createElement('div');
+        none.textContent = 'No performances/shows set for this date.';
+        summary.appendChild(none);
+      }
+
+      const duties = Array.isArray(entry?.duties) ? entry.duties : [];
+      const showDutyCount = shows.reduce((sum, s) => sum + (Array.isArray(s.duties) ? s.duties.length : 0), 0);
+      const dutyRow = document.createElement('div');
+      dutyRow.style.marginTop = '8px';
+      dutyRow.textContent = `Duties for this date: ${duties.length + showDutyCount}`;
+      summary.appendChild(dutyRow);
+
+      const editHint = document.createElement('div');
+      editHint.className = 'hint';
+      editHint.style.marginTop = '6px';
+      editHint.textContent = 'Edit the full event run on the Events page.';
+      summary.appendChild(editHint);
+    }
+
     function populateCalendarEditGroupSelect(selectedId) {
       const sel = document.getElementById('calendarEditGroup');
       if (!sel) return;
@@ -2695,32 +2779,12 @@
       calendarState.selectedEventId = Number(event.id);
       const panel = document.getElementById('calendarEventPanel');
       if (panel) panel.classList.remove('hidden');
-      populateCalendarEventSummary(event);
+      const targetDateKeyPreview = dateKeyOverride || calendarState.activeDateKey || null;
+      if (targetDateKeyPreview) populateCalendarEventSummaryForDate(event, targetDateKeyPreview);
+      else populateCalendarEventSummary(event);
       const adminWrap = document.getElementById('calendarEventAdminWrap');
-      const canEdit = role === 'admin' || role === 'superadmin';
-      if (adminWrap) {
-        adminWrap.classList.toggle('hidden', !canEdit);
-        if (canEdit) {
-          const titleInput = document.getElementById('calendarEditTitle');
-          if (titleInput) titleInput.value = event.title || '';
-          const descInput = document.getElementById('calendarEditDescription');
-          if (descInput) descInput.value = event.description || '';
-          const startDateInput = document.getElementById('calendarEditStartDate');
-          if (startDateInput) startDateInput.value = extractDatePart(event.start_date || event.event_date) || '';
-          const endDateInput = document.getElementById('calendarEditEndDate');
-          if (endDateInput) endDateInput.value = extractDatePart(event.end_date || event.start_date || event.event_date) || '';
-          const startTimeInput = document.getElementById('calendarEditStartTime');
-          if (startTimeInput) startTimeInput.value = (event.start_time || '').slice(0, 5);
-          const endTimeInput = document.getElementById('calendarEditEndTime');
-          if (endTimeInput) endTimeInput.value = (event.end_time || '').slice(0, 5);
-          const addressInput = document.getElementById('calendarEditAddress');
-          if (addressInput) addressInput.value = event.address || '';
-          const groupRow = document.getElementById('calendarEditGroupRow');
-          if (groupRow) groupRow.classList.toggle('hidden', role !== 'superadmin');
-          if (role === 'superadmin') populateCalendarEditGroupSelect(event.group_id);
-          setCalendarColorInput(event);
-        }
-      }
+      // Keep full event editing on the Events page only
+      if (adminWrap) adminWrap.classList.add('hidden');
       const err = document.getElementById('calendarEditError');
       if (err) err.textContent = '';
       calendarState.scheduleFocusEventId = Number(event.id) || null;
