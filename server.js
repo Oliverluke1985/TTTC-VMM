@@ -1289,7 +1289,14 @@ app.patch('/events/:id', authRequired, adminOnly, async (req, res) => {
     if (end_time !== undefined) { setClauses.push(`end_time = $${idx++}`); params.push(end_time); }
     if (color_hex !== undefined) { setClauses.push(`color_hex = $${idx++}`); params.push(color_hex ?? null); }
     if (address !== undefined) { setClauses.push(`address = $${idx++}`); params.push(address ?? null); }
-    if (group_id !== undefined) { setClauses.push(`group_id = $${idx++}`); params.push(group_id); }
+    // Never allow events to be detached from an organization accidentally
+    if (group_id !== undefined) {
+      if (group_id == null || group_id === '') {
+        return res.status(400).json({ message: 'Organization is required for events.' });
+      }
+      setClauses.push(`group_id = $${idx++}`);
+      params.push(group_id);
+    }
     if (setClauses.length === 0) return res.json({ id });
     let result;
     if (req.user.role === 'superadmin') {
@@ -1304,8 +1311,6 @@ app.patch('/events/:id', authRequired, adminOnly, async (req, res) => {
       );
     }
     if (result.rowCount === 0) return res.status(404).json({ message: 'Not found' });
-    // Archive all duties linked to this event
-    try { await pool.query('UPDATE duties SET archived_at=NOW() WHERE event_id=$1 AND archived_at IS NULL', [id]); } catch (_) {}
     res.json({ id: result.rows[0].id });
   } catch (err) {
     res.status(400).json({ message: err.message });

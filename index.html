@@ -746,6 +746,11 @@
       <div class="col">
         <h3>Edit Event</h3>
         <label>Event ID</label><input id="editEventId" type="number" />
+        <div id="editEventGroupRow" class="hidden">
+          <label>Organization</label>
+          <select id="editEventGroup"><option value="">— Select organization —</option></select>
+          <div class="hint">Superadmin-only: ensure the event is attached to the correct organization.</div>
+        </div>
         <label>Title</label><input id="editEventTitle" type="text" />
         <label>Description</label><input id="editEventDesc" type="text" />
         <label>Address</label><input id="editEventAddress" type="text" />
@@ -2734,7 +2739,9 @@
         color_hex: readCalendarColorInput(),
       };
       if (role === 'superadmin') {
-        payload.group_id = document.getElementById('calendarEditGroup')?.value || null;
+        const gid = document.getElementById('calendarEditGroup')?.value || '';
+        // Don't allow accidental detaching by sending null/empty
+        if (gid) payload.group_id = Number(gid);
       }
       try {
         const res = await authed(`/events/${eventId}`, {
@@ -3599,6 +3606,7 @@
           document.getElementById('volGroup'),
           document.getElementById('dutyGroup'),
           document.getElementById('superEventGroupFilter'),
+          document.getElementById('editEventGroup'),
           document.getElementById('superDutyGroupFilter'),
           document.getElementById('dutyTemplateGroup'),
           document.getElementById('saAdminEditGroup')
@@ -3607,7 +3615,7 @@
           if (!sel) return;
           const current = sel.value;
           const isSuperFilter = sel.id === 'superEventGroupFilter' || sel.id === 'superDutyGroupFilter';
-          const wantsOrgPrompt = isSuperFilter || sel.id === 'dutyTemplateGroup';
+          const wantsOrgPrompt = isSuperFilter || sel.id === 'dutyTemplateGroup' || sel.id === 'editEventGroup';
           sel.innerHTML = wantsOrgPrompt ? '<option value="">— Select organization —</option>' : '<option value="">— None —</option>';
           groups.forEach(g => {
             const opt = document.createElement('option');
@@ -3731,13 +3739,13 @@
           const note = document.getElementById('eventsSuperNote');
           const needsSelection = filterWrap && !filterWrap.classList.contains('hidden');
           if (needsSelection && (!sel || !sel.value)) {
-            if (tbody) tbody.innerHTML = '';
+            // Allow superadmin to view all events (used for recovery if an event was accidentally detached)
+            path = '/events';
             if (note) {
               note.classList.remove('error');
               note.classList.add('hint');
-              note.textContent = 'Select an organization above to view events.';
+              note.textContent = 'Showing all organizations. Choose an organization above to filter.';
             }
-            return;
           }
           if (sel && sel.value) {
             path = `/events?group_id=${encodeURIComponent(sel.value)}`;
@@ -3761,11 +3769,14 @@
               actions = `<button data-eid="${e.id}" class="editEventPrefillBtn">Edit</button> <button data-eid="${e.id}" class="archiveEventBtn">Archive</button> <button data-eid="${e.id}" class="deleteEventBtn">Delete</button>`;
             }
           const dateTxt = e.start_date ? (e.end_date ? `${e.start_date} – ${e.end_date}` : `${e.start_date}`) : (e.event_date || '');
+          const orgTag = (role === 'superadmin' && e.group_id != null && groupNameById && groupNameById[e.group_id])
+            ? ` (${groupNameById[e.group_id]})`
+            : (role === 'superadmin' ? (e.group_id == null ? ' (Unassigned org)' : '') : '');
           const joinCell = (role === 'volunteer')
             ? `<td>${e.joined ? `<button data-eid="${e.id}" class="leaveBtn">Leave</button>` : `<button data-eid=\"${e.id}\" class=\"joinBtn\">Join</button>`}</td>`
             : '<td class="hidden"></td>';
           tr.innerHTML =
-            `<td>${e.id}</td><td>${e.title}</td><td>${dateTxt}</td>
+            `<td>${e.id}</td><td>${e.title}${orgTag}</td><td>${dateTxt}</td>
                ${joinCell}
                <td>${actions}</td>`;
           tbody.appendChild(tr);
@@ -3776,6 +3787,12 @@
             const eventData = (window.eventById || {})[id] || {};
             document.getElementById('eventEditWrap').classList.remove('hidden');
             document.getElementById('editEventId').value = String(id);
+            const groupRow = document.getElementById('editEventGroupRow');
+            const groupSel = document.getElementById('editEventGroup');
+            if (groupRow) groupRow.classList.toggle('hidden', role !== 'superadmin');
+            if (role === 'superadmin' && groupSel) {
+              groupSel.value = eventData.group_id != null ? String(eventData.group_id) : '';
+            }
             document.getElementById('editEventTitle').value = eventData.title || '';
             document.getElementById('editEventDesc').value = eventData.description || '';
             const editAddress = document.getElementById('editEventAddress');
@@ -4510,6 +4527,7 @@
     // Save event edits
     document.getElementById('saveEventBtn')?.addEventListener('click', async () => {
       const id = Number(document.getElementById('editEventId').value);
+      const editGroupSel = document.getElementById('editEventGroup');
       const title = document.getElementById('editEventTitle').value.trim();
       const description = document.getElementById('editEventDesc').value.trim();
       const start_date_raw = document.getElementById('editEventStart').value || '';
@@ -4528,6 +4546,15 @@
         // IMPORTANT: avoid wiping dates if the date inputs are blank due to formatting.
         if (start_date_raw) payload.start_date = start_date_raw;
         if (end_date_raw) payload.end_date = end_date_raw;
+        // Superadmin: never allow detaching an event from an org by accident
+        if (role === 'superadmin') {
+          const gid = editGroupSel ? (editGroupSel.value || '') : '';
+          if (!gid) {
+            document.getElementById('editEventError').textContent = 'Organization is required for events.';
+            return;
+          }
+          payload.group_id = Number(gid);
+        }
         const res = await authed(`/events/${id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
