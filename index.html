@@ -2267,6 +2267,24 @@
       return Number.isNaN(value) ? 0 : value;
     }
 
+    function getEventTimeLabelForDate(ev, dateKey) {
+      const startKey = extractDatePart(ev?.start_date || ev?.event_date);
+      const endKey = extractDatePart(ev?.end_date || ev?.start_date || ev?.event_date);
+      if (!dateKey) return '';
+      // Single-day event: show start time (current UI convention)
+      if (startKey && endKey && startKey === endKey && dateKey === startKey) {
+        return formatTime12((ev?.start_time || '').slice(0, 5));
+      }
+      // Multi-day: start day shows start time; end day shows end time; middle days show no time
+      if (startKey && dateKey === startKey) {
+        return formatTime12((ev?.start_time || '').slice(0, 5));
+      }
+      if (endKey && dateKey === endKey) {
+        return formatTime12((ev?.end_time || '').slice(0, 5));
+      }
+      return '';
+    }
+
     function showCalendarDayEvents(dateKey) {
       const summary = document.getElementById('calendarEventSummary');
       const panel = document.getElementById('calendarEventPanel');
@@ -2300,8 +2318,8 @@
         .forEach(ev => {
           const btn = document.createElement('button');
           const parts = [];
-          const startTime = formatTime12((ev.start_time || '').slice(0, 5));
-          if (startTime) parts.push(startTime);
+          const timeLabel = getEventTimeLabelForDate(ev, dateKey);
+          if (timeLabel) parts.push(timeLabel);
           parts.push(ev.title || `Event #${ev.id}`);
           if (role === 'superadmin' && ev.group_id != null) {
             const orgName = groupNameById[ev.group_id];
@@ -2508,8 +2526,8 @@
           btn.type = 'button';
           btn.className = 'calendar-event' + (isMobile ? ' calendar-event--bar' : '');
           const pieces = [];
-          const startTime = formatTime12((ev.start_time || '').slice(0, 5));
-          if (startTime) pieces.push(startTime);
+          const timeLabel = getEventTimeLabelForDate(ev, key);
+          if (timeLabel) pieces.push(timeLabel);
           pieces.push(ev.title || `Event #${ev.id}`);
           if (role === 'superadmin' && ev.group_id != null) {
             const gName = groupNameById[ev.group_id];
@@ -2521,8 +2539,8 @@
             btn.textContent = label;
           } else {
             // Mobile: show start time in a boxed marker
-            const compactTime = startTime
-              ? String(startTime).replace(' AM', 'a').replace(' PM', 'p')
+            const compactTime = timeLabel
+              ? String(timeLabel).replace(' AM', 'a').replace(' PM', 'p')
               : '';
             btn.textContent = compactTime;
             btn.setAttribute('aria-label', label);
