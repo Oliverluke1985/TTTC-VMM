@@ -1553,6 +1553,23 @@
         return acc;
       }, {});
     }
+    // Postgres TIMESTAMP columns are timezone-less. Our API often returns them as
+    // strings without a timezone suffix (e.g. "2025-12-22 19:05:00").
+    // Those represent UTC in this app, so normalize them to ISO+Z before Date parsing.
+    function normalizeDbTimestampToIso(value) {
+      if (!value) return '';
+      if (value instanceof Date) return value.toISOString();
+      const s = String(value).trim();
+      // Already has timezone info
+      if (/[zZ]$/.test(s) || /[+-]\d{2}:\d{2}$/.test(s)) return s;
+      // Date only
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return `${s}T00:00:00Z`;
+      // "YYYY-MM-DD HH:MM[:SS[.ms]]" or "YYYY-MM-DDTHH:MM[:SS[.ms]]" with no timezone
+      if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2}(\.\d{1,6})?)?$/.test(s)) {
+        return s.replace(' ', 'T') + 'Z';
+      }
+      return s;
+    }
     function convertUtcToLocalInput(iso, tz) {
       if (!iso) return '';
       try {
@@ -1565,7 +1582,7 @@
           minute: '2-digit',
           hour12: false
         });
-        const parts = mapDateParts(formatter.formatToParts(new Date(iso)));
+        const parts = mapDateParts(formatter.formatToParts(new Date(normalizeDbTimestampToIso(iso))));
         if (!parts.year || !parts.month || !parts.day || !parts.hour || !parts.minute) return iso;
         return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
       } catch {
@@ -1615,7 +1632,7 @@
           timeZone: tz || activeTimeZone,
           month: '2-digit', day: '2-digit', year: 'numeric',
           hour: '2-digit', minute: '2-digit', hour12: true
-        }).format(new Date(iso));
+        }).format(new Date(normalizeDbTimestampToIso(iso)));
       } catch {
         return iso;
       }
