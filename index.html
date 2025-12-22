@@ -3922,6 +3922,10 @@
         const start_time = row?.querySelector('.showStart')?.value || '';
         const end_time = row?.querySelector('.showEnd')?.value || '';
         const notes = row?.querySelector('.showNotes')?.value || '';
+        if (!show_date || !start_time || !end_time) {
+          if (status) status.textContent = 'Date, start time, and end time are required to save.';
+          return;
+        }
         try {
           const res = await authed(`/events/${eventId}/shows/${sid}`, {
             method: 'PATCH',
@@ -4470,8 +4474,8 @@
       const description = document.getElementById('eventDesc2').value.trim();
       const grpSel2 = document.getElementById('eventGroup2');
       const gid2 = grpSel2 && grpSel2.value ? Number(grpSel2.value) : (groupId ?? null);
-      const start_date = document.getElementById('eventStart2').value;
-      const end_date = document.getElementById('eventEnd2').value;
+      const start_date = document.getElementById('eventStart2').value || null;
+      const end_date = document.getElementById('eventEnd2').value || null;
       const start_time = document.getElementById('eventStartTime2').value;
       const end_time = document.getElementById('eventEndTime2').value;
       const addressWrap = document.getElementById('eventAddressField');
@@ -4510,8 +4514,8 @@
       const id = Number(document.getElementById('editEventId').value);
       const title = document.getElementById('editEventTitle').value.trim();
       const description = document.getElementById('editEventDesc').value.trim();
-      const start_date = document.getElementById('editEventStart').value;
-      const end_date = document.getElementById('editEventEnd').value;
+      const start_date = document.getElementById('editEventStart').value || null;
+      const end_date = document.getElementById('editEventEnd').value || null;
       const start_time = document.getElementById('editEventStartTime').value;
       const end_time = document.getElementById('editEventEndTime').value;
       const address = document.getElementById('editEventAddress').value.trim();
