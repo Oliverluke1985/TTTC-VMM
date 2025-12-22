@@ -1229,9 +1229,12 @@ app.get('/events', authRequired, async (req, res) => {
   // Return events plus a joined flag for the current user
   if (req.user.role === 'superadmin') {
     const groupFilter = req.query.group_id ? Number(req.query.group_id) : null;
+    const unassignedOnly = String(req.query.unassigned || '').toLowerCase() === '1'
+      || String(req.query.unassigned || '').toLowerCase() === 'true';
     const params = [req.user.id];
     let where = 'e.archived_at IS NULL';
     if (Number.isFinite(groupFilter)) { where += ' AND e.group_id = $2'; params.push(groupFilter); }
+    if (unassignedOnly) { where += ' AND e.group_id IS NULL'; }
     const events = await pool.query(
       `SELECT e.*, EXISTS(
          SELECT 1 FROM event_attendees a WHERE a.event_id = e.id AND a.user_id = $1

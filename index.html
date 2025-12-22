@@ -713,6 +713,10 @@
       <div class="col">
         <label>Organization (superadmin filter)</label>
         <select id="superEventGroupFilter"><option value="">— Select organization —</option></select>
+        <label class="duty-edit-archived-toggle" style="margin-top:8px">
+          <input type="checkbox" id="superEventShowUnassigned" />
+          <span>Show unassigned events (recovery)</span>
+        </label>
         <div id="eventsSuperNote" class="hint"></div>
       </div>
     </div>
@@ -3650,6 +3654,14 @@
             });
             sel._wiredChange = true;
           }
+          // Superadmin event recovery toggle
+          if (sel.id === 'superEventGroupFilter') {
+            const unassignedToggle = document.getElementById('superEventShowUnassigned');
+            if (unassignedToggle && !unassignedToggle._wired) {
+              unassignedToggle.addEventListener('change', () => fetchEvents());
+              unassignedToggle._wired = true;
+            }
+          }
           // when admin changes target group for new duty, repopulate event dropdowns to that org
           if (sel.id === 'dutyGroup' && !sel._wiredDuty) {
             sel.addEventListener('change', () => {
@@ -3735,16 +3747,26 @@
         let path = '/events';
         if (role === 'superadmin') {
           const sel = document.getElementById('superEventGroupFilter');
+          const showUnassigned = document.getElementById('superEventShowUnassigned');
           const filterWrap = document.getElementById('eventsSuperFilter');
           const note = document.getElementById('eventsSuperNote');
           const needsSelection = filterWrap && !filterWrap.classList.contains('hidden');
           if (needsSelection && (!sel || !sel.value)) {
-            // Allow superadmin to view all events (used for recovery if an event was accidentally detached)
-            path = '/events';
-            if (note) {
-              note.classList.remove('error');
-              note.classList.add('hint');
-              note.textContent = 'Showing all organizations. Choose an organization above to filter.';
+            if (showUnassigned && showUnassigned.checked) {
+              path = `/events?unassigned=1`;
+              if (note) {
+                note.classList.remove('error');
+                note.classList.add('hint');
+                note.textContent = 'Showing unassigned events only (recovery).';
+              }
+            } else {
+              if (tbody) tbody.innerHTML = '';
+              if (note) {
+                note.classList.remove('error');
+                note.classList.add('hint');
+                note.textContent = 'Select an organization above to view events.';
+              }
+              return;
             }
           }
           if (sel && sel.value) {
@@ -3916,7 +3938,7 @@
       }
       shows.forEach(s => {
         const tr = document.createElement('tr');
-        const dateVal = s.show_date || '';
+        const dateVal = extractDatePart(s.show_date) || '';
         const startVal = (s.start_time || '').slice(0, 5);
         const endVal = (s.end_time || '').slice(0, 5);
         tr.innerHTML =
@@ -4036,7 +4058,7 @@
         (Array.isArray(shows) ? shows : []).forEach(s => {
           const opt = document.createElement('option');
           opt.value = s.id;
-          const d = s.show_date || '';
+          const d = extractDatePart(s.show_date) || '';
           const t1 = (s.start_time || '').slice(0, 5);
           const t2 = (s.end_time || '').slice(0, 5);
           const notes = (s.notes || '').trim();
