@@ -3782,8 +3782,8 @@
             document.getElementById('editEventDesc').value = eventData.description || '';
             const editAddress = document.getElementById('editEventAddress');
             if (editAddress) editAddress.value = eventData.address || '';
-            document.getElementById('editEventStart').value = eventData.start_date || eventData.event_date || '';
-            document.getElementById('editEventEnd').value = eventData.end_date || eventData.start_date || eventData.event_date || '';
+            document.getElementById('editEventStart').value = extractDatePart(eventData.start_date || eventData.event_date) || '';
+            document.getElementById('editEventEnd').value = extractDatePart(eventData.end_date || eventData.start_date || eventData.event_date) || '';
             document.getElementById('editEventStartTime').value = (eventData.start_time || '').slice(0, 5);
             document.getElementById('editEventEndTime').value = (eventData.end_time || '').slice(0, 5);
             // Load showtimes for this event
@@ -4476,8 +4476,8 @@
       const gid2 = grpSel2 && grpSel2.value ? Number(grpSel2.value) : (groupId ?? null);
       const start_date = document.getElementById('eventStart2').value || null;
       const end_date = document.getElementById('eventEnd2').value || null;
-      const start_time = document.getElementById('eventStartTime2').value;
-      const end_time = document.getElementById('eventEndTime2').value;
+      const start_time = document.getElementById('eventStartTime2').value || null;
+      const end_time = document.getElementById('eventEndTime2').value || null;
       const addressWrap = document.getElementById('eventAddressField');
       const address = addressWrap && !addressWrap.classList.contains('hidden')
         ? document.getElementById('eventAddress').value.trim()
@@ -4514,16 +4514,26 @@
       const id = Number(document.getElementById('editEventId').value);
       const title = document.getElementById('editEventTitle').value.trim();
       const description = document.getElementById('editEventDesc').value.trim();
-      const start_date = document.getElementById('editEventStart').value || null;
-      const end_date = document.getElementById('editEventEnd').value || null;
-      const start_time = document.getElementById('editEventStartTime').value;
-      const end_time = document.getElementById('editEventEndTime').value;
+      const start_date_raw = document.getElementById('editEventStart').value || '';
+      const end_date_raw = document.getElementById('editEventEnd').value || '';
+      const start_time = document.getElementById('editEventStartTime').value || null;
+      const end_time = document.getElementById('editEventEndTime').value || null;
       const address = document.getElementById('editEventAddress').value.trim();
       try {
+        const payload = {
+          title,
+          description,
+          start_time,
+          end_time,
+          address: address || null
+        };
+        // IMPORTANT: avoid wiping dates if the date inputs are blank due to formatting.
+        if (start_date_raw) payload.start_date = start_date_raw;
+        if (end_date_raw) payload.end_date = end_date_raw;
         const res = await authed(`/events/${id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title, description, start_date, end_date, start_time, end_time, address: address || null })
+          body: JSON.stringify(payload)
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) { document.getElementById('editEventError').textContent = data.message || 'Failed to save event'; return; }
