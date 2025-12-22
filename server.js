@@ -2504,6 +2504,50 @@ app.patch('/time-tracking/:id', authRequired, async (req, res) => {
     await ensureDutyDateColumn();
     await ensureDurationHoursColumn();
     await ensureTimeTrackingConstraints();
+
+    // Load current row (scoped by role) so we can safely compute duration in JS.
+    // This avoids brittle SQL recompute logic that can cause Postgres param typing errors.
+    let currentRes;
+    if (req.user.role === 'superadmin') {
+      currentRes = await pool.query(
+        `SELECT id, start_time, end_time, duty_date, duration_hours
+         FROM time_tracking
+         WHERE id=$1`,
+        [id]
+      );
+    } else {
+      currentRes = await pool.query(
+        `SELECT t.id, t.start_time, t.end_time, t.duty_date, t.duration_hours
+         FROM time_tracking t
+         JOIN users u ON u.id = t.volunteer_id
+         WHERE t.id=$1 AND u.group_id=$2`,
+        [id, req.user.group_id]
+      );
+    }
+    if (currentRes.rowCount === 0) return res.status(404).json({ message: 'Not found' });
+    const current = currentRes.rows[0] || {};
+
+    const parseIso = (v) => {
+      if (!v) return null;
+      const d = new Date(String(v));
+      return Number.isNaN(d.getTime()) ? null : d;
+    };
+
+    const nextStart = (start_time !== undefined)
+      ? (start_time ? parseIso(start_time) : null)
+      : (current.start_time ? new Date(current.start_time) : null);
+    const nextEnd = (end_time !== undefined)
+      ? (end_time ? parseIso(end_time) : null)
+      : (current.end_time ? new Date(current.end_time) : null);
+
+    if (nextStart && nextEnd && nextEnd.getTime() < nextStart.getTime()) {
+      return res.status(400).json({ message: 'End time must be after start time.' });
+    }
+
+    const computedDurationHours = (nextStart && nextEnd)
+      ? ((nextEnd.getTime() - nextStart.getTime()) / 3600000)
+      : null;
+
     // Build update pieces
     const setClauses = [];
     const params = [];
@@ -2511,21 +2555,13 @@ app.patch('/time-tracking/:id', authRequired, async (req, res) => {
     if (start_time !== undefined) { setClauses.push(`start_time = $${idx++}::timestamp`); params.push(start_time || null); }
     if (end_time !== undefined) { setClauses.push(`end_time = $${idx++}::timestamp`); params.push(end_time || null); }
     if (duty_date !== undefined) { setClauses.push(`duty_date = $${idx++}::date`); params.push(duty_date || null); }
-    // duration computed if both times set, else accept manual override when provided
-    let computeDuration = false;
-    if (start_time !== undefined || end_time !== undefined) computeDuration = true;
-    if (!computeDuration && duration_hours !== undefined) {
-      setClauses.push(`duration_hours = $${idx++}`); params.push(duration_hours);
-    }
-    // Always recompute if both timestamps available in DB after update
-    // We implement recompute in SQL using CASE when computeDuration true
-    if (computeDuration) {
-      setClauses.push(`duration_hours = CASE WHEN (COALESCE((SELECT start_time FROM time_tracking WHERE id=$${idx}), start_time) IS NOT NULL AND COALESCE((SELECT end_time FROM time_tracking WHERE id=$${idx}), end_time) IS NOT NULL)
-        THEN EXTRACT(EPOCH FROM (COALESCE((SELECT end_time FROM time_tracking WHERE id=$${idx}), end_time) - COALESCE((SELECT start_time FROM time_tracking WHERE id=$${idx}), start_time)))/3600
-        ELSE duration_hours END`);
-      // Use id multiple times as placeholders
-      params.push(id, id, id, id);
-      idx += 4;
+    // Duration: allow explicit override, else compute from current+incoming times
+    if (duration_hours !== undefined) {
+      setClauses.push(`duration_hours = $${idx++}::double precision`);
+      params.push(duration_hours == null || duration_hours === '' ? null : Number(duration_hours));
+    } else if (start_time !== undefined || end_time !== undefined) {
+      setClauses.push(`duration_hours = $${idx++}::double precision`);
+      params.push(computedDurationHours);
     }
 
     if (setClauses.length === 0) return res.json({ id });
