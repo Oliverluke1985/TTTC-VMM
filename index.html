@@ -2584,12 +2584,10 @@
       if (!token) return;
       if (!skipReset) resetCalendarView();
       const filterValue = getCalendarGroupFilterValue();
-      if (((role === 'admin' || role === 'volunteer') && !filterValue) ||
-          (role === 'superadmin' && !filterValue)) {
-        const message = role === 'superadmin'
-          ? 'Select an organization above to view its calendar.'
-          : 'You must belong to an organization to view its calendar.';
-        showCalendarStatus(message, true);
+      // Admin/volunteer calendars are always org-scoped. Superadmin can view "All organizations"
+      // in the month grid; day schedule still requires selecting a specific org.
+      if ((role === 'admin' || role === 'volunteer') && !filterValue) {
+        showCalendarStatus('You must belong to an organization to view its calendar.', true);
         const grid = document.getElementById('calendarGrid');
         if (grid) grid.innerHTML = '';
         return;
