@@ -2071,7 +2071,11 @@
       const assignments = Array.isArray(dutyEntry.assignments) ? dutyEntry.assignments : [];
       const dutyColor = getDutyColor(dutyEntry) || eventColor;
       const isAssignedToUser = assignments.some(assign => assign?.volunteer_id != null && Number(assign.volunteer_id) === Number(userId));
-      const clockBtn = (role === 'volunteer' && isAssignedToUser)
+      const isClosed = dutyEntry?.is_closed === true;
+      // Volunteers should only see closed duties when assigned; open duties are available to all joined volunteers.
+      if (role === 'volunteer' && isClosed && !isAssignedToUser) return '';
+      const canVolunteerClock = (role === 'volunteer') && (!isClosed || isAssignedToUser);
+      const clockBtn = canVolunteerClock
         ? `<div style="margin-top:6px;"><button class="calendar-duty-clock-btn" onclick="goToDutyClockForDuty(${dutyEntry.id}, '${dateKey || ''}')">Go to Time Clock</button></div>`
         : '';
       const assignmentsHtml = assignments.length
@@ -2119,17 +2123,23 @@
       const showHtml = showtimes.length
         ? showtimes.map(s => {
             const sd = Array.isArray(s.duties) ? s.duties : [];
-            const inner = sd.length
-              ? sd.map(duty => buildScheduleDutyHtml(duty, color, tz)).join('')
-              : '<div class="calendar-day-schedule-empty">No duties for this showtime.</div>';
+            const innerParts = sd.length
+              ? sd.map(duty => buildScheduleDutyHtml(duty, color, tz, dateKey)).filter(Boolean)
+              : [];
+            const inner = innerParts.length
+              ? innerParts.join('')
+              : '<div class="calendar-day-schedule-empty">No duties for this performance/show.</div>';
             return `<div class="calendar-showtime-block">
               <div class="calendar-showtime-header"><strong>${formatShowLabel(s)}</strong></div>
               ${inner}
             </div>`;
           }).join('')
         : '';
-      const eventDutyHtml = eventLevelDuties.length
-        ? eventLevelDuties.map(duty => buildScheduleDutyHtml(duty, color, tz)).join('')
+      const eventDutyParts = eventLevelDuties.length
+        ? eventLevelDuties.map(duty => buildScheduleDutyHtml(duty, color, tz, dateKey)).filter(Boolean)
+        : [];
+      const eventDutyHtml = eventDutyParts.length
+        ? eventDutyParts.join('')
         : (showtimes.length ? '' : '<div class="calendar-day-schedule-empty">No duties scheduled.</div>');
       const dutiesHtml = `${showHtml}${eventDutyHtml ? `<div class=\"calendar-event-duties-block\">${eventDutyHtml}</div>` : ''}`.trim();
       const metaLabel = orgName || eventEntry.address || '';
@@ -2655,7 +2665,11 @@
       }
       try {
         showCalendarStatus('Loading…');
-        const events = await fetchCalendarEventsData(filterValue);
+        let events = await fetchCalendarEventsData(filterValue);
+        // Volunteer calendar access should be scoped to events they have joined.
+        if (role === 'volunteer') {
+          events = (Array.isArray(events) ? events : []).filter(e => e && e.joined === true);
+        }
         calendarState.events = events;
         calendarState.eventsByDate = buildCalendarEventsByDay(events);
         renderCalendar();
