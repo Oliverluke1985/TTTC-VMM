@@ -3936,21 +3936,24 @@
         tbody.innerHTML = '';
         events.forEach(e => {
           const tr = document.createElement('tr');
-            let actions = '';
-            if (role === 'admin' || role === 'superadmin') {
-              actions = `<button data-eid="${e.id}" class="editEventPrefillBtn">Edit</button> <button data-eid="${e.id}" class="archiveEventBtn">Archive</button> <button data-eid="${e.id}" class="deleteEventBtn">Delete</button>`;
-            }
+          const showJoin = (role === 'volunteer');
+          const showActions = (role === 'admin' || role === 'superadmin');
+          let actions = '';
+          if (showActions) {
+            actions = `<button data-eid="${e.id}" class="editEventPrefillBtn">Edit</button> <button data-eid="${e.id}" class="archiveEventBtn">Archive</button> <button data-eid="${e.id}" class="deleteEventBtn">Delete</button>`;
+          }
           const dateTxt = formatEventDatesForList(e) || '';
           const orgTag = (role === 'superadmin' && e.group_id != null && groupNameById && groupNameById[e.group_id])
             ? ` (${groupNameById[e.group_id]})`
             : (role === 'superadmin' ? (e.group_id == null ? ' (Unassigned org)' : '') : '');
-          const joinCell = (role === 'volunteer')
-            ? `<td>${e.joined ? `<button data-eid="${e.id}" class="leaveBtn">Leave</button>` : `<button data-eid=\"${e.id}\" class=\"joinBtn\">Join</button>`}</td>`
-            : '<td class="hidden"></td>';
+          const joinCell = showJoin
+            ? `<td>${e.joined ? `<button data-eid="${e.id}" class="leaveBtn">Leave</button>` : `<button data-eid="${e.id}" class="joinBtn">Join</button>`}</td>`
+            : '';
+          const actionsCell = showActions ? `<td>${actions}</td>` : '';
           tr.innerHTML =
             `<td>${e.id}</td><td>${e.title}${orgTag}</td><td>${dateTxt}</td>
                ${joinCell}
-               <td>${actions}</td>`;
+               ${actionsCell}`;
           tbody.appendChild(tr);
         });
           // wire actions
