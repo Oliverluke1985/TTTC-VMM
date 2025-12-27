@@ -1637,10 +1637,24 @@ app.get('/duties', authRequired, async (req, res) => {
     );
     return res.json(duties.rows);
   }
+  // Volunteers: only see duties for events they have joined, and only for current/upcoming event runs.
+  // This prevents confusion and hides past/unjoined duties.
+  const volunteerParams = [req.user.group_id, req.user.id];
+  let volunteerEventFilterSql = '';
+  if (Number.isFinite(eventFilter)) {
+    volunteerEventFilterSql = 'AND d.event_id = $3';
+    volunteerParams.push(eventFilter);
+  }
   const duties = await pool.query(
     `${baseSelect}
-     WHERE d.group_id=$1 AND d.archived_at IS NULL
-       ${Number.isFinite(eventFilter) ? 'AND d.event_id = $3' : ''}
+     JOIN events e ON e.id = d.event_id
+     JOIN event_attendees a ON a.event_id = e.id AND a.user_id = $2
+     WHERE d.group_id=$1
+       AND d.archived_at IS NULL
+       AND e.archived_at IS NULL
+       ${volunteerEventFilterSql}
+       AND COALESCE(e.end_date, e.start_date, e.event_date) IS NOT NULL
+       AND COALESCE(e.end_date, e.start_date, e.event_date) >= CURRENT_DATE
        AND (COALESCE(d.is_closed, false) = false OR EXISTS (
          SELECT 1 FROM duty_assignments da
          WHERE da.duty_id = d.id AND da.volunteer_id = $2
@@ -1650,7 +1664,7 @@ app.get('/duties', authRequired, async (req, res) => {
          WHERE dr.duty_id = d.id AND dr.volunteer_id = $2
        )
      ORDER BY d.id`,
-    Number.isFinite(eventFilter) ? [req.user.group_id, req.user.id, eventFilter] : [req.user.group_id, req.user.id]
+    volunteerParams
   );
   res.json(duties.rows);
 });
@@ -2311,6 +2325,11 @@ app.get('/calendar/assignments', authRequired, async (req, res) => {
         OR (e.event_date IS NOT NULL AND e.event_date = $2::date)
       )`
     ];
+    // Volunteers should only see schedules for events they joined.
+    if (req.user.role === 'volunteer') {
+      eventWhere.push(`EXISTS (SELECT 1 FROM event_attendees a WHERE a.event_id = e.id AND a.user_id = $3)`);
+      eventParams.push(req.user.id);
+    }
     const eventsRes = await pool.query(
       `SELECT e.id, e.title, e.group_id, e.color_hex, e.start_date, e.end_date, e.start_time, e.end_time, e.address
        FROM events e
