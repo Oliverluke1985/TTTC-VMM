@@ -1904,6 +1904,34 @@
       return '';
     }
 
+    function formatDateUs(value) {
+      const key = extractDatePart(value);
+      if (!key) return '';
+      const parts = key.split('-');
+      if (parts.length !== 3) return key;
+      const [yyyy, mm, dd] = parts;
+      return `${mm}/${dd}/${yyyy}`;
+    }
+
+    function formatEventDatesForList(e) {
+      const startKey = extractDatePart(e?.start_date || e?.event_date);
+      const endKey = extractDatePart(e?.end_date || e?.start_date || e?.event_date);
+      if (!startKey) return '';
+      const startDate = formatDateUs(startKey);
+      const endDate = endKey ? formatDateUs(endKey) : '';
+      const startTime = formatTime12((e?.start_time || '').slice(0, 5));
+      const endTime = formatTime12((e?.end_time || '').slice(0, 5));
+      if (endKey && endKey !== startKey) {
+        const first = `${startDate}${startTime ? ` ${startTime}` : ''}`.trim();
+        const last = `${endDate}${endTime ? ` ${endTime}` : ''}`.trim();
+        return `${first} – ${last}`.trim();
+      }
+      let label = startDate;
+      if (startTime && endTime) label += ` ${startTime} – ${endTime}`;
+      else if (startTime) label += ` ${startTime}`;
+      return label;
+    }
+
     function parseEventDateValue(value) {
       const datePart = extractDatePart(value);
       if (!datePart) return null;
@@ -2419,11 +2447,11 @@
       const endTime = formatTime12((event.end_time || '').slice(0, 5));
       if (!startDate) return 'Date TBD';
       if (endDate && endDate !== startDate) {
-        const first = `${startDate}${startTime ? ` ${startTime}` : ''}`.trim();
-        const last = `${endDate}${endTime ? ` ${endTime}` : ''}`.trim();
+        const first = `${formatDateUs(startDate)}${startTime ? ` ${startTime}` : ''}`.trim();
+        const last = `${formatDateUs(endDate)}${endTime ? ` ${endTime}` : ''}`.trim();
         return `${first} – ${last}`.trim();
       }
-      let label = startDate;
+      let label = formatDateUs(startDate);
       if (startTime && endTime) label += ` ${startTime} – ${endTime}`;
       else if (startTime) label += ` ${startTime}`;
       return label;
@@ -3912,7 +3940,7 @@
             if (role === 'admin' || role === 'superadmin') {
               actions = `<button data-eid="${e.id}" class="editEventPrefillBtn">Edit</button> <button data-eid="${e.id}" class="archiveEventBtn">Archive</button> <button data-eid="${e.id}" class="deleteEventBtn">Delete</button>`;
             }
-          const dateTxt = e.start_date ? (e.end_date ? `${e.start_date} – ${e.end_date}` : `${e.start_date}`) : (e.event_date || '');
+          const dateTxt = formatEventDatesForList(e) || '';
           const orgTag = (role === 'superadmin' && e.group_id != null && groupNameById && groupNameById[e.group_id])
             ? ` (${groupNameById[e.group_id]})`
             : (role === 'superadmin' ? (e.group_id == null ? ' (Unassigned org)' : '') : '');
@@ -5618,7 +5646,7 @@
              <td data-label="Start" class="nowrap">${startDisplay}</td>
              <td data-label="End" class="nowrap">${endDisplay}</td>
              <td data-label="Hours">${hours}</td>
-             <td data-label="Date">${r.duty_date || ''}</td>`;
+             <td data-label="Date">${formatDateUs(r.duty_date) || ''}</td>`;
           tbody.appendChild(tr);
         });
         if (role === 'superadmin' && groups.length > 0) {
@@ -6037,7 +6065,7 @@
            <td data-label="Start">${formatDisplayDateTime(r.start_time, tz)}</td>
            <td data-label="End">${formatDisplayDateTime(r.end_time, tz)}</td>
            <td data-label="Hours">${hours}</td>
-           <td data-label="Date">${r.duty_date || ''}</td>
+           <td data-label="Date">${formatDateUs(r.duty_date) || ''}</td>
            <td data-label="Status">${statusLabel}</td>
            <td data-label="Approve">${approveCell}</td>`;
         tbody.appendChild(tr);
@@ -6076,7 +6104,7 @@
           const hours = formatHoursAsHm(r.duration_hours);
           const volunteerLabel = formatVolunteerLabel(r);
           tr.innerHTML =
-            `<td>${r.id}</td><td>${volunteerLabel}</td><td>${hours}</td><td>${r.duty_date || ''}</td>
+            `<td>${r.id}</td><td>${volunteerLabel}</td><td>${hours}</td><td>${formatDateUs(r.duty_date) || ''}</td>
              <td><button onclick="approve(${r.id})">Approve</button></td>
              <td><button onclick="rejectApproval(${r.id})">Delete</button></td>`;
           tbody.appendChild(tr);
