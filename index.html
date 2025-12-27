@@ -1530,6 +1530,15 @@
     }
     refreshAccountTimeZoneDisplay();
     const pad2 = n => String(n).padStart(2, '0');
+    function formatHoursAsHm(hours) {
+      if (hours == null || hours === '') return '';
+      const num = Number(hours);
+      if (!Number.isFinite(num)) return '';
+      const totalMinutes = Math.max(0, Math.round(num * 60));
+      const h = Math.floor(totalMinutes / 60);
+      const m = totalMinutes % 60;
+      return `${h}:${pad2(m)}`;
+    }
     function getGroupTimeZone(id) {
       return (id != null && groupTimeZoneById[id]) ? groupTimeZoneById[id] : DEFAULT_TIME_ZONE;
     }
@@ -4414,7 +4423,7 @@
         timeEntryTimeZoneById = {};
         rows.forEach(r => {
           const tr = document.createElement('tr');
-          const hours = (r.duration_hours != null ? Number(r.duration_hours).toFixed(2) : '');
+          const hours = formatHoursAsHm(r.duration_hours);
           timeEntryTimeZoneById[r.id] = tz;
           const assignment = describeAssignment(r);
           const statusLabel = r.approved ? 'Approved' : 'Pending';
@@ -5583,7 +5592,7 @@
         tbody.innerHTML = '';
         rows.forEach(r => {
           const tr = document.createElement('tr');
-          const hours = (r.duration_hours != null ? Number(r.duration_hours).toFixed(2) : '');
+          const hours = formatHoursAsHm(r.duration_hours);
           const tz = getVolunteerTimeZone(r.volunteer_id || userId);
           const startDisplay = formatDisplayDateTime(r.start_time, tz);
           const endDisplay = formatDisplayDateTime(r.end_time, tz);
@@ -6003,7 +6012,7 @@
       const tz = getVolunteerTimeZone(Number(sel.value));
       logs.forEach(r => {
         const tr = document.createElement('tr');
-        const hours = (r.duration_hours != null ? Number(r.duration_hours).toFixed(2) : '');
+        const hours = formatHoursAsHm(r.duration_hours);
         const statusLabel = r.approved ? 'Approved' : 'Pending';
         const approveCell = r.approved
           ? '<span>Approved</span>'
@@ -6050,7 +6059,7 @@
         }
         pending.forEach(r => {
           const tr = document.createElement('tr');
-          const hours = (r.duration_hours != null ? Number(r.duration_hours).toFixed(2) : '');
+          const hours = formatHoursAsHm(r.duration_hours);
           const volunteerLabel = formatVolunteerLabel(r);
           tr.innerHTML =
             `<td>${r.id}</td><td>${volunteerLabel}</td><td>${hours}</td><td>${r.duty_date || ''}</td>
@@ -6152,7 +6161,7 @@
       }
       rows.forEach(r => {
         const tr = document.createElement('tr');
-        const hours = (r.duration_hours != null ? Number(r.duration_hours).toFixed(2) : '');
+          const hours = formatHoursAsHm(r.duration_hours);
         const tz = getVolunteerTimeZone(r.volunteer_id);
         timeEntryTimeZoneById[r.id] = tz;
         const volunteerLabel = formatVolunteerLabel(r);
