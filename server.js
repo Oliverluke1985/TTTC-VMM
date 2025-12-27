@@ -2173,17 +2173,31 @@ app.get('/time-tracking.csv', authRequired, async (req, res) => {
       if (value == null) return '';
       return String(value).replace(/"/g, '""');
     };
-            const header = ['Log ID','Volunteer','Duty','Event ID','Event Name','Start Time','End Time','Hours','Approved','Event Running Hours','Volunteer Running Hours'];
+    const pad2 = n => String(n).padStart(2, '0');
+    const minutesToHm = (mins) => {
+      if (mins == null) return '';
+      const total = Math.max(0, Math.round(Number(mins)));
+      const h = Math.floor(total / 60);
+      const m = total % 60;
+      return `${h}:${pad2(m)}`;
+    };
+    const hoursToMinutes = (hours) => {
+      if (hours == null) return null;
+      const num = Number(hours);
+      if (!Number.isFinite(num)) return null;
+      return Math.round(num * 60);
+    };
+    const header = ['Log ID','Volunteer','Duty','Event ID','Event Name','Start Time','End Time','Hours (HH:MM)','Approved','Event Running Hours (HH:MM)','Volunteer Running Hours (HH:MM)'];
     // Sort ascending by start time for running totals
     const sorted = [...rows].sort((a, b) => {
       const aTime = a.start_time ? Date.parse(a.start_time) : 0;
       const bTime = b.start_time ? Date.parse(b.start_time) : 0;
       return aTime - bTime;
     });
-    const eventRunning = new Map(); // key: volunteer|event
-    const volRunning = new Map();
-    const eventTotals = new Map(); // key: volunteer|event -> total
-    const volTotals = new Map();
+    const eventRunning = new Map(); // key: volunteer|event -> minutes
+    const volRunning = new Map(); // volunteer -> minutes
+    const eventTotals = new Map(); // key: volunteer|event -> minutes
+    const volTotals = new Map(); // volunteer -> minutes
     const volunteerLabels = new Map();
     const eventLabels = new Map();
 
@@ -2195,14 +2209,14 @@ app.get('/time-tracking.csv', authRequired, async (req, res) => {
       const eventLabel = r.event_title || '';
       volunteerLabels.set(r.volunteer_id, volunteerLabel);
       eventLabels.set(r.event_id, eventLabel);
-      const hoursVal = r.duration_hours != null ? Number(r.duration_hours) : null;
+      const minutesVal = hoursToMinutes(r.duration_hours);
       const evtKey = `${r.volunteer_id}|${r.event_id ?? 'none'}`;
-      const evRun = (eventRunning.get(evtKey) || 0) + (hoursVal || 0);
-      const volRun = (volRunning.get(r.volunteer_id) || 0) + (hoursVal || 0);
+      const evRun = (eventRunning.get(evtKey) || 0) + (minutesVal || 0);
+      const volRun = (volRunning.get(r.volunteer_id) || 0) + (minutesVal || 0);
       eventRunning.set(evtKey, evRun);
       volRunning.set(r.volunteer_id, volRun);
-      eventTotals.set(evtKey, (eventTotals.get(evtKey) || 0) + (hoursVal || 0));
-      volTotals.set(r.volunteer_id, (volTotals.get(r.volunteer_id) || 0) + (hoursVal || 0));
+      eventTotals.set(evtKey, (eventTotals.get(evtKey) || 0) + (minutesVal || 0));
+      volTotals.set(r.volunteer_id, (volTotals.get(r.volunteer_id) || 0) + (minutesVal || 0));
       return [
         formatCell(r.id),
         formatCell(volunteerLabel),
@@ -2211,10 +2225,10 @@ app.get('/time-tracking.csv', authRequired, async (req, res) => {
         formatCell(eventLabel || ''),
         formatCell(format12Hour(r.start_time)),
         formatCell(format12Hour(r.end_time)),
-        formatCell(hoursVal != null ? hoursVal.toFixed(2) : ''),
+        formatCell(minutesVal != null ? minutesToHm(minutesVal) : ''),
         formatCell(r.approved ? 'Yes' : 'No'),
-        formatCell(hoursVal != null ? evRun.toFixed(2) : ''),
-        formatCell(hoursVal != null ? volRun.toFixed(2) : '')
+        formatCell(minutesVal != null ? minutesToHm(evRun) : ''),
+        formatCell(minutesVal != null ? minutesToHm(volRun) : '')
       ].map(v => `"${v}"`).join(',');
     });
     const summary = [];
@@ -2231,13 +2245,13 @@ app.get('/time-tracking.csv', authRequired, async (req, res) => {
           row[1] = formatCell(vLabel);
           row[3] = formatCell(eventId === 'none' ? '' : eventId);
           row[4] = formatCell(eLabel);
-          row[7] = formatCell(total.toFixed(2));
+          row[7] = formatCell(minutesToHm(total));
           summary.push(row.map(v => `"${v}"`).join(','));
         });
       const volTotal = volTotals.get(vId) || 0;
       const totRow = new Array(header.length).fill('');
       totRow[1] = formatCell(`${vLabel} — TOTAL`);
-      totRow[7] = formatCell(volTotal.toFixed(2));
+      totRow[7] = formatCell(minutesToHm(volTotal));
       summary.push(totRow.map(v => `"${v}"`).join(','));
       summary.push('');
     });
@@ -2245,7 +2259,7 @@ app.get('/time-tracking.csv', authRequired, async (req, res) => {
     if (grandTotal > 0) {
       const gRow = new Array(header.length).fill('');
       gRow[1] = formatCell('GRAND TOTAL');
-      gRow[7] = formatCell(grandTotal.toFixed(2));
+      gRow[7] = formatCell(minutesToHm(grandTotal));
       summary.push(gRow.map(v => `"${v}"`).join(','));
     }
 
