@@ -2371,8 +2371,8 @@ app.get('/calendar/assignments', authRequired, async (req, res) => {
     const dutyRows = dutiesRes.rows || [];
     const dutyIds = dutyRows.map(r => Number(r.id)).filter(Number.isFinite);
 
-    // Load duty assignments (who is assigned) even if no time has been logged yet
-    // Volunteers only see their own assignment row.
+    // Load duty assignments (who is assigned) even if no time has been logged yet.
+    // Volunteers can see who they're working with (names only; emails withheld).
     let dutyAssignRows = [];
     if (dutyIds.length) {
       const daParams = [dutyIds];
@@ -2381,16 +2381,12 @@ app.get('/calendar/assignments', authRequired, async (req, res) => {
           da.duty_id,
           da.volunteer_id,
           COALESCE(u.name, p.name, u.email, 'Volunteer #' || u.id::text) AS volunteer_name,
-          u.email AS volunteer_email
+          ${req.user.role === 'volunteer' ? 'NULL' : 'u.email'} AS volunteer_email
         FROM duty_assignments da
         JOIN users u ON u.id = da.volunteer_id
         LEFT JOIN user_profile p ON p.user_id = u.id
         WHERE da.duty_id = ANY($1::int[])
       `;
-      if (req.user.role === 'volunteer') {
-        daSql += ' AND da.volunteer_id = $2';
-        daParams.push(req.user.id);
-      }
       dutyAssignRows = (await pool.query(daSql, daParams)).rows || [];
     }
 
@@ -2398,16 +2394,12 @@ app.get('/calendar/assignments', authRequired, async (req, res) => {
     const assignParams = [rawDate, scopedGroupId];
     let assignWhere = `t.duty_date = $1 AND d.group_id = $2 AND d.event_id = ANY($3::int[])`;
     assignParams.push(eventIds);
-    if (req.user.role === 'volunteer') {
-      assignWhere += ` AND t.volunteer_id = $4`;
-      assignParams.push(req.user.id);
-    }
     const assignSql = `
       SELECT
         t.id AS time_tracking_id,
         t.volunteer_id,
         COALESCE(u.name, p.name, u.email, 'Volunteer #' || u.id::text) AS volunteer_name,
-        u.email AS volunteer_email,
+        ${req.user.role === 'volunteer' ? 'NULL' : 'u.email'} AS volunteer_email,
         t.start_time,
         t.end_time,
         t.duration_hours,
