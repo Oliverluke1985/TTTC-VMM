@@ -4775,6 +4775,24 @@
           showActionStatus('Failed to load duties', true);
           return;
         }
+        // Ensure we have event titles for time clock dropdown labels
+        try {
+          if (!window.eventById || Object.keys(window.eventById || {}).length === 0) {
+            const gid = (role === 'superadmin')
+              ? (document.getElementById('superDutyGroupFilter')?.value || '')
+              : (groupId != null ? String(groupId) : '');
+            if (gid) {
+              const evRes = await authed(`/events?group_id=${encodeURIComponent(gid)}`);
+              if (evRes.ok) {
+                const evs = await evRes.json().catch(() => ([]));
+                window.eventById = window.eventById || {};
+                (Array.isArray(evs) ? evs : []).forEach(ev => {
+                  if (ev && ev.id != null) window.eventById[ev.id] = ev;
+                });
+              }
+            }
+          }
+        } catch { /* ignore */ }
         const note = document.getElementById('dutyEditLoadNote');
         if (note && (role === 'admin' || role === 'superadmin')) {
           const archivedCount = duties.filter(d => d && d.archived_at).length;
@@ -4811,7 +4829,12 @@
             duties.forEach(d => {
               const opt = document.createElement('option');
               opt.value = d.id;
-              opt.textContent = `${d.id} — ${d.title}`;
+              const eventTitle = (d && d.event_id != null && window.eventById && window.eventById[d.event_id])
+                ? (window.eventById[d.event_id].title || '')
+                : '';
+              opt.textContent = eventTitle
+                ? `${d.id} — ${d.title} (${eventTitle})`
+                : `${d.id} — ${d.title}`;
               trackSel.appendChild(opt);
             });
             if (prev && trackSel.querySelector(`option[value="${prev}"]`)) trackSel.value = prev;
